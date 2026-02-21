@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robot Builder Math Game</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <div class="logo-mark">🤖</div>
+        <div>
+          <h1 class="app-title">Robot Builder Math</h1>
+          <p class="app-subtitle">Practice adding and subtracting to build your robot!</p>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section class="robot-panel">
+          <h2 class="section-title">Your Robot</h2>
+          <div id="robot-stage" class="robot-stage">
+            <div class="robot-part robot-shadow"></div>
+            <div class="robot-part robot-body" data-part="body"></div>
+            <div class="robot-part robot-head" data-part="head"></div>
+            <div class="robot-part robot-eye-left" data-part="eye-left"></div>
+            <div class="robot-part robot-eye-right" data-part="eye-right"></div>
+            <div class="robot-part robot-mouth" data-part="mouth"></div>
+            <div class="robot-part robot-arm-left" data-part="arm-left"></div>
+            <div class="robot-part robot-arm-right" data-part="arm-right"></div>
+            <div class="robot-part robot-leg-left" data-part="leg-left"></div>
+            <div class="robot-part robot-leg-right" data-part="leg-right"></div>
+            <div class="robot-part robot-antenna" data-part="antenna"></div>
+          </div>
+          <p class="progress-label">
+            Parts collected:
+            <span id="parts-count">0</span> / <span id="parts-total">9</span>
+          </p>
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+        </section>
+
+        <section class="game-panel">
+          <h2 class="section-title">Solve the Puzzle</h2>
+          <div class="difficulty-toggle" aria-label="Select difficulty">
+            <button class="chip chip-selected" data-difficulty="easy">Easy</button>
+            <button class="chip" data-difficulty="mixed">Mixed</button>
+          </div>
+
+          <div class="card problem-card">
+            <div class="problem-text-wrapper">
+              <span id="operand-a" class="problem-number">3</span>
+              <span id="operator" class="problem-operator">+</span>
+              <span id="operand-b" class="problem-number">4</span>
+              <span class="problem-operator">=</span>
+              <input
+                id="answer-input"
+                class="answer-input"
+                type="number"
+                inputmode="numeric"
+                autocomplete="off"
+                aria-label="Your answer"
+              />
+            </div>
+            <button id="check-btn" class="primary-button">Check answer</button>
+            <p id="feedback" class="feedback" aria-live="polite"></p>
+          </div>
+
+          <div class="card stats-card">
+            <div class="stat">
+              <span class="stat-label">Questions answered</span>
+              <span id="questions-count" class="stat-value">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Correct answers</span>
+              <span id="correct-count" class="stat-value">0</span>
+            </div>
+          </div>
+
+          <button id="new-robot-btn" class="secondary-button">Start a new robot</button>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <p>No winners or losers — just have fun building your robot while you practice!</p>
+      </footer>
+    </div>
+
+    <script src="main.js"></script>
+  </body>
+</html>
+

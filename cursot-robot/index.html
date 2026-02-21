@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Math — Build Your Robot!</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>Build Your Robot!</h1>
+      <p class="subtitle">Answer correctly to add parts to your robot.</p>
+    </header>
+
+    <main class="main">
+      <section class="robot-section" aria-label="Your robot">
+        <div class="robot-container">
+          <div class="robot" id="robot" role="img" aria-label="Robot you are building">
+            <!-- Robot parts rendered by game.js -->
+          </div>
+          <p class="parts-count" id="partsCount">0 of 10 parts</p>
+        </div>
+      </section>
+
+      <section class="game-section">
+        <div class="problem-card" id="problemCard">
+          <p class="problem-text" id="problemText">3 + 4 = ?</p>
+          <div class="answer-choices" id="answerChoices" role="group" aria-label="Choose the answer">
+            <!-- Four choice buttons filled by game.js -->
+          </div>
+        </div>
+        <p class="feedback" id="feedback" aria-live="polite"></p>
+        <div class="complete-actions" id="completeActions" hidden>
+          <button type="button" class="btn btn-reset" id="resetBtn" aria-label="Start over and build another robot">
+            Build another robot!
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>First grade math practice — addition & subtraction</p>
+    </footer>
+  </div>
+  <div id="confettiContainer" class="confetti-container" aria-hidden="true"></div>
+  <script src="game.js"></script>
+</body>
+</html>
