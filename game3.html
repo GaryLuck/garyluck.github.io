@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Safari Memory Match</title>
+<style>
+:root {
+--bg-color: #DBEAFE;
+--text-primary: #1E40AF;
+--text-header: #2563EB;
+--card-front: #3B82F6;
+--card-back: #FFFFFF;
+--border-front: #FFFFFF;
+--border-back: #FACC15;
+--btn-bg: #FACC15;
+--btn-text: #713F12;
+--success-green: #22C55E;
+}
+body {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+background-color: var(--bg-color);
+font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: space-evenly;
+height: 100vh;
+width: 100vw;
+overflow: hidden;
+-webkit-tap-highlight-color: transparent;
+user-select: none;
+-webkit-user-select: none;
+touch-action: manipulation;
+}
+.header {
+text-align: center;
+width: 100%;
+}
+.header h1 {
+font-size: 2.5rem;
+color: var(--text-header);
+margin: 0;
+font-weight: 800;
+text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.header p {
+font-size: 1.1rem;
+color: var(--text-primary);
+margin: 0.2rem 0;
+font-weight: 600;
+}
+@media (min-width: 600px) {
+.header h1 { font-size: 3rem; }
+.header p { font-size: 1.3rem; }
+}
+.stats {
+display: flex;
+justify-content: center;
+gap: 1rem;
+margin-top: 0.5rem;
+}
+.stat-box {
+background: white;
+padding: 0.3rem 1rem;
+border-radius: 0.8rem;
+box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+min-width: 70px;
+}
+.stat-label {
+display: block;
+font-size: 0.7rem;
+color: #6B7280;
+text-transform: uppercase;
+font-weight: bold;
+}
+.stat-value {
+font-size: 1.3rem;
+font-weight: bold;
+}
+#move-count { color: var(--text-header); }
+#pairs-count { color: #16A34A; }
+.game-board {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+grid-template-rows: repeat(4, 1fr);
+gap: 10px;
+padding: 10px;
+width: 95vw;
+max-width: 500px;
+height: 55vh;
+max-height: 600px;
+box-sizing: border-box;
+}
+@media (orientation: landscape) and (max-height: 800px) {
+.game-board {
+grid-template-columns: repeat(4, 1fr);
+grid-template-rows: repeat(3, 1fr);
+width: 80vw;
+height: 60vh;
+max-width: 700px;
+}
+.header { margin-top: 5px; }
+}
+.card-container {
+width: 100%;
+height: 100%;
+cursor: pointer;
+-webkit-perspective: 1000px;
+perspective: 1000px;
+background: none;
+border: none;
+padding: 0;
+outline: none;
+}
+.card-inner {
+position: relative;
+width: 100%;
+height: 100%;
+text-align: center;
+transition: transform 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+-webkit-transform-style: preserve-3d;
+transform-style: preserve-3d;
+box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+border-radius: 12px;
+}
+.card-container.flipped .card-inner {
+-webkit-transform: rotateY(180deg);
+transform: rotateY(180deg);
+}
+@keyframes bounceMatch {
+0%, 100% { transform: rotateY(180deg) scale(1); -webkit-transform: rotateY(180deg) scale(1); }
+50% { transform: rotateY(180deg) scale(1.1); -webkit-transform: rotateY(180deg) scale(1.1); }
+}
+.card-container.matched .card-inner {
+-webkit-transform: rotateY(180deg);
+transform: rotateY(180deg);
+-webkit-animation: bounceMatch 0.4s ease-in-out;
+animation: bounceMatch 0.4s ease-in-out;
+box-shadow: 0 0 15px rgba(34, 197, 94, 0.5);
+}
+.card-front, .card-back {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+-webkit-backface-visibility: hidden;
+backface-visibility: hidden;
+-webkit-transform: translateZ(0);
+transform: translateZ(0);
+border-radius: 12px;
+display: flex;
+align-items: center;
+justify-content: center;
+box-sizing: border-box;
+border: 3px solid;
+}
+.card-front {
+background-color: var(--card-front);
+border-color: var(--border-front);
+font-size: 2.5rem;
+}
+.card-back {
+background-color: var(--card-back);
+border-color: var(--border-back);
+-webkit-transform: rotateY(180deg) translateZ(0);
+transform: rotateY(180deg) translateZ(0);
+font-size: 3.5rem;
+}
+@media (min-width: 400px) and (min-height: 600px) {
+.card-front { font-size: 3.5rem; }
+.card-back { font-size: 4.5rem; }
+}
+.btn {
+background-color: var(--btn-bg);
+color: var(--btn-text);
+font-weight: bold;
+font-size: 1.2rem;
+padding: 0.8rem 2rem;
+border-radius: 99px;
+border: none;
+box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+cursor: pointer;
+display: flex;
+align-items: center;
+gap: 0.5rem;
+transition: transform 0.1s;
+margin-bottom: 10px;
+}
+.btn:active {
+transform: scale(0.95);
+}
+.modal-overlay {
+position: fixed;
+top: 0;
+left: 0;
+width: 100vw;
+height: 100vh;
+background: rgba(0, 0, 0, 0.6);
+display: flex;
+align-items: center;
+justify-content: center;
+z-index: 50;
+opacity: 0;
+pointer-events: none;
+transition: opacity 0.3s ease;
+}
+.modal-overlay.active {
+opacity: 1;
+pointer-events: auto;
+}
+.modal-content {
+background: white;
+padding: 2rem;
+border-radius: 1.5rem;
+text-align: center;
+width: 80%;
+max-width: 320px;
+box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+transform: scale(0.8);
+transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.modal-overlay.active .modal-content {
+transform: scale(1);
+}
+.modal-content h2 { margin: 0 0 0.5rem 0; font-size: 2rem; color: #1F2937; }
+.modal-content p { color: #4B5563; margin-bottom: 1rem; }
+.modal-score { font-size: 1.25rem; font-weight: bold; color: var(--text-header); margin-bottom: 1.5rem; }
+.btn-play-again {
+width: 100%;
+background-color: var(--success-green);
+color: white;
+font-size: 1.25rem;
+padding: 1rem;
+border-radius: 1rem;
+border: none;
+font-weight: bold;
+box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.btn-play-again:active { transform: scale(0.95); }
+@keyframes fall {
+0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+.confetti {
+position: fixed;
+top: 0;
+width: 10px;
+height: 10px;
+pointer-events: none;
+z-index: 100;
+animation: fall 3s linear forwards;
+}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Safari Match</h1>
+<p>Find the matching animals!</p>
+<div class="stats">
+<div class="stat-box">
+<span class="stat-label">Moves</span>
+<div id="move-count" class="stat-value">0</div>
+</div>
+<div class="stat-box">
+<span class="stat-label">Pairs</span>
+<div id="pairs-count" class="stat-value">0 / 6</div>
+</div>
+</div>
+</div>
+<div id="game-board" class="game-board"></div>
+<button onclick="initGame()" class="btn"><span>🔄</span> Restart</button>
+<div id="win-modal" class="modal-overlay">
+<div class="modal-content">
+<div style="font-size: 4rem; margin-bottom: 0.5rem;">🏆</div>
+<h2>You Won!</h2>
+<p>Great job finding all the animals!</p>
+<div class="modal-score">Score: <span id="final-moves">0</span> moves</div>
+<button onclick="closeModalAndRestart()" class="btn-play-again">Play Again</button>
+</div>
+</div>
+<script>
+const animals = ['🦁', '🐘', '🦒', '🦓', '🐵', '🐸'];
+let cards = [];
+let flippedCards = [];
+let matchedPairs = 0;
+let moves = 0;
+let isLocked = false;
+const boardElement = document.getElementById('game-board');
+const moveElement = document.getElementById('move-count');
+const pairsElement = document.getElementById('pairs-count');
+const winModal = document.getElementById('win-modal');
+const finalMovesElement = document.getElementById('final-moves');
+let audioCtx;
+function playSound(type) {
+if (!audioCtx) {
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+if (!AudioContext) return;
+audioCtx = new AudioContext();
+}
+if (audioCtx.state === 'suspended') audioCtx.resume();
+const osc = audioCtx.createOscillator();
+const gainNode = audioCtx.createGain();
+osc.connect(gainNode);
+gainNode.connect(audioCtx.destination);
+if (type === 'flip') {
+osc.type = 'sine';
+osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+osc.start();
+osc.stop(audioCtx.currentTime + 0.1);
+} else if (type === 'match') {
+osc.type = 'triangle';
+osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.1);
+osc.frequency.setValueAtTime(800, audioCtx.currentTime + 0.2);
+gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+osc.start();
+osc.stop(audioCtx.currentTime + 0.3);
+} else if (type === 'win') {
+const now = audioCtx.currentTime;
+[523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+const osc2 = audioCtx.createOscillator();
+const gain2 = audioCtx.createGain();
+osc2.connect(gain2);
+gain2.connect(audioCtx.destination);
+osc2.frequency.value = freq;
+gain2.gain.setValueAtTime(0.1, now + i*0.1);
+gain2.gain.exponentialRampToValueAtTime(0.001, now + i*0.1 + 0.3);
+osc2.start(now + i*0.1);
+osc2.stop(now + i*0.1 + 0.3);
+});
+}
+}
+function shuffle(array) {
+let currentIndex = array.length, randomIndex;
+while (currentIndex != 0) {
+randomIndex = Math.floor(Math.random() * currentIndex);
+currentIndex--;
+[array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+}
+return array;
+}
+function createCard(animal, index) {
+const container = document.createElement('button');
+container.type = 'button';
+container.className = 'card-container';
+container.id = 'card-container-' + index;
+const clickHandler = function(e) {
+e.preventDefault();
+flipCard(index);
+};
+container.addEventListener('touchstart', clickHandler, { passive: false });
+container.addEventListener('click', clickHandler);
+const inner = document.createElement('div');
+inner.className = 'card-inner';
+const front = document.createElement('div');
+front.className = 'card-front';
+front.innerHTML = '🐾';
+const back = document.createElement('div');
+back.className = 'card-back';
+back.innerHTML = animal;
+inner.appendChild(front);
+inner.appendChild(back);
+container.appendChild(inner);
+return container;
+}
+function initGame() {
+boardElement.innerHTML = '';
+cards = [...animals, ...animals];
+cards = shuffle(cards);
+flippedCards = [];
+matchedPairs = 0;
+moves = 0;
+isLocked = false;
+moveElement.innerText = moves;
+pairsElement.innerText = `0 / ${animals.length}`;
+winModal.classList.remove('active');
+cards.forEach((animal, index) => {
+const cardElement = createCard(animal, index);
+boardElement.appendChild(cardElement);
+});
+}
+function flipCard(index) {
+if (isLocked) return;
+const cardContainer = document.getElementById('card-container-' + index);
+if (cardContainer.classList.contains('flipped') || cardContainer.classList.contains('matched')) return;
+playSound('flip');
+cardContainer.classList.add('flipped');
+flippedCards.push({ index, animal: cards[index], element: cardContainer });
+if (flippedCards.length === 2) {
+moves++;
+moveElement.innerText = moves;
+checkForMatch();
+}
+}
+function checkForMatch() {
+isLocked = true;
+const card1 = flippedCards[0];
+const card2 = flippedCards[1];
+if (card1.animal === card2.animal) {
+setTimeout(() => { playSound('match'); }, 200);
+card1.element.classList.add('matched');
+card2.element.classList.add('matched');
+matchedPairs++;
+pairsElement.innerText = `${matchedPairs} / ${animals.length}`;
+flippedCards = [];
+isLocked = false;
+if (matchedPairs === animals.length) {
+setTimeout(handleWin, 600);
+}
+} else {
+setTimeout(() => {
+card1.element.classList.remove('flipped');
+card2.element.classList.remove('flipped');
+flippedCards = [];
+isLocked = false;
+}, 1000);
+}
+}
+function createConfetti() {
+const colors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+for (let i = 0; i < 50; i++) {
+const confetti = document.createElement('div');
+confetti.className = 'confetti';
+confetti.style.left = Math.random() * 100 + 'vw';
+confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+document.body.appendChild(confetti);
+setTimeout(() => confetti.remove(), 4000);
+}
+}
+function handleWin() {
+playSound('win');
+createConfetti();
+finalMovesElement.innerText = moves;
+winModal.classList.add('active');
+}
+function closeModalAndRestart() {
+winModal.classList.remove('active');
+setTimeout(initGame, 300);
+}
+window.onload = initGame;
+</script>
+</body>
+</html>
