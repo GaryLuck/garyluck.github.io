@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maze Builder and Solver</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --line: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --wall: #000000;
+      --open: #f8fafc;
+      --start: #16a34a;
+      --finish: #dc2626;
+      --visited: #60a5fa;
+      --solution: #f59e0b;
+      --accent: #22d3ee;
+      --button: #1e293b;
+      --button-hover: #334155;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 10% 10%, #1e293b 0%, rgba(30, 41, 59, 0.2) 35%, transparent 60%),
+        radial-gradient(circle at 80% 20%, #0b3b4f 0%, rgba(11, 59, 79, 0.2) 30%, transparent 55%),
+        linear-gradient(165deg, #020617, #0f172a 60%, #111827);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 12px;
+    }
+
+    .app {
+      width: min(1100px, 100%);
+      background: color-mix(in srgb, var(--panel) 82%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(2, 6, 23, 0.55);
+    }
+
+    button {
+      background: var(--button);
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 150ms ease;
+    }
+
+    button:hover { background: var(--button-hover); }
+    button.active {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.45);
+      background: #0f2530;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .spacer { flex: 1; }
+
+    .speed {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .speed input {
+      width: 130px;
+    }
+
+    .board-wrap {
+      padding: 12px;
+    }
+
+    canvas {
+      width: 100%;
+      max-height: 78vh;
+      border-radius: 10px;
+      border: 1px solid #243041;
+      background: #000;
+      display: block;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .status {
+      padding: 0 12px 12px;
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 22px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 0 12px 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    @media (max-width: 700px) {
+      .topbar {
+        gap: 6px;
+      }
+      button {
+        font-size: 13px;
+        padding: 7px 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <button id="modeCarve" class="active">Carve</button>
+      <button id="modeStart">Set Start</button>
+      <button id="modeFinish">Set Finish</button>
+      <div class="spacer"></div>
+      <div class="speed">
+        <label for="speedRange">Animation</label>
+        <input id="speedRange" type="range" min="10" max="200" value="70" />
+        <span id="speedReadout">70ms</span>
+      </div>
+      <button id="solveBtn">Solve</button>
+      <button id="resetBtn">Fill / Start Over</button>
+    </div>
+
+    <div class="board-wrap">
+      <canvas id="mazeCanvas" aria-label="Maze grid"></canvas>
+    </div>
+
+    <div id="status" class="status">Drag to carve a path, then place Start and Finish.</div>
+
+    <div class="legend">
+      <span class="chip"><span class="swatch" style="background:#000"></span>Wall</span>
+      <span class="chip"><span class="swatch" style="background:#f8fafc"></span>Open</span>
+      <span class="chip"><span class="swatch" style="background:#16a34a"></span>Start</span>
+      <span class="chip"><span class="swatch" style="background:#dc2626"></span>Finish</span>
+      <span class="chip"><span class="swatch" style="background:#60a5fa"></span>Search</span>
+      <span class="chip"><span class="swatch" style="background:#f59e0b"></span>Solution</span>
+    </div>
+  </main>
+
+  <script>
+    const COLS = 48;
+    const ROWS = 32;
+
+    const CELL = {
+      WALL: 0,
+      OPEN: 1,
+      START: 2,
+      FINISH: 3,
+      VISITED: 4,
+      SOLUTION: 5,
+    };
+
+    const COLORS = {
+      [CELL.WALL]: '#000000',
+      [CELL.OPEN]: '#f8fafc',
+      [CELL.START]: '#16a34a',
+      [CELL.FINISH]: '#dc2626',
+      [CELL.VISITED]: '#60a5fa',
+      [CELL.SOLUTION]: '#f59e0b',
+    };
+
+    const MODE = {
+      CARVE: 'carve',
+      START: 'start',
+      FINISH: 'finish',
+    };
+
+    const canvas = document.getElementById('mazeCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const statusEl = document.getElementById('status');
+    const modeCarveBtn = document.getElementById('modeCarve');
+    const modeStartBtn = document.getElementById('modeStart');
+    const modeFinishBtn = document.getElementById('modeFinish');
+    const solveBtn = document.getElementById('solveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const speedRange = document.getElementById('speedRange');
+    const speedReadout = document.getElementById('speedReadout');
+
+    let grid = [];
+    let startPos = null;
+    let finishPos = null;
+    let mode = MODE.CARVE;
+    let dragging = false;
+    let solving = false;
+    let cancelSolve = false;
+
+    function createGrid() {
+      return Array.from({ length: ROWS }, () => Array(COLS).fill(CELL.WALL));
+    }
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function setMode(nextMode) {
+      if (solving) return;
+      mode = nextMode;
+      modeCarveBtn.classList.toggle('active', mode === MODE.CARVE);
+      modeStartBtn.classList.toggle('active', mode === MODE.START);
+      modeFinishBtn.classList.toggle('active', mode === MODE.FINISH);
+
+      if (mode === MODE.CARVE) setStatus('Carve paths by dragging.');
+      if (mode === MODE.START) setStatus('Tap a cell to place Start.');
+      if (mode === MODE.FINISH) setStatus('Tap a cell to place Finish.');
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function resetSearchOnly() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (grid[r][c] === CELL.VISITED || grid[r][c] === CELL.SOLUTION) {
+            grid[r][c] = CELL.OPEN;
+          }
+        }
+      }
+      if (startPos) grid[startPos.r][startPos.c] = CELL.START;
+      if (finishPos) grid[finishPos.r][finishPos.c] = CELL.FINISH;
+    }
+
+    function fullReset() {
+      cancelSolve = true;
+      solving = false;
+      grid = createGrid();
+      startPos = null;
+      finishPos = null;
+      setMode(MODE.CARVE);
+      setStatus('Maze refilled. Drag to carve a new one.');
+      draw();
+      updateButtons();
+    }
+
+    function updateButtons() {
+      solveBtn.disabled = solving;
+      modeCarveBtn.disabled = solving;
+      modeStartBtn.disabled = solving;
+      modeFinishBtn.disabled = solving;
+    }
+
+    function findCellFromEvent(ev) {
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const cellW = rect.width / COLS;
+      const cellH = rect.height / ROWS;
+      const c = Math.floor(x / cellW);
+      const r = Math.floor(y / cellH);
+      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
+      return { r, c };
+    }
+
+    function clearSpecialAt(r, c) {
+      if (startPos && startPos.r === r && startPos.c === c) startPos = null;
+      if (finishPos && finishPos.r === r && finishPos.c === c) finishPos = null;
+    }
+
+    function carveCell(cell) {
+      if (!cell) return;
+      const { r, c } = cell;
+      clearSpecialAt(r, c);
+      grid[r][c] = CELL.OPEN;
+    }
+
+    function setStart(cell) {
+      if (!cell) return;
+      const { r, c } = cell;
+      if (startPos) grid[startPos.r][startPos.c] = CELL.OPEN;
+      if (finishPos && finishPos.r === r && finishPos.c === c) finishPos = null;
+      startPos = { r, c };
+      grid[r][c] = CELL.START;
+      setStatus('Start placed. Set Finish or press Solve.');
+    }
+
+    function setFinish(cell) {
+      if (!cell) return;
+      const { r, c } = cell;
+      if (finishPos) grid[finishPos.r][finishPos.c] = CELL.OPEN;
+      if (startPos && startPos.r === r && startPos.c === c) startPos = null;
+      finishPos = { r, c };
+      grid[r][c] = CELL.FINISH;
+      setStatus('Finish placed. Set Start or press Solve.');
+    }
+
+    function applyAction(cell) {
+      if (!cell || solving) return;
+      resetSearchOnly();
+      if (mode === MODE.CARVE) carveCell(cell);
+      if (mode === MODE.START) setStart(cell);
+      if (mode === MODE.FINISH) setFinish(cell);
+      draw();
+    }
+
+    function key(r, c) {
+      return `${r},${c}`;
+    }
+
+    function parseKey(k) {
+      const [r, c] = k.split(',').map(Number);
+      return { r, c };
+    }
+
+    function neighbors(r, c) {
+      const out = [];
+      if (r > 0) out.push({ r: r - 1, c });
+      if (r < ROWS - 1) out.push({ r: r + 1, c });
+      if (c > 0) out.push({ r, c: c - 1 });
+      if (c < COLS - 1) out.push({ r, c: c + 1 });
+      return out;
+    }
+
+    function buildPath(parent, endKey, startKey) {
+      const path = [];
+      let cur = endKey;
+      while (cur && cur !== startKey) {
+        path.push(parseKey(cur));
+        cur = parent.get(cur);
+      }
+      path.push(parseKey(startKey));
+      path.reverse();
+      return path;
+    }
+
+    function playSuccessTone() {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        const audio = new Ctx();
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, audio.currentTime);
+        osc.frequency.linearRampToValueAtTime(659.25, audio.currentTime + 0.12);
+        osc.frequency.linearRampToValueAtTime(783.99, audio.currentTime + 0.24);
+        gain.gain.setValueAtTime(0.0001, audio.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.12, audio.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.32);
+        osc.connect(gain);
+        gain.connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + 0.33);
+      } catch (_) {
+        // Audio is optional.
+      }
+    }
+
+    async function solveMaze() {
+      if (!startPos || !finishPos) {
+        setStatus('Place both Start and Finish before solving.');
+        return;
+      }
+
+      resetSearchOnly();
+      draw();
+
+      solving = true;
+      cancelSolve = false;
+      updateButtons();
+      setStatus('Solving...');
+
+      const delay = Number(speedRange.value);
+      const queue = [];
+      const seen = new Set();
+      const parent = new Map();
+
+      const startK = key(startPos.r, startPos.c);
+      const finishK = key(finishPos.r, finishPos.c);
+
+      queue.push(startPos);
+      seen.add(startK);
+
+      let found = false;
+
+      while (queue.length && !cancelSolve) {
+        const cur = queue.shift();
+        const curK = key(cur.r, cur.c);
+
+        if (curK === finishK) {
+          found = true;
+          break;
+        }
+
+        for (const nb of neighbors(cur.r, cur.c)) {
+          const nbK = key(nb.r, nb.c);
+          if (seen.has(nbK)) continue;
+
+          const cellType = grid[nb.r][nb.c];
+          const walkable = cellType !== CELL.WALL;
+          if (!walkable) continue;
+
+          seen.add(nbK);
+          parent.set(nbK, curK);
+          queue.push(nb);
+
+          if (nbK !== finishK && nbK !== startK && grid[nb.r][nb.c] === CELL.OPEN) {
+            grid[nb.r][nb.c] = CELL.VISITED;
+          }
+        }
+
+        draw();
+        await sleep(delay);
+      }
+
+      if (cancelSolve) {
+        solving = false;
+        updateButtons();
+        setStatus('Solve cancelled.');
+        return;
+      }
+
+      if (!found) {
+        solving = false;
+        updateButtons();
+        setStatus('No path found.');
+        return;
+      }
+
+      const path = buildPath(parent, finishK, startK);
+      for (const node of path) {
+        const k = key(node.r, node.c);
+        if (k !== startK && k !== finishK) {
+          grid[node.r][node.c] = CELL.SOLUTION;
+          draw();
+          await sleep(Math.max(18, Math.floor(delay * 0.55)));
+        }
+      }
+
+      grid[startPos.r][startPos.c] = CELL.START;
+      grid[finishPos.r][finishPos.c] = CELL.FINISH;
+      draw();
+      solving = false;
+      updateButtons();
+      setStatus(`Solved. Path length: ${path.length - 1} moves.`);
+      playSuccessTone();
+    }
+
+    function draw() {
+      const cellW = canvas.width / COLS;
+      const cellH = canvas.height / ROWS;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          ctx.fillStyle = COLORS[grid[r][c]];
+          ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
+        }
+      }
+
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let c = 1; c < COLS; c++) {
+        const x = Math.round(c * cellW) + 0.5;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+      }
+      for (let r = 1; r < ROWS; r++) {
+        const y = Math.round(r * cellH) + 0.5;
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+      }
+      ctx.stroke();
+    }
+
+    function resizeCanvas() {
+      const wrap = canvas.parentElement;
+      const width = Math.max(320, Math.floor(wrap.clientWidth));
+      const height = Math.floor(width * (ROWS / COLS));
+      canvas.width = width;
+      canvas.height = height;
+      draw();
+    }
+
+    modeCarveBtn.addEventListener('click', () => setMode(MODE.CARVE));
+    modeStartBtn.addEventListener('click', () => setMode(MODE.START));
+    modeFinishBtn.addEventListener('click', () => setMode(MODE.FINISH));
+
+    solveBtn.addEventListener('click', () => {
+      if (!solving) solveMaze();
+    });
+
+    resetBtn.addEventListener('click', () => fullReset());
+
+    speedRange.addEventListener('input', () => {
+      speedReadout.textContent = `${speedRange.value}ms`;
+    });
+
+    canvas.addEventListener('pointerdown', (ev) => {
+      dragging = true;
+      canvas.setPointerCapture(ev.pointerId);
+      applyAction(findCellFromEvent(ev));
+    });
+
+    canvas.addEventListener('pointermove', (ev) => {
+      if (!dragging) return;
+      if (mode !== MODE.CARVE) return;
+      applyAction(findCellFromEvent(ev));
+    });
+
+    canvas.addEventListener('pointerup', (ev) => {
+      dragging = false;
+      try { canvas.releasePointerCapture(ev.pointerId); } catch (_) {}
+    });
+
+    canvas.addEventListener('pointercancel', (ev) => {
+      dragging = false;
+      try { canvas.releasePointerCapture(ev.pointerId); } catch (_) {}
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+
+    function init() {
+      grid = createGrid();
+      speedReadout.textContent = `${speedRange.value}ms`;
+      resizeCanvas();
+      updateButtons();
+    }
+
+    init();
+  </script>
+</body>
+</html>
+
