@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Maze Builder + Solver</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --ink: #e5e7eb;
+      --accent: #10b981;
+      --wall: #000000;
+      --path: #ffffff;
+      --visited: #93c5fd;
+      --solution: #f59e0b;
+      --start: #22c55e;
+      --finish: #ef4444;
+      --gridline: #1f2937;
+    }
+
+    * {
+      box-sizing: border-box;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #1f2937, #0b1020 60%);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      background: color-mix(in oklab, var(--panel), #000 15%);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .controls label,
+    .controls span {
+      font-size: 0.9rem;
+    }
+
+    button, select, input[type="range"] {
+      border-radius: 8px;
+      border: 1px solid #374151;
+      background: #0b1221;
+      color: var(--ink);
+      padding: 8px 10px;
+      font-size: 0.9rem;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #111d36;
+    }
+
+    button.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent) inset;
+    }
+
+    .canvas-wrap {
+      min-height: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    canvas {
+      background: #000;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      max-width: 100%;
+      max-height: 100%;
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="modeDraw" class="active">Draw Path</button>
+    <button id="modeFill">Fill Walls</button>
+    <button id="modeStart">Set Start</button>
+    <button id="modeFinish">Set Finish</button>
+
+    <label for="algo">Algorithm</label>
+    <select id="algo">
+      <option value="bfs">BFS</option>
+      <option value="dfs">DFS</option>
+      <option value="astar">A*</option>
+    </select>
+
+    <label for="speed">Speed</label>
+    <input id="speed" type="range" min="1" max="120" value="45">
+    <span id="speedLabel">45 cells/s</span>
+
+    <button id="solve">Solve Maze</button>
+    <button id="clear">Fill & Start Over</button>
+    <span id="status">Draw a maze, then set start and finish.</span>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="maze" aria-label="Maze grid"></canvas>
+  </div>
+
+  <script>
+    (() => {
+      const ROWS = 40;
+      const COLS = 40;
+      const canvas = document.getElementById("maze");
+      const ctx = canvas.getContext("2d");
+
+      const CELL = 18;
+      canvas.width = COLS * CELL;
+      canvas.height = ROWS * CELL;
+
+      const modeButtons = {
+        draw: document.getElementById("modeDraw"),
+        fill: document.getElementById("modeFill"),
+        start: document.getElementById("modeStart"),
+        finish: document.getElementById("modeFinish")
+      };
+      const algoEl = document.getElementById("algo");
+      const speedEl = document.getElementById("speed");
+      const speedLabel = document.getElementById("speedLabel");
+      const solveBtn = document.getElementById("solve");
+      const clearBtn = document.getElementById("clear");
+      const statusEl = document.getElementById("status");
+
+      const WALL = 1;
+      const OPEN = 0;
+      const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(WALL));
+
+      let mode = "draw";
+      let isPointerDown = false;
+      let solving = false;
+      let start = null;
+      let finish = null;
+      let visitedAnim = [];
+      let pathAnim = [];
+      let animToken = 0;
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function setMode(next) {
+        mode = next;
+        Object.entries(modeButtons).forEach(([key, btn]) => {
+          btn.classList.toggle("active", key === next);
+        });
+      }
+
+      function fillWalls() {
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            grid[r][c] = WALL;
+          }
+        }
+        visitedAnim = [];
+        pathAnim = [];
+        start = null;
+        finish = null;
+      }
+
+      function inBounds(r, c) {
+        return r >= 0 && c >= 0 && r < ROWS && c < COLS;
+      }
+
+      function keyOf(r, c) {
+        return r + "," + c;
+      }
+
+      function parseKey(key) {
+        const [r, c] = key.split(",").map(Number);
+        return { r, c };
+      }
+
+      function neighbors(r, c) {
+        const out = [];
+        const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (inBounds(nr, nc) && grid[nr][nc] === OPEN) out.push({ r: nr, c: nc });
+        }
+        return out;
+      }
+
+      function heuristic(a, b) {
+        return Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+      }
+
+      function reconstruct(cameFrom, endKey) {
+        const path = [];
+        let cur = endKey;
+        while (cur) {
+          path.push(parseKey(cur));
+          cur = cameFrom.get(cur) || null;
+        }
+        path.reverse();
+        return path;
+      }
+
+      function solveBFS() {
+        const sKey = keyOf(start.r, start.c);
+        const fKey = keyOf(finish.r, finish.c);
+        const q = [start];
+        const seen = new Set([sKey]);
+        const cameFrom = new Map();
+        const visitedOrder = [];
+        while (q.length) {
+          const cur = q.shift();
+          const cKey = keyOf(cur.r, cur.c);
+          visitedOrder.push(cur);
+          if (cKey === fKey) return { visitedOrder, path: reconstruct(cameFrom, cKey) };
+          for (const n of neighbors(cur.r, cur.c)) {
+            const nKey = keyOf(n.r, n.c);
+            if (seen.has(nKey)) continue;
+            seen.add(nKey);
+            cameFrom.set(nKey, cKey);
+            q.push(n);
+          }
+        }
+        return { visitedOrder, path: [] };
+      }
+
+      function solveDFS() {
+        const sKey = keyOf(start.r, start.c);
+        const fKey = keyOf(finish.r, finish.c);
+        const stack = [start];
+        const seen = new Set([sKey]);
+        const cameFrom = new Map();
+        const visitedOrder = [];
+        while (stack.length) {
+          const cur = stack.pop();
+          const cKey = keyOf(cur.r, cur.c);
+          visitedOrder.push(cur);
+          if (cKey === fKey) return { visitedOrder, path: reconstruct(cameFrom, cKey) };
+          const next = neighbors(cur.r, cur.c).reverse();
+          for (const n of next) {
+            const nKey = keyOf(n.r, n.c);
+            if (seen.has(nKey)) continue;
+            seen.add(nKey);
+            cameFrom.set(nKey, cKey);
+            stack.push(n);
+          }
+        }
+        return { visitedOrder, path: [] };
+      }
+
+      function solveAStar() {
+        const sKey = keyOf(start.r, start.c);
+        const fKey = keyOf(finish.r, finish.c);
+        const openList = [{ r: start.r, c: start.c, g: 0, f: heuristic(start, finish) }];
+        const openSet = new Set([sKey]);
+        const cameFrom = new Map();
+        const gScore = new Map([[sKey, 0]]);
+        const visitedOrder = [];
+
+        while (openList.length) {
+          let bestIdx = 0;
+          for (let i = 1; i < openList.length; i++) {
+            if (openList[i].f < openList[bestIdx].f) bestIdx = i;
+          }
+          const cur = openList.splice(bestIdx, 1)[0];
+          const cKey = keyOf(cur.r, cur.c);
+          openSet.delete(cKey);
+          visitedOrder.push({ r: cur.r, c: cur.c });
+          if (cKey === fKey) return { visitedOrder, path: reconstruct(cameFrom, cKey) };
+
+          for (const n of neighbors(cur.r, cur.c)) {
+            const nKey = keyOf(n.r, n.c);
+            const tentativeG = (gScore.get(cKey) ?? Infinity) + 1;
+            if (tentativeG >= (gScore.get(nKey) ?? Infinity)) continue;
+            cameFrom.set(nKey, cKey);
+            gScore.set(nKey, tentativeG);
+            if (!openSet.has(nKey)) {
+              openSet.add(nKey);
+              openList.push({
+                r: n.r,
+                c: n.c,
+                g: tentativeG,
+                f: tentativeG + heuristic(n, finish)
+              });
+            }
+          }
+        }
+        return { visitedOrder, path: [] };
+      }
+
+      function getCellFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const c = Math.floor((x / rect.width) * COLS);
+        const r = Math.floor((y / rect.height) * ROWS);
+        if (!inBounds(r, c)) return null;
+        return { r, c };
+      }
+
+      function paintCell(r, c) {
+        if (!inBounds(r, c) || solving) return;
+        if (mode === "draw") {
+          grid[r][c] = OPEN;
+        } else if (mode === "fill") {
+          grid[r][c] = WALL;
+          if (start && start.r === r && start.c === c) start = null;
+          if (finish && finish.r === r && finish.c === c) finish = null;
+        } else if (mode === "start") {
+          grid[r][c] = OPEN;
+          start = { r, c };
+        } else if (mode === "finish") {
+          grid[r][c] = OPEN;
+          finish = { r, c };
+        }
+        visitedAnim = [];
+        pathAnim = [];
+        draw();
+      }
+
+      function drawCell(r, c, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--gridline").trim();
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(c * CELL + 0.25, r * CELL + 0.25, CELL - 0.5, CELL - 0.5);
+      }
+
+      function draw() {
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            drawCell(r, c, grid[r][c] === WALL ? getCss("--wall") : getCss("--path"));
+          }
+        }
+        for (const v of visitedAnim) {
+          if (start && v.r === start.r && v.c === start.c) continue;
+          if (finish && v.r === finish.r && v.c === finish.c) continue;
+          drawCell(v.r, v.c, getCss("--visited"));
+        }
+        for (const p of pathAnim) {
+          if (start && p.r === start.r && p.c === start.c) continue;
+          if (finish && p.r === finish.r && p.c === finish.c) continue;
+          drawCell(p.r, p.c, getCss("--solution"));
+        }
+        if (start) drawCell(start.r, start.c, getCss("--start"));
+        if (finish) drawCell(finish.r, finish.c, getCss("--finish"));
+      }
+
+      function getCss(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+
+      async function animateSolve(visited, path, token) {
+        const cellsPerSec = Number(speedEl.value);
+        const delay = Math.max(5, Math.floor(1000 / cellsPerSec));
+        visitedAnim = [];
+        pathAnim = [];
+        draw();
+
+        for (const step of visited) {
+          if (token !== animToken) return;
+          visitedAnim.push(step);
+          draw();
+          await sleep(delay);
+        }
+
+        for (const step of path) {
+          if (token !== animToken) return;
+          pathAnim.push(step);
+          draw();
+          await sleep(delay);
+        }
+      }
+
+      async function solveMaze() {
+        if (solving) return;
+        if (!start || !finish) {
+          setStatus("Set both start and finish first.");
+          return;
+        }
+        if (grid[start.r][start.c] === WALL || grid[finish.r][finish.c] === WALL) {
+          setStatus("Start/finish must be on open cells.");
+          return;
+        }
+        solving = true;
+        animToken++;
+        const token = animToken;
+        setStatus("Solving...");
+        let result;
+        if (algoEl.value === "dfs") result = solveDFS();
+        else if (algoEl.value === "astar") result = solveAStar();
+        else result = solveBFS();
+
+        await animateSolve(result.visitedOrder, result.path, token);
+        if (token !== animToken) return;
+        if (result.path.length) {
+          setStatus("Solved. Path length: " + (result.path.length - 1));
+        } else {
+          setStatus("No solution found.");
+        }
+        solving = false;
+      }
+
+      function bindPointer() {
+        canvas.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          canvas.setPointerCapture(e.pointerId);
+          isPointerDown = true;
+          const cell = getCellFromEvent(e);
+          if (cell) paintCell(cell.r, cell.c);
+        });
+        canvas.addEventListener("pointermove", (e) => {
+          if (!isPointerDown) return;
+          e.preventDefault();
+          const cell = getCellFromEvent(e);
+          if (cell) paintCell(cell.r, cell.c);
+        });
+        const release = () => { isPointerDown = false; };
+        canvas.addEventListener("pointerup", release);
+        canvas.addEventListener("pointercancel", release);
+        canvas.addEventListener("pointerleave", release);
+      }
+
+      modeButtons.draw.addEventListener("click", () => setMode("draw"));
+      modeButtons.fill.addEventListener("click", () => setMode("fill"));
+      modeButtons.start.addEventListener("click", () => setMode("start"));
+      modeButtons.finish.addEventListener("click", () => setMode("finish"));
+      solveBtn.addEventListener("click", solveMaze);
+      clearBtn.addEventListener("click", () => {
+        animToken++;
+        solving = false;
+        fillWalls();
+        draw();
+        setStatus("Maze filled. Start over by drilling a path.");
+      });
+      speedEl.addEventListener("input", () => {
+        speedLabel.textContent = speedEl.value + " cells/s";
+      });
+
+      fillWalls();
+      bindPointer();
+      draw();
+    })();
+  </script>
+</body>
+</html>
