@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Creator and Solver</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #mazeCanvas {
+            border: 2px solid #333;
+            cursor: pointer;
+        }
+       .controls {
+            margin-top: 10px;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="mazeCanvas"></canvas>
+    <div class="controls">
+        <button id="solveBtn">Solve Maze</button>
+        <button id="resetBtn">Fill In and Start Over</button>
+    </div>
+    <div>
+        <p><strong>Instructions:</strong></p>
+        <ol>
+            <li>Click and drag to carve a path in the maze.</li>
+            <li>Single-click to set the <strong>start</strong> point (it will be green).</li>
+            <li>Single-click again to set the <strong>finish</strong> point (it will be red).</li>
+        </ol>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const solveBtn = document.getElementById('solveBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        const COLS = 41;
+        const ROWS = 41;
+        const CELL_SIZE = 15;
+
+        canvas.width = COLS * CELL_SIZE;
+        canvas.height = ROWS * CELL_SIZE;
+
+        let maze = [];
+        let start = null;
+        let end = null;
+        let isDrawing = false;
+
+        const WALL = 0;
+        const PATH = 1;
+
+        function initializeMaze() {
+            maze = Array(ROWS).fill(null).map(() => Array(COLS).fill(WALL));
+            start = null;
+            end = null;
+            drawMaze();
+        }
+
+        function drawMaze() {
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    drawCell(x, y, maze[y][x] === WALL? 'black' : 'white');
+                }
+            }
+        }
+        
+        function drawCell(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+
+        function getCellFromMouseEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            return {
+                col: Math.floor(x / CELL_SIZE),
+                row: Math.floor(y / CELL_SIZE)
+            };
+        }
+
+        canvas.addEventListener('mousedown', e => {
+            isDrawing = true;
+            const { col, row } = getCellFromMouseEvent(e);
+             if (!start) {
+                start = { x: col, y: row };
+                maze[row][col] = PATH;
+                drawCell(col, row, 'green');
+            } else if (!end) {
+                end = { x: col, y: row };
+                maze[row][col] = PATH;
+                drawCell(col, row, 'red');
+            } else {
+                 maze[row][col] = PATH;
+                 drawCell(col, row, 'white');
+            }
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            if (isDrawing && start && end) {
+                const { col, row } = getCellFromMouseEvent(e);
+                if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+                    maze[row][col] = PATH;
+                    drawCell(col, row, 'white');
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mouseleave', () => isDrawing = false);
+
+        resetBtn.addEventListener('click', initializeMaze);
+
+        solveBtn.addEventListener('click', () => {
+             if (start && end) {
+                solveMaze();
+            } else {
+                alert("Please select a start and end point first.");
+            }
+        });
+        
+        async function solveMaze() {
+            const queue = [[start]];
+            const visited = new Set([`${start.y}-${start.x}`]);
+
+            while (queue.length > 0) {
+                const path = queue.shift();
+                const { x, y } = path[path.length - 1];
+
+                if (x === end.x && y === end.y) {
+                    drawSolution(path);
+                    return;
+                }
+
+                const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+                for (const [dx, dy] of neighbors) {
+                    const newX = x + dx;
+                    const newY = y + dy;
+
+                    if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS &&
+                        maze[newY][newX] === PATH &&!visited.has(`${newY}-${newX}`)) {
+                        
+                        visited.add(`${newY}-${newX}`);
+                        const newPath = [...path, { x: newX, y: newY }];
+                        queue.push(newPath);
+                        
+                        if(!(newX === end.x && newY === end.y)){
+                           drawCell(newX, newY, 'lightblue');
+                           await new Promise(resolve => setTimeout(resolve, 10));
+                        }
+                    }
+                }
+            }
+        }
+        
+        function drawSolution(path) {
+            path.forEach(p => {
+                 if (!((p.x === start.x && p.y === start.y) || (p.x === end.x && p.y === end.y))) {
+                    drawCell(p.x, p.y, 'yellow');
+                }
+            });
+        }
+
+        initializeMaze();
+    </script>
+
+</body>
+</html>
