@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Interactive Maze Builder & Solver</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: none;
+    background: #222;
+    color: #eee;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  #toolbar {
+    padding: 6px 10px;
+    background: #333;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+  }
+  #toolbar label {
+    margin-right: 4px;
+    white-space: nowrap;
+  }
+  #toolbar select, #toolbar input[type=range], #toolbar button {
+    font-size: 14px;
+  }
+  #toolbar button {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background: #444;
+    color: #eee;
+    cursor: pointer;
+  }
+  #toolbar button:hover {
+    background: #555;
+  }
+  #toolbar .group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #2a2a2a;
+  }
+  #status {
+    margin-left: auto;
+    font-size: 13px;
+    opacity: 0.8;
+  }
+  #canvas-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #111;
+  }
+  canvas {
+    background: #000;
+    touch-action: none;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <div class="group">
+      <label>Draw mode:</label>
+      <label><input type="radio" name="drawmode" value="carve" checked> Carve path</label>
+      <label><input type="radio" name="drawmode" value="fill"> Fill wall</label>
+      <label><input type="radio" name="drawmode" value="start"> Set start</label>
+      <label><input type="radio" name="drawmode" value="finish"> Set finish</label>
+    </div>
+
+    <div class="group">
+      <label for="algo">Algorithm:</label>
+      <select id="algo">
+        <option value="bfs">BFS</option>
+        <option value="dfs">DFS</option>
+        <option value="astar">A*</option>
+      </select>
+    </div>
+
+    <div class="group">
+      <label for="speed">Speed:</label>
+      <input id="speed" type="range" min="1" max="200" value="60">
+    </div>
+
+    <button id="solveBtn">Solve</button>
+    <button id="resetBtn">Reset / New Maze</button>
+
+    <div id="status">Ready</div>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="mazeCanvas" width="600" height="600"></canvas>
+  </div>
+</div>
+
+<!-- Simple success sound (short beep) embedded as base64 -->
+<audio id="successSound" preload="auto"
+  src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAAA//8AAP//AAD//wAA//8AAP//AAD//wAA">
+</audio>
+
+<script>
+(function() {
+  const canvas = document.getElementById('mazeCanvas');
+  const ctx = canvas.getContext('2d');
+  const algoSelect = document.getElementById('algo');
+  const speedSlider = document.getElementById('speed');
+  const solveBtn = document.getElementById('solveBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const statusEl = document.getElementById('status');
+  const successSound = document.getElementById('successSound');
+
+  // Grid configuration
+  const ROWS = 30;
+  const COLS = 30;
+  let cellSize = Math.floor(Math.min(canvas.width, canvas.height) / Math.max(ROWS, COLS));
+
+  // Cell types
+  const WALL = 0;
+  const PATH = 1;
+
+  // Colors
+  const COLORS = {
+    wall: '#000000',
+    path: '#ffffff',
+    start: '#00aa00',
+    finish: '#aa0000',
+    frontier: '#3366ff',
+    visited: '#cccc00',
+    solution: '#00ffff'
+  };
+
+  // Grid data
+  let grid = [];
+  let startCell = null;   // {r, c}
+  let finishCell = null;  // {r, c}
+  let solving = false;
+  let drawMode = 'carve';
+  let isDrawing = false;
+
+  function initGrid() {
+    grid = [];
+    for (let r = 0; r < ROWS; r++) {
+      const row = [];
+      for (let c = 0; c < COLS; c++) {
+        row.push(WALL);
+      }
+      grid.push(row);
+    }
+    startCell = null;
+    finishCell = null;
+    solving = false;
+    statusEl.textContent = 'Maze cleared. Draw paths, set start and finish, then click Solve.';
+    drawGrid();
+  }
+
+  function drawCell(r, c, colorOverride) {
+    const x = c * cellSize;
+    const y = r * cellSize;
+    const type = grid[r][c];
+    let color = COLORS.wall;
+    if (colorOverride) {
+      color = colorOverride;
+    } else if (startCell && startCell.r === r && startCell.c === c) {
+      color = COLORS.start;
+    } else if (finishCell && finishCell.r === r && finishCell.c === c) {
+      color = COLORS.finish;
+    } else if (type === PATH) {
+      color = COLORS.path;
+    }
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, cellSize, cellSize);
+  }
+
+  function drawGrid() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        drawCell(r, c);
+      }
+    }
+  }
+
+  function getCellFromEvent(ev) {
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    if (ev.touches && ev.touches.length > 0) {
+      clientX = ev.touches[0].clientX;
+      clientY = ev.touches[0].clientY;
+    } else {
+      clientX = ev.clientX;
+      clientY = ev.clientY;
+    }
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const c = Math.floor(x / cellSize);
+    const r = Math.floor(y / cellSize);
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
+    return { r, c };
+  }
+
+  function handleDrawAtCell(cell) {
+    if (!cell || solving) return;
+    const { r, c } = cell;
+    if (drawMode === 'carve') {
+      grid[r][c] = PATH;
+      drawCell(r, c);
+    } else if (drawMode === 'fill') {
+      grid[r][c] = WALL;
+      if (startCell && startCell.r === r && startCell.c === c) startCell = null;
+      if (finishCell && finishCell.r === r && finishCell.c === c) finishCell = null;
+      drawCell(r, c);
+    } else if (drawMode === 'start') {
+      if (grid[r][c] === WALL) grid[r][c] = PATH;
+      startCell = { r, c };
+      drawGrid();
+    } else if (drawMode === 'finish') {
+      if (grid[r][c] === WALL) grid[r][c] = PATH;
+      finishCell = { r, c };
+      drawGrid();
+    }
+  }
+
+  // Mouse events
+  canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    isDrawing = true;
+    handleDrawAtCell(getCellFromEvent(e));
+  });
+  window.addEventListener('mouseup', () => {
+    isDrawing = false;
+  });
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    handleDrawAtCell(getCellFromEvent(e));
+  });
+
+  // Touch events
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    isDrawing = true;
+    handleDrawAtCell(getCellFromEvent(e));
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    handleDrawAtCell(getCellFromEvent(e));
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    isDrawing = false;
+  }, { passive: false });
+
+  // Prevent scrolling on the whole page for touch
+  document.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+  }, { passive: false });
+
+  // Draw mode radio buttons
+  document.querySelectorAll('input[name="drawmode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      drawMode = document.querySelector('input[name="drawmode"]:checked').value;
+    });
+  });
+
+  // Utility: delay based on speed slider
+  function getDelay() {
+    const v = parseInt(speedSlider.value, 10); // 1..200
+    // Map slider to delay ms (higher slider = faster)
+    const maxDelay = 200;
+    const minDelay = 5;
+    const t = v / 200;
+    return Math.round(maxDelay - t * (maxDelay - minDelay));
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function neighbors(r, c) {
+    const res = [];
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1]
+    ];
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+        if (grid[nr][nc] === PATH || (finishCell && finishCell.r === nr && finishCell.c === nc)) {
+          res.push({ r: nr, c: nc });
+        }
+      }
+    }
+    return res;
+  }
+
+  function manhattan(a, b) {
+    return Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+  }
+
+  async function animatePath(prev, end) {
+    // Reconstruct path
+    const path = [];
+    let curKey = `${end.r},${end.c}`;
+    while (curKey in prev) {
+      const [r, c] = curKey.split(',').map(Number);
+      path.push({ r, c });
+      curKey = prev[curKey];
+    }
+    path.reverse();
+    for (const cell of path) {
+      if (startCell && cell.r === startCell.r && cell.c === startCell.c) continue;
+      if (finishCell && cell.r === finishCell.r && cell.c === finishCell.c) continue;
+      drawCell(cell.r, cell.c, COLORS.solution);
+      await sleep(getDelay());
+    }
+  }
+
+  async function solveBFS() {
+    const q = [];
+    const visited = new Set();
+    const prev = {};
+    const startKey = `${startCell.r},${startCell.c}`;
+    q.push(startCell);
+    visited.add(startKey);
+
+    while (q.length > 0) {
+      const cur = q.shift();
+      const curKey = `${cur.r},${cur.c}`;
+
+      if (!(startCell && cur.r === startCell.r && cur.c === startCell.c) &&
+          !(finishCell && cur.r === finishCell.r && cur.c === finishCell.c)) {
+        drawCell(cur.r, cur.c, COLORS.visited);
+      }
+
+      if (finishCell && cur.r === finishCell.r && cur.c === finishCell.c) {
+        await animatePath(prev, cur);
+        return true;
+      }
+
+      for (const nb of neighbors(cur.r, cur.c)) {
+        const key = `${nb.r},${nb.c}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          prev[key] = curKey;
+          q.push(nb);
+          if (!(finishCell && nb.r === finishCell.r && nb.c === finishCell.c)) {
+            drawCell(nb.r, nb.c, COLORS.frontier);
+          }
+        }
+      }
+      await sleep(getDelay());
+    }
+    return false;
+  }
+
+  async function solveDFS() {
+    const stack = [];
+    const visited = new Set();
+    const prev = {};
+    const startKey = `${startCell.r},${startCell.c}`;
+    stack.push(startCell);
+    visited.add(startKey);
+
+    while (stack.length > 0) {
+      const cur = stack.pop();
+      const curKey = `${cur.r},${cur.c}`;
+
+      if (!(startCell && cur.r === startCell.r && cur.c === startCell.c) &&
+          !(finishCell && cur.r === finishCell.r && cur.c === finishCell.c)) {
+        drawCell(cur.r, cur.c, COLORS.visited);
+      }
+
+      if (finishCell && cur.r === finishCell.r && cur.c === finishCell.c) {
+        await animatePath(prev, cur);
+        return true;
+      }
+
+      const nbs = neighbors(cur.r, cur.c);
+      // To make DFS visually interesting, randomize neighbors
+      for (let i = nbs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [nbs[i], nbs[j]] = [nbs[j], nbs[i]];
+      }
+
+      for (const nb of nbs) {
+        const key = `${nb.r},${nb.c}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          prev[key] = curKey;
+          stack.push(nb);
+          if (!(finishCell && nb.r === finishCell.r && nb.c === finishCell.c)) {
+            drawCell(nb.r, nb.c, COLORS.frontier);
+          }
+        }
+      }
+      await sleep(getDelay());
+    }
+    return false;
+  }
+
+  async function solveAStar() {
+    const open = [];
+    const openSet = new Set();
+    const closedSet = new Set();
+    const prev = {};
+    const gScore = {};
+    const fScore = {};
+
+    function key(cell) {
+      return `${cell.r},${cell.c}`;
+    }
+
+    function pushOpen(cell) {
+      open.push(cell);
+      openSet.add(key(cell));
+    }
+
+    function popLowestF() {
+      let bestIdx = 0;
+      let bestF = fScore[key(open[0])] ?? Infinity;
+      for (let i = 1; i < open.length; i++) {
+        const k = key(open[i]);
+        const f = fScore[k] ?? Infinity;
+        if (f < bestF) {
+          bestF = f;
+          bestIdx = i;
+        }
+      }
+      const cell = open[bestIdx];
+      open.splice(bestIdx, 1);
+      openSet.delete(key(cell));
+      return cell;
+    }
+
+    const startKey = key(startCell);
+    gScore[startKey] = 0;
+    fScore[startKey] = manhattan(startCell, finishCell);
+    pushOpen(startCell);
+
+    while (open.length > 0) {
+      const cur = popLowestF();
+      const curKey = key(cur);
+
+      if (!(startCell && cur.r === startCell.r && cur.c === startCell.c) &&
+          !(finishCell && cur.r === finishCell.r && cur.c === finishCell.c)) {
+        drawCell(cur.r, cur.c, COLORS.visited);
+      }
+
+      if (finishCell && cur.r === finishCell.r && cur.c === finishCell.c) {
+        await animatePath(prev, cur);
+        return true;
+      }
+
+      closedSet.add(curKey);
+
+      for (const nb of neighbors(cur.r, cur.c)) {
+        const nbKey = key(nb);
+        if (closedSet.has(nbKey)) continue;
+
+        const tentativeG = (gScore[curKey] ?? Infinity) + 1;
+        if (!openSet.has(nbKey) || tentativeG < (gScore[nbKey] ?? Infinity)) {
+          prev[nbKey] = curKey;
+          gScore[nbKey] = tentativeG;
+          fScore[nbKey] = tentativeG + manhattan(nb, finishCell);
+          if (!openSet.has(nbKey)) {
+            pushOpen(nb);
+            if (!(finishCell && nb.r === finishCell.r && nb.c === finishCell.c)) {
+              drawCell(nb.r, nb.c, COLORS.frontier);
+            }
+          }
+        }
+      }
+      await sleep(getDelay());
+    }
+    return false;
+  }
+
+  async function solveMaze() {
+    if (solving) return;
+    if (!startCell || !finishCell) {
+      statusEl.textContent = 'Please set both start and finish cells.';
+      return;
+    }
+    solving = true;
+    statusEl.textContent = 'Solving...';
+    drawGrid(); // redraw clean maze with start/finish
+
+    let found = false;
+    const algo = algoSelect.value;
+    if (algo === 'bfs') {
+      found = await solveBFS();
+    } else if (algo === 'dfs') {
+      found = await solveDFS();
+    } else if (algo === 'astar') {
+      found = await solveAStar();
+    }
+
+    if (found) {
+      statusEl.textContent = 'Solution found.';
+      try { successSound.currentTime = 0; successSound.play(); } catch (e) {}
+    } else {
+      statusEl.textContent = 'No path found.';
+    }
+    solving = false;
+  }
+
+  solveBtn.addEventListener('click', () => {
+    solveMaze();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    initGrid();
+  });
+
+  // Initial setup
+  initGrid();
+})();
+</script>
+</body>
+</html>
