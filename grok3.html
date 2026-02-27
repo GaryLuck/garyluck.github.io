@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Driller & Solver</title>
+    <style>
+        body { margin:0; padding:20px; font-family:'Segoe UI',Arial,sans-serif; background:linear-gradient(#f0f4f8,#d9e2ec); display:flex; flex-direction:column; align-items:center; color:#222; }
+        h1 { margin:10px 0 5px; font-size:2.2em; color:#1a3c6e; }
+        .subtitle { margin:0 0 20px; font-size:1.1em; color:#444; }
+        .controls { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:center; margin-bottom:15px; background:white; padding:12px 20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+        label { font-weight:600; margin-right:6px; }
+        select, button, input[type="range"] { padding:10px 16px; font-size:16px; border-radius:8px; border:2px solid #1a3c6e; background:white; cursor:pointer; transition:all 0.2s; }
+        select { min-width:160px; }
+        input[type="range"] { width:150px; padding:5px; }
+        button:hover { background:#1a3c6e; color:white; transform:translateY(-2px); }
+        #solveBtn { background:#22c55e; color:white; border-color:#16a34a; font-weight:bold; }
+        #solveBtn:hover { background:#16a34a; }
+        canvas { border:4px solid #1a3c6e; border-radius:12px; box-shadow:0 10px 30px rgba(26,60,110,0.3); background:#fff; touch-action:none; }
+        .info { margin-top:15px; font-size:0.95em; max-width:520px; text-align:center; color:#555; }
+        .legend { display:flex; gap:20px; margin-top:10px; flex-wrap:wrap; justify-content:center; }
+        .legend-item { display:flex; align-items:center; gap:8px; font-size:0.9em; }
+        .legend-color { width:24px; height:24px; border:1px solid #333; border-radius:4px; }
+        #speedLabel { font-size:14px; color:#333; }
+    </style>
+</head>
+<body>
+    <h1>Maze Driller & Solver</h1>
+    <p class="subtitle">Draw paths • Set S/F • Choose Algo + Speed • Watch it solve!</p>
+
+    <div class="controls">
+        <label for="modeSelect">Mode:</label>
+        <select id="modeSelect">
+            <option value="draw" selected>🖌️ Drill Path</option>
+            <option value="start">🏁 Set Start (S)</option>
+            <option value="end">🎯 Set Finish (F)</option>
+        </select>
+
+        <label for="algoSelect">Algorithm:</label>
+        <select id="algoSelect">
+            <option value="bfs" selected>BFS</option>
+            <option value="dfs">DFS</option>
+            <option value="astar">A* (fixed!)</option>
+        </select>
+
+        <label for="speedSlider">Anim Speed:</label>
+        <input type="range" id="speedSlider" min="1" max="10" value="5" step="1">
+        <span id="speedLabel">Medium (5x)</span>
+        
+        <button id="solveBtn">🚀 Solve Maze</button>
+        <button id="resetBtn">🔄 New Maze</button>
+        <button id="clearBtn">🧹 Clear Solution</button>
+    </div>
+
+    <canvas id="canvas" width="500" height="500"></canvas>
+
+    <div class="info"><strong>How to:</strong> Drill white paths (black=wall). Place green S + red F. Pick algo & speed. Solve!</div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background:#1a1a1a"></div> Wall</div>
+        <div class="legend-item"><div class="legend-color" style="background:#f0f0f0"></div> Path</div>
+        <div class="legend-item"><div class="legend-color" style="background:#22cc22"></div> Start</div>
+        <div class="legend-item"><div class="legend-color" style="background:#cc2222"></div> Finish</div>
+        <div class="legend-item"><div class="legend-color" style="background:#4a9eff"></div> Searched</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ffcc00"></div> Solution</div>
+    </div>
+
+    <script>
+        const ROWS = 25;
+        const COLS = 25;
+        const CELL_SIZE = 20;
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let grid = [];
+        let start = null;
+        let end = null;
+        let explored = null;
+        let pathCells = null;
+        let mode = 'draw';
+        let algo = 'bfs';
+        let animSpeed = 5;
+        let isDragging = false;
+
+        // Simple binary min-heap for A*
+        class MinHeap {
+            constructor() { this.heap = []; }
+            push(value) {
+                this.heap.push(value);
+                this._siftUp(this.heap.length - 1);
+            }
+            pop() {
+                if (this.heap.length === 0) return null;
+                if (this.heap.length === 1) return this.heap.pop();
+                const min = this.heap[0];
+                this.heap[0] = this.heap.pop();
+                this._siftDown(0);
+                return min;
+            }
+            _siftUp(idx) {
+                let parent = Math.floor((idx - 1) / 2);
+                while (idx > 0 && this.heap[idx].priority < this.heap[parent].priority) {
+                    [this.heap[idx], this.heap[parent]] = [this.heap[parent], this.heap[idx]];
+                    idx = parent;
+                    parent = Math.floor((idx - 1) / 2);
+                }
+            }
+            _siftDown(idx) {
+                let min = idx;
+                const left = 2 * idx + 1;
+                const right = 2 * idx + 2;
+                if (left < this.heap.length && this.heap[left].priority < this.heap[min].priority) min = left;
+                if (right < this.heap.length && this.heap[right].priority < this.heap[min].priority) min = right;
+                if (min !== idx) {
+                    [this.heap[idx], this.heap[min]] = [this.heap[min], this.heap[idx]];
+                    this._siftDown(min);
+                }
+            }
+            get length() { return this.heap.length; }
+        }
+
+        function getPos(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    ctx.fillStyle = grid[r][c] === 0 ? '#1a1a1a' : '#f0f0f0';
+                    ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+            ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 1;
+            for (let i = 0; i <= ROWS; i++) {
+                ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(COLS * CELL_SIZE, i * CELL_SIZE); ctx.stroke();
+            }
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, ROWS * CELL_SIZE); ctx.stroke();
+            }
+            if (explored) {
+                ctx.fillStyle = '#4a9eff';
+                for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (explored[r][c]) ctx.fillRect(c*CELL_SIZE, r*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+            if (pathCells) {
+                ctx.fillStyle = '#ffcc00';
+                for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (pathCells[r][c]) ctx.fillRect(c*CELL_SIZE, r*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+            if (start) {
+                const x = start.col * CELL_SIZE, y = start.row * CELL_SIZE;
+                ctx.fillStyle = '#22cc22'; ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                ctx.fillStyle = '#000'; ctx.font = `bold ${CELL_SIZE*0.65}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('S', x + CELL_SIZE/2, y + CELL_SIZE/2);
+            }
+            if (end) {
+                const x = end.col * CELL_SIZE, y = end.row * CELL_SIZE;
+                ctx.fillStyle = '#cc2222'; ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                ctx.fillStyle = '#000'; ctx.font = `bold ${CELL_SIZE*0.65}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('F', x + CELL_SIZE/2, y + CELL_SIZE/2);
+            }
+        }
+
+        function resetMaze() {
+            grid = Array.from({length:ROWS},()=>Array(COLS).fill(0));
+            start = end = explored = pathCells = null;
+            draw();
+        }
+
+        function clearSolution() {
+            explored = pathCells = null;
+            draw();
+        }
+
+        function heuristic(a, b) {
+            return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
+        }
+
+        function solveMaze() {
+            if (!start || !end) { alert("Set Start and Finish first."); return; }
+
+            const visited = Array.from({length:ROWS},()=>Array(COLS).fill(false));
+            const parent = Array.from({length:ROWS},()=>Array(COLS).fill(null));
+            const order = [];
+
+            let found = false;
+
+            if (algo === 'astar') {
+                const openSet = new MinHeap();
+                const gScore = Array.from({length:ROWS},()=>Array(COLS).fill(Infinity));
+                const cameFrom = parent; // reuse
+
+                const s = {row: start.row, col: start.col};
+                gScore[s.row][s.col] = 0;
+                openSet.push({priority: heuristic(s, end), cell: s});
+                visited[s.row][s.col] = true; // mark as visited once expanded
+
+                while (openSet.length > 0) {
+                    const {cell: curr} = openSet.pop();
+                    order.push({row: curr.row, col: curr.col});
+
+                    if (curr.row === end.row && curr.col === end.col) {
+                        found = true;
+                        break;
+                    }
+
+                    const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+                    for (const [dr, dc] of dirs) {
+                        const nr = curr.row + dr, nc = curr.col + dc;
+                        if (nr<0 || nr>=ROWS || nc<0 || nc>=COLS || grid[nr][nc]===0) continue;
+
+                        const tentativeG = gScore[curr.row][curr.col] + 1;
+                        if (tentativeG < gScore[nr][nc]) {
+                            gScore[nr][nc] = tentativeG;
+                            cameFrom[nr][nc] = {row: curr.row, col: curr.col};
+                            const f = tentativeG + heuristic({row:nr, col:nc}, end);
+                            openSet.push({priority: f, cell: {row:nr, col:nc}});
+                            // We don't mark visited here — allow better paths to re-expand
+                        }
+                    }
+                }
+            } else {
+                // BFS / DFS (original logic)
+                const structure = [];
+                const s = {row: start.row, col: start.col};
+                structure.push(s);
+                visited[s.row][s.col] = true;
+
+                while (structure.length > 0) {
+                    const curr = algo === 'bfs' ? structure.shift() : structure.pop();
+                    order.push({row: curr.row, col: curr.col});
+
+                    if (curr.row === end.row && curr.col === end.col) {
+                        found = true;
+                        break;
+                    }
+
+                    const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+                    for (const [dr, dc] of dirs) {
+                        const nr = curr.row + dr, nc = curr.col + dc;
+                        if (nr>=0 && nr<ROWS && nc>=0 && nc<COLS && grid[nr][nc]===1 && !visited[nr][nc]) {
+                            visited[nr][nc] = true;
+                            parent[nr][nc] = {row: curr.row, col: curr.col};
+                            structure.push({row:nr, col:nc});
+                        }
+                    }
+                }
+            }
+
+            explored = Array.from({length:ROWS},()=>Array(COLS).fill(false));
+            pathCells = Array.from({length:ROWS},()=>Array(COLS).fill(false));
+
+            let idx = 0;
+            const exploreDelay = Math.max(1, 100 - (animSpeed * 10) + 1);
+            const pathDelay = exploreDelay * 2;
+
+            function explorationStep() {
+                if (idx < order.length) {
+                    const cell = order[idx];
+                    explored[cell.row][cell.col] = true;
+                    draw();
+                    idx++;
+                    setTimeout(explorationStep, exploreDelay);
+                } else {
+                    if (!found) { alert("No path found."); return; }
+
+                    const path = [];
+                    let curr = {row: end.row, col: end.col};
+                    while (curr) {
+                        path.push(curr);
+                        curr = parent[curr.row]?.[curr.col];
+                    }
+                    path.reverse();
+
+                    let pidx = 0;
+                    function pathStep() {
+                        if (pidx < path.length) {
+                            const cell = path[pidx];
+                            pathCells[cell.row][cell.col] = true;
+                            draw();
+                            pidx++;
+                            setTimeout(pathStep, pathDelay);
+                        } else {
+                            playSuccessSound();
+                        }
+                    }
+                    pathStep();
+                }
+            }
+            explorationStep();
+        }
+
+        function playSuccessSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const now = ctx.currentTime;
+                const beep = (f,d,v=0.3)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(f,now);g.gain.value=v;o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+d);};
+                beep(523.25,0.18); setTimeout(()=>beep(659.25,0.18),180); setTimeout(()=>beep(783.99,0.35),360);
+            } catch(e){}
+        }
+
+        function handlePointerDown(clientX, clientY) {
+            const pos = getPos(clientX, clientY);
+            const col = Math.floor(pos.x / CELL_SIZE);
+            const row = Math.floor(pos.y / CELL_SIZE);
+            if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+
+            if (mode === 'draw') {
+                isDragging = true;
+                grid[row][col] = 1; draw();
+            } else if (mode === 'start') {
+                start = {row, col};
+                if (grid[row][col] === 0) grid[row][col] = 1;
+                draw();
+            } else if (mode === 'end') {
+                end = {row, col};
+                if (grid[row][col] === 0) grid[row][col] = 1;
+                draw();
+            }
+        }
+
+        canvas.addEventListener('mousedown', e=>handlePointerDown(e.clientX,e.clientY));
+        canvas.addEventListener('mousemove', e=>{if(!isDragging||mode!=='draw')return; const pos=getPos(e.clientX,e.clientY); const c=Math.floor(pos.x/CELL_SIZE),r=Math.floor(pos.y/CELL_SIZE); if(r>=0&&r<ROWS&&c>=0&&c<COLS){grid[r][c]=1;draw();}});
+        canvas.addEventListener('mouseup', ()=>isDragging=false);
+        canvas.addEventListener('mouseleave', ()=>isDragging=false);
+
+        canvas.addEventListener('touchstart', e=>{e.preventDefault(); const t=e.touches[0]; handlePointerDown(t.clientX,t.clientY);}, {passive:false});
+        canvas.addEventListener('touchmove', e=>{if(!isDragging||mode!=='draw')return; e.preventDefault(); const t=e.touches[0]; const pos=getPos(t.clientX,t.clientY); const c=Math.floor(pos.x/CELL_SIZE),r=Math.floor(pos.y/CELL_SIZE); if(r>=0&&r<ROWS&&c>=0&&c<COLS){grid[r][c]=1;draw();}}, {passive:false});
+        canvas.addEventListener('touchend', ()=>isDragging=false);
+
+        document.getElementById('modeSelect').onchange = e=>mode=e.target.value;
+        document.getElementById('algoSelect').onchange = e=>algo=e.target.value;
+
+        const speedSlider = document.getElementById('speedSlider');
+        const speedLabel = document.getElementById('speedLabel');
+        speedSlider.oninput = e=>{
+            animSpeed = +e.target.value;
+            const labels = ['Slowest','Very Slow','Slow','Slower','Medium','Faster','Fast','Very Fast','Super Fast','Fastest'];
+            speedLabel.textContent = `${labels[animSpeed-1]} (${animSpeed}x)`;
+        };
+
+        document.getElementById('solveBtn').onclick = solveMaze;
+        document.getElementById('resetBtn').onclick = resetMaze;
+        document.getElementById('clearBtn').onclick = clearSolution;
+
+        function init() {
+            canvas.width = COLS * CELL_SIZE;
+            canvas.height = ROWS * CELL_SIZE;
+            resetMaze();
+        }
+        window.onload = init;
+    </script>
+</body>
+</html>
