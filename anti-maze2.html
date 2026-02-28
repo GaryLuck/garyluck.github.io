@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="description" content="Interactive maze creator and solver with DFS, BFS, and A* algorithms">
+  <title>Maze Creator &amp; Solver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Base ───────────────────────── */
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: none;
+      touch-action: none;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0b0e14;
+      color: #e2e8f0;
+    }
+
+    /* ── Layout ─────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── Header ─────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #111827 0%, #1a1f2e 100%);
+      border-bottom: 1px solid rgba(99, 102, 241, .25);
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #818cf8, #c084fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: .02em;
+    }
+
+    /* ── Toolbar ─────────────────────────────── */
+    #toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      background: #111827;
+      border-bottom: 1px solid rgba(99, 102, 241, .15);
+      flex-shrink: 0;
+    }
+
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(30, 41, 59, .7);
+      border: 1px solid rgba(99, 102, 241, .12);
+      border-radius: 10px;
+      padding: 4px 8px;
+    }
+
+    .tool-group label {
+      font-size: .72rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      white-space: nowrap;
+    }
+
+    /* buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      font-size: .78rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .18s ease;
+      color: #e2e8f0;
+      background: rgba(55, 65, 81, .8);
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: rgba(79, 90, 110, .9);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn.active {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      box-shadow: 0 0 12px rgba(99, 102, 241, .4);
+    }
+
+    .btn-solve {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+    }
+
+    .btn-solve:hover {
+      box-shadow: 0 0 14px rgba(16, 185, 129, .5);
+    }
+
+    .btn-solve:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-reset {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: #fff;
+    }
+
+    .btn-reset:hover {
+      box-shadow: 0 0 14px rgba(239, 68, 68, .45);
+    }
+
+    /* select */
+    select {
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: rgba(55, 65, 81, .8);
+      color: #e2e8f0;
+      border: 1px solid rgba(99, 102, 241, .2);
+      font-size: .78rem;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .18s;
+    }
+
+    select:focus {
+      border-color: #818cf8;
+    }
+
+    /* range slider */
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100px;
+      height: 6px;
+      background: rgba(55, 65, 81, .9);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #818cf8, #c084fc);
+      box-shadow: 0 0 6px rgba(99, 102, 241, .5);
+      cursor: pointer;
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #818cf8, #c084fc);
+      box-shadow: 0 0 6px rgba(99, 102, 241, .5);
+      cursor: pointer;
+    }
+
+    #speed-val {
+      font-size: .72rem;
+      font-weight: 600;
+      color: #818cf8;
+      min-width: 28px;
+      text-align: center;
+    }
+
+    /* ── Canvas Area ─────────────────────────── */
+    #canvas-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: radial-gradient(ellipse at center, #131a27 0%, #0b0e14 70%);
+      touch-action: none;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      touch-action: none;
+      border-radius: 6px;
+      box-shadow: 0 0 40px rgba(99, 102, 241, .08);
+    }
+
+    /* ── Status Bar ──────────────────────────── */
+    #status-bar {
+      padding: 8px 16px;
+      font-size: .75rem;
+      font-weight: 500;
+      text-align: center;
+      background: #111827;
+      border-top: 1px solid rgba(99, 102, 241, .15);
+      color: #94a3b8;
+      flex-shrink: 0;
+      min-height: 32px;
+      transition: color .2s;
+    }
+
+    #status-bar.success {
+      color: #34d399;
+    }
+
+    #status-bar.fail {
+      color: #f87171;
+    }
+
+    /* ── Responsive tweaks ───────────────────── */
+    @media (max-width: 650px) {
+      header h1 {
+        font-size: 1rem;
+      }
+
+      .tool-group {
+        padding: 3px 6px;
+      }
+
+      .btn {
+        padding: 6px 10px;
+        font-size: .72rem;
+      }
+
+      select {
+        padding: 5px 8px;
+        font-size: .72rem;
+      }
+
+      input[type=range] {
+        width: 70px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="app">
+    <header>
+      <h1>✦ Maze Creator &amp; Solver</h1>
+    </header>
+
+    <div id="toolbar">
+      <!-- Drawing mode -->
+      <div class="tool-group">
+        <label>Mode</label>
+        <button class="btn active" id="btn-draw" data-mode="draw">🖊 Draw</button>
+        <button class="btn" id="btn-erase" data-mode="erase">◻ Erase</button>
+        <button class="btn" id="btn-start" data-mode="start">🟢 Start</button>
+        <button class="btn" id="btn-finish" data-mode="finish">🔴 Finish</button>
+      </div>
+
+      <!-- Algorithm -->
+      <div class="tool-group">
+        <label>Algorithm</label>
+        <select id="algo-select">
+          <option value="dfs">DFS</option>
+          <option value="bfs">BFS</option>
+          <option value="astar">A*</option>
+        </select>
+      </div>
+
+      <!-- Speed -->
+      <div class="tool-group">
+        <label>Speed</label>
+        <input type="range" id="speed-slider" min="1" max="100" value="50">
+        <span id="speed-val">50</span>
+      </div>
+
+      <!-- Actions -->
+      <div class="tool-group">
+        <button class="btn btn-solve" id="btn-solve">▶ Solve</button>
+        <button class="btn btn-reset" id="btn-reset">↺ Reset</button>
+      </div>
+    </div>
+
+    <div id="canvas-wrap">
+      <canvas id="maze-canvas"></canvas>
+    </div>
+
+    <div id="status-bar" id="status">Draw paths, set start &amp; finish, then solve!</div>
+  </div>
+
+  <script>
+    /* ═══════════════════════════════════════════
+       Maze Creator & Solver
+       ═══════════════════════════════════════════ */
+    (() => {
+      'use strict';
+
+      // ── Constants ──────────────────────────────
+      const WALL = 0;
+      const PATH = 1;
+      const START = 2;
+      const FINISH = 3;
+
+      const COLORS = {
+        [WALL]: '#111827',
+        [PATH]: '#334155',
+        [START]: '#22c55e',
+        [FINISH]: '#ef4444',
+        visited: '#6366f1',
+        frontier: '#818cf8',
+        solution: '#facc15',
+        gridLine: '#1e293b',
+      };
+
+      // ── State ──────────────────────────────────
+      let cols = 40, rows = 30;
+      let cellSize = 20;
+      let grid = [];
+      let startCell = null;
+      let finishCell = null;
+      let mode = 'draw';        // draw | erase | start | finish
+      let solving = false;
+      let animCancel = false;
+
+      // ── DOM refs ───────────────────────────────
+      const canvas = document.getElementById('maze-canvas');
+      const ctx = canvas.getContext('2d');
+      const wrap = document.getElementById('canvas-wrap');
+      const status = document.getElementById('status-bar');
+      const slider = document.getElementById('speed-slider');
+      const speedVal = document.getElementById('speed-val');
+      const algoSel = document.getElementById('algo-select');
+      const btnSolve = document.getElementById('btn-solve');
+      const btnReset = document.getElementById('btn-reset');
+      const modeButtons = document.querySelectorAll('[data-mode]');
+
+      // ── Audio helpers (oscillator-based) ───────
+      let audioCtx = null;
+      function ensureAudioCtx() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+      function playTone(freq, duration, type = 'sine', volume = 0.12) {
+        try {
+          ensureAudioCtx();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = type;
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + duration);
+        } catch (_) { }
+      }
+      function sfxCarve() { playTone(600, 0.06, 'square', 0.06); }
+      function sfxStart() { playTone(880, 0.15, 'sine', 0.10); }
+      function sfxSolved() {
+        playTone(523, 0.15, 'sine', 0.14);
+        setTimeout(() => playTone(659, 0.15, 'sine', 0.14), 150);
+        setTimeout(() => playTone(784, 0.25, 'sine', 0.14), 300);
+      }
+      function sfxNoSolution() { playTone(200, 0.4, 'sawtooth', 0.10); }
+
+      // ── Grid init ──────────────────────────────
+      function initGrid() {
+        grid = [];
+        for (let r = 0; r < rows; r++) {
+          grid[r] = [];
+          for (let c = 0; c < cols; c++) grid[r][c] = WALL;
+        }
+        startCell = null;
+        finishCell = null;
+        solving = false;
+        animCancel = false;
+      }
+
+      // ── Sizing ─────────────────────────────────
+      function resize() {
+        const pad = 16;
+        const maxW = wrap.clientWidth - pad * 2;
+        const maxH = wrap.clientHeight - pad * 2;
+        cellSize = Math.max(8, Math.min(Math.floor(maxW / cols), Math.floor(maxH / rows)));
+        canvas.width = cols * cellSize;
+        canvas.height = rows * cellSize;
+        render();
+      }
+
+      // ── Rendering ──────────────────────────────
+      let visitedSet = new Set();
+      let frontierSet = new Set();
+      let solutionSet = new Set();
+
+      function cellKey(r, c) { return r * cols + c; }
+
+      function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const x = c * cellSize, y = r * cellSize;
+            const k = cellKey(r, c);
+
+            // base colour
+            let color = COLORS[grid[r][c]];
+
+            // overlay solve state (visited < frontier < solution)
+            if (visitedSet.has(k)) color = COLORS.visited;
+            if (frontierSet.has(k)) color = COLORS.frontier;
+            if (solutionSet.has(k)) color = COLORS.solution;
+
+            // start / finish always on top
+            if (grid[r][c] === START) color = COLORS[START];
+            if (grid[r][c] === FINISH) color = COLORS[FINISH];
+
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, cellSize, cellSize);
+
+            // subtle grid lines
+            ctx.strokeStyle = COLORS.gridLine;
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(x, y, cellSize, cellSize);
+          }
+        }
+      }
+
+      // ── Drawing (mouse & touch) ────────────────
+      let pointerDown = false;
+      let lastCell = null;  // for line interpolation
+
+      function cellFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        let cx, cy;
+        if (e.touches && e.touches.length) {
+          cx = e.touches[0].clientX - rect.left;
+          cy = e.touches[0].clientY - rect.top;
+        } else {
+          cx = e.clientX - rect.left;
+          cy = e.clientY - rect.top;
+        }
+        const c = Math.floor(cx / cellSize);
+        const r = Math.floor(cy / cellSize);
+        if (r < 0 || r >= rows || c < 0 || c >= cols) return null;
+        return { r, c };
+      }
+
+      // Bresenham line: returns all cells between (r0,c0) and (r1,c1)
+      function lineCells(r0, c0, r1, c1) {
+        const cells = [];
+        let dr = Math.abs(r1 - r0), dc = Math.abs(c1 - c0);
+        let sr = r0 < r1 ? 1 : -1, sc = c0 < c1 ? 1 : -1;
+        let err = dc - dr;
+        let cr = r0, cc = c0;
+        while (true) {
+          cells.push({ r: cr, c: cc });
+          if (cr === r1 && cc === c1) break;
+          const e2 = 2 * err;
+          if (e2 > -dr) { err -= dr; cc += sc; }
+          if (e2 < dc) { err += dc; cr += sr; }
+        }
+        return cells;
+      }
+
+      function applyToolSingle(r, c) {
+        switch (mode) {
+          case 'draw':
+            if (grid[r][c] === WALL) { grid[r][c] = PATH; sfxCarve(); }
+            break;
+          case 'erase':
+            if (grid[r][c] === START) startCell = null;
+            if (grid[r][c] === FINISH) finishCell = null;
+            if (grid[r][c] !== WALL) grid[r][c] = WALL;
+            break;
+          case 'start':
+            if (startCell) grid[startCell.r][startCell.c] = PATH;
+            grid[r][c] = START;
+            startCell = { r, c };
+            break;
+          case 'finish':
+            if (finishCell) grid[finishCell.r][finishCell.c] = PATH;
+            grid[r][c] = FINISH;
+            finishCell = { r, c };
+            break;
+        }
+      }
+
+      function applyTool(cell) {
+        if (!cell || solving) return;
+        // Interpolate between last cell and current cell
+        if (lastCell && (mode === 'draw' || mode === 'erase')) {
+          const cells = lineCells(lastCell.r, lastCell.c, cell.r, cell.c);
+          for (const p of cells) applyToolSingle(p.r, p.c);
+        } else {
+          applyToolSingle(cell.r, cell.c);
+        }
+        lastCell = { r: cell.r, c: cell.c };
+        render();
+      }
+
+      function onPointerDown(e) {
+        e.preventDefault();
+        ensureAudioCtx();
+        pointerDown = true;
+        lastCell = null;
+        applyTool(cellFromEvent(e));
+      }
+      function onPointerMove(e) {
+        e.preventDefault();
+        if (!pointerDown) return;
+        applyTool(cellFromEvent(e));
+      }
+      function onPointerUp(e) {
+        e.preventDefault();
+        pointerDown = false;
+        lastCell = null;
+      }
+
+      canvas.addEventListener('mousedown', onPointerDown);
+      canvas.addEventListener('mousemove', onPointerMove);
+      canvas.addEventListener('mouseup', onPointerUp);
+      canvas.addEventListener('mouseleave', onPointerUp);
+      canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+      canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+      canvas.addEventListener('touchend', onPointerUp, { passive: false });
+      canvas.addEventListener('touchcancel', onPointerUp, { passive: false });
+
+      // prevent page scroll on iPad
+      document.addEventListener('touchmove', e => {
+        if (e.target === canvas) e.preventDefault();
+      }, { passive: false });
+
+      // ── Mode buttons ───────────────────────────
+      modeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (solving) return;
+          mode = btn.dataset.mode;
+          modeButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+
+      // ── Speed slider ──────────────────────────
+      slider.addEventListener('input', () => { speedVal.textContent = slider.value; });
+
+      // ── Helpers for solvers ────────────────────
+      function getDelay() {
+        // slider 1 = slow (200ms), 100 = fast (0ms)
+        return Math.round(200 * (1 - (slider.value - 1) / 99));
+      }
+      function sleep(ms) {
+        return new Promise(res => setTimeout(res, ms));
+      }
+      function neighbors(r, c) {
+        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        const out = [];
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && grid[nr][nc] !== WALL) {
+            out.push({ r: nr, c: nc });
+          }
+        }
+        return out;
+      }
+      function reconstructPath(cameFrom, endKey) {
+        const path = [];
+        let k = endKey;
+        while (k !== null && k !== undefined) {
+          path.push(k);
+          k = cameFrom.get(k);
+        }
+        return path.reverse();
+      }
+
+      function setStatus(msg, cls = '') {
+        status.textContent = msg;
+        status.className = cls;
+      }
+
+      // ── Solvers ────────────────────────────────
+      async function solveDFS() {
+        const sk = cellKey(startCell.r, startCell.c);
+        const fk = cellKey(finishCell.r, finishCell.c);
+        const stack = [sk];
+        const visited = new Set();
+        const cameFrom = new Map();
+        cameFrom.set(sk, null);
+
+        while (stack.length > 0) {
+          if (animCancel) return null;
+          const k = stack.pop();
+          if (visited.has(k)) continue;
+          visited.add(k);
+          visitedSet.add(k);
+          render();
+          await sleep(getDelay());
+
+          if (k === fk) return reconstructPath(cameFrom, fk);
+
+          const r = Math.floor(k / cols), c = k % cols;
+          for (const n of neighbors(r, c)) {
+            const nk = cellKey(n.r, n.c);
+            if (!visited.has(nk)) {
+              cameFrom.set(nk, k);
+              stack.push(nk);
+              frontierSet.add(nk);
+            }
+          }
+        }
+        return null; // no solution
+      }
+
+      async function solveBFS() {
+        const sk = cellKey(startCell.r, startCell.c);
+        const fk = cellKey(finishCell.r, finishCell.c);
+        const queue = [sk];
+        const visited = new Set([sk]);
+        const cameFrom = new Map();
+        cameFrom.set(sk, null);
+
+        while (queue.length > 0) {
+          if (animCancel) return null;
+          const k = queue.shift();
+          visitedSet.add(k);
+          render();
+          await sleep(getDelay());
+
+          if (k === fk) return reconstructPath(cameFrom, fk);
+
+          const r = Math.floor(k / cols), c = k % cols;
+          for (const n of neighbors(r, c)) {
+            const nk = cellKey(n.r, n.c);
+            if (!visited.has(nk)) {
+              visited.add(nk);
+              cameFrom.set(nk, k);
+              queue.push(nk);
+              frontierSet.add(nk);
+            }
+          }
+        }
+        return null;
+      }
+
+      // MinHeap for A*
+      class MinHeap {
+        constructor() { this.data = []; }
+        push(item) {
+          this.data.push(item);
+          this._bubbleUp(this.data.length - 1);
+        }
+        pop() {
+          const top = this.data[0];
+          const last = this.data.pop();
+          if (this.data.length > 0) { this.data[0] = last; this._sinkDown(0); }
+          return top;
+        }
+        get size() { return this.data.length; }
+        _bubbleUp(i) {
+          while (i > 0) {
+            const p = (i - 1) >> 1;
+            if (this.data[i].f < this.data[p].f) { [this.data[i], this.data[p]] = [this.data[p], this.data[i]]; i = p; }
+            else break;
+          }
+        }
+        _sinkDown(i) {
+          const n = this.data.length;
+          while (true) {
+            let s = i, l = 2 * i + 1, r = 2 * i + 2;
+            if (l < n && this.data[l].f < this.data[s].f) s = l;
+            if (r < n && this.data[r].f < this.data[s].f) s = r;
+            if (s !== i) { [this.data[i], this.data[s]] = [this.data[s], this.data[i]]; i = s; }
+            else break;
+          }
+        }
+      }
+
+      async function solveAStar() {
+        const sk = cellKey(startCell.r, startCell.c);
+        const fk = cellKey(finishCell.r, finishCell.c);
+        const fr = finishCell.r, fc = finishCell.c;
+
+        function h(k) {
+          const r = Math.floor(k / cols), c = k % cols;
+          return Math.abs(r - fr) + Math.abs(c - fc);
+        }
+
+        const open = new MinHeap();
+        const gScore = new Map();
+        const cameFrom = new Map();
+        gScore.set(sk, 0);
+        cameFrom.set(sk, null);
+        open.push({ k: sk, f: h(sk) });
+        const closed = new Set();
+
+        while (open.size > 0) {
+          if (animCancel) return null;
+          const { k } = open.pop();
+          if (closed.has(k)) continue;
+          closed.add(k);
+          visitedSet.add(k);
+          render();
+          await sleep(getDelay());
+
+          if (k === fk) return reconstructPath(cameFrom, fk);
+
+          const r = Math.floor(k / cols), c = k % cols;
+          const g = gScore.get(k);
+          for (const n of neighbors(r, c)) {
+            const nk = cellKey(n.r, n.c);
+            if (closed.has(nk)) continue;
+            const ng = g + 1;
+            if (!gScore.has(nk) || ng < gScore.get(nk)) {
+              gScore.set(nk, ng);
+              cameFrom.set(nk, k);
+              open.push({ k: nk, f: ng + h(nk) });
+              frontierSet.add(nk);
+            }
+          }
+        }
+        return null;
+      }
+
+      // ── Solve orchestration ────────────────────
+      async function doSolve() {
+        if (solving) return;
+        if (!startCell || !finishCell) {
+          setStatus('⚠  Set both a Start and a Finish cell first.', 'fail');
+          return;
+        }
+        solving = true;
+        animCancel = false;
+        btnSolve.disabled = true;
+        visitedSet.clear();
+        frontierSet.clear();
+        solutionSet.clear();
+
+        sfxStart();
+        const algo = algoSel.value;
+        setStatus(`Solving with ${algo.toUpperCase()}…`);
+
+        let path = null;
+        switch (algo) {
+          case 'dfs': path = await solveDFS(); break;
+          case 'bfs': path = await solveBFS(); break;
+          case 'astar': path = await solveAStar(); break;
+        }
+
+        frontierSet.clear();
+
+        if (animCancel) {
+          setStatus('Solve cancelled.', '');
+        } else if (path) {
+          solutionSet = new Set(path);
+          render();
+          sfxSolved();
+          setStatus(`✔ Solution found! Path length: ${path.length}`, 'success');
+        } else {
+          sfxNoSolution();
+          setStatus('✘ No solution exists.', 'fail');
+        }
+
+        solving = false;
+        btnSolve.disabled = false;
+      }
+
+      btnSolve.addEventListener('click', doSolve);
+
+      // ── Reset ──────────────────────────────────
+      btnReset.addEventListener('click', () => {
+        animCancel = true;
+        setTimeout(() => {
+          initGrid();
+          visitedSet.clear();
+          frontierSet.clear();
+          solutionSet.clear();
+          render();
+          setStatus('Maze cleared. Draw paths, set start & finish, then solve!');
+          btnSolve.disabled = false;
+        }, 50);
+      });
+
+      // ── Window resize ──────────────────────────
+      window.addEventListener('resize', resize);
+
+      // ── Boot ───────────────────────────────────
+      initGrid();
+      resize();
+      setStatus('Draw paths, set start & finish, then solve!');
+    })();
+  </script>
+</body>
+
+</html>
