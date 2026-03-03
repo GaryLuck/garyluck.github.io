@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <title>Maze Builder &amp; Solver</title>
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    sans-serif;
+                background: #0f0f1a;
+                color: #e0e0e0;
+                height: 100vh;
+                width: 100vw;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                touch-action: none;
+            }
+
+            #header {
+                flex-shrink: 0;
+                background: #16162a;
+                border-bottom: 2px solid #2a2a4a;
+                padding: 6px 12px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                flex-wrap: wrap;
+            }
+
+            #header h1 {
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #a78bfa;
+                white-space: nowrap;
+                letter-spacing: 0.5px;
+            }
+
+            #controls {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+                flex: 1;
+            }
+
+            .control-group {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+
+            .sep {
+                width: 1px;
+                height: 24px;
+                background: #2a2a4a;
+                margin: 0 2px;
+            }
+
+            .tool-btn {
+                padding: 5px 10px;
+                border: 1.5px solid #3a3a5c;
+                border-radius: 6px;
+                background: #1e1e38;
+                color: #c0c0e0;
+                font-size: 0.78rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s;
+                white-space: nowrap;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            .tool-btn:hover {
+                background: #2a2a4e;
+                border-color: #5a5a8c;
+            }
+
+            .tool-btn.active-open {
+                background: #1a3a1a;
+                border-color: #00e676;
+                color: #00e676;
+            }
+            .tool-btn.active-wall {
+                background: #2a2a2a;
+                border-color: #90a4ae;
+                color: #cfd8dc;
+            }
+            .tool-btn.active-start {
+                background: #1a3a20;
+                border-color: #00c853;
+                color: #69f0ae;
+            }
+            .tool-btn.active-end {
+                background: #3a1a1a;
+                border-color: #ff1744;
+                color: #ff6e6e;
+            }
+
+            #btn-solve {
+                padding: 5px 14px;
+                border: 1.5px solid #7c3aed;
+                border-radius: 6px;
+                background: #4c1d95;
+                color: #e9d5ff;
+                font-size: 0.78rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.15s;
+                white-space: nowrap;
+            }
+            #btn-solve:hover:not(:disabled) {
+                background: #6d28d9;
+            }
+            #btn-solve:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            #btn-stop {
+                padding: 5px 14px;
+                border: 1.5px solid #b91c1c;
+                border-radius: 6px;
+                background: #7f1d1d;
+                color: #fca5a5;
+                font-size: 0.78rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.15s;
+                white-space: nowrap;
+                display: none;
+            }
+            #btn-stop:hover {
+                background: #991b1b;
+            }
+
+            #btn-reset {
+                padding: 5px 14px;
+                border: 1.5px solid #374151;
+                border-radius: 6px;
+                background: #1f2937;
+                color: #9ca3af;
+                font-size: 0.78rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.15s;
+                white-space: nowrap;
+            }
+            #btn-reset:hover {
+                background: #374151;
+                color: #e5e7eb;
+            }
+
+            #algorithm {
+                padding: 5px 8px;
+                border: 1.5px solid #3a3a5c;
+                border-radius: 6px;
+                background: #1e1e38;
+                color: #c0c0e0;
+                font-size: 0.78rem;
+                font-weight: 600;
+                cursor: pointer;
+                outline: none;
+            }
+
+            .speed-label {
+                font-size: 0.72rem;
+                color: #8080b0;
+                white-space: nowrap;
+            }
+
+            #speed {
+                width: 80px;
+                accent-color: #7c3aed;
+                cursor: pointer;
+            }
+
+            #canvas-container {
+                flex: 1;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                overflow: hidden;
+                background: #0f0f1a;
+                padding: 4px;
+            }
+
+            #maze {
+                display: block;
+                cursor: crosshair;
+                image-rendering: pixelated;
+            }
+
+            #status-bar {
+                flex-shrink: 0;
+                height: 24px;
+                background: #16162a;
+                border-top: 1px solid #2a2a4a;
+                display: flex;
+                align-items: center;
+                padding: 0 12px;
+                gap: 16px;
+            }
+
+            #status-msg {
+                font-size: 0.72rem;
+                color: #8080b0;
+                flex: 1;
+            }
+
+            #status-msg.success {
+                color: #00e676;
+            }
+            #status-msg.error {
+                color: #ff6b6b;
+            }
+            #status-msg.solving {
+                color: #42a5f5;
+            }
+
+            #stats {
+                font-size: 0.7rem;
+                color: #555580;
+                white-space: nowrap;
+            }
+
+            /* Legend */
+            .legend {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .legend-item {
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                font-size: 0.68rem;
+                color: #6060a0;
+            }
+            .legend-swatch {
+                width: 10px;
+                height: 10px;
+                border-radius: 2px;
+                flex-shrink: 0;
+            }
+
+            @media (max-width: 600px) {
+                #header h1 {
+                    font-size: 0.9rem;
+                }
+                .tool-btn,
+                #btn-solve,
+                #btn-stop,
+                #btn-reset {
+                    padding: 6px 8px;
+                    font-size: 0.72rem;
+                }
+                #speed {
+                    width: 60px;
+                }
+                .legend {
+                    display: none;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="header">
+            <h1>🔮 Maze Solver</h1>
+            <div id="controls">
+                <div class="control-group" id="tool-group">
+                    <button
+                        class="tool-btn active-open"
+                        id="btn-tool-open"
+                        data-tool="open"
+                    >
+                        ✏️ Open
+                    </button>
+                    <button
+                        class="tool-btn"
+                        id="btn-tool-wall"
+                        data-tool="wall"
+                    >
+                        🧱 Wall
+                    </button>
+                    <button
+                        class="tool-btn"
+                        id="btn-tool-start"
+                        data-tool="start"
+                    >
+                        🟢 Start
+                    </button>
+                    <button class="tool-btn" id="btn-tool-end" data-tool="end">
+                        🔴 End
+                    </button>
+                </div>
+                <div class="sep"></div>
+                <div class="control-group">
+                    <select id="algorithm" title="Search algorithm">
+                        <option value="bfs">BFS</option>
+                        <option value="dfs">DFS</option>
+                        <option value="astar">A*</option>
+                    </select>
+                </div>
+                <div class="sep"></div>
+                <div class="control-group">
+                    <span class="speed-label">🐢</span>
+                    <input
+                        type="range"
+                        id="speed"
+                        min="1"
+                        max="100"
+                        value="40"
+                        title="Animation speed"
+                    />
+                    <span class="speed-label">🐇</span>
+                </div>
+                <div class="sep"></div>
+                <div class="control-group">
+                    <button id="btn-solve">▶ Solve</button>
+                    <button id="btn-stop">■ Stop</button>
+                    <button id="btn-reset">↺ Reset</button>
+                </div>
+                <div class="sep"></div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div
+                            class="legend-swatch"
+                            style="background: #00c853"
+                        ></div>
+                        Start
+                    </div>
+                    <div class="legend-item">
+                        <div
+                            class="legend-swatch"
+                            style="background: #ff1744"
+                        ></div>
+                        End
+                    </div>
+                    <div class="legend-item">
+                        <div
+                            class="legend-swatch"
+                            style="background: #1565c0"
+                        ></div>
+                        Visited
+                    </div>
+                    <div class="legend-item">
+                        <div
+                            class="legend-swatch"
+                            style="background: #42a5f5"
+                        ></div>
+                        Frontier
+                    </div>
+                    <div class="legend-item">
+                        <div
+                            class="legend-swatch"
+                            style="background: #ffd600"
+                        ></div>
+                        Path
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="maze"></canvas>
+        </div>
+
+        <div id="status-bar">
+            <span id="status-msg"
+                >Click and drag to open pathways. Set 🟢 Start and 🔴 End, then
+                hit Solve!</span
+            >
+            <span id="stats"></span>
+        </div>
+
+        <script>
+            (() => {
+                "use strict";
+
+                // ── Cell states ────────────────────────────────────────────────────────────
+                const WALL = 0;
+                const OPEN = 1;
+                const START = 2;
+                const END = 3;
+
+                // ── Viz overlay states ─────────────────────────────────────────────────────
+                const VIZ_NONE = 0;
+                const VIZ_VISITED = 1;
+                const VIZ_FRONTIER = 2;
+                const VIZ_PATH = 3;
+
+                // ── Colors ─────────────────────────────────────────────────────────────────
+                const C = {
+                    wall: "#1a1a2e",
+                    open: "#dde1f0",
+                    start: "#00c853",
+                    end: "#ff1744",
+                    visited: "#1565c0",
+                    frontier: "#42a5f5",
+                    path: "#ffd600",
+                    gridLine: "rgba(255,255,255,0.04)",
+                };
+
+                // ── State ──────────────────────────────────────────────────────────────────
+                let canvas, ctx;
+                let grid = []; // 2-D: WALL | OPEN | START | END
+                let vizGrid = []; // 2-D: VIZ_*
+                let rows = 0,
+                    cols = 0,
+                    cellSize = 0;
+                let startCell = null,
+                    endCell = null;
+                let currentTool = "open";
+                let isDrawing = false;
+                let lastCell = null;
+                let isSolving = false;
+                let solveGen = null;
+                let solveTimerId = null;
+                let visitedCount = 0;
+
+                // ── Init ───────────────────────────────────────────────────────────────────
+                function init() {
+                    canvas = document.getElementById("maze");
+                    ctx = canvas.getContext("2d");
+
+                    computeGridSize();
+                    initGrid();
+                    drawGrid();
+                    attachEvents();
+                    window.addEventListener(
+                        "resize",
+                        debounce(handleResize, 200),
+                    );
+                }
+
+                function computeGridSize() {
+                    const container =
+                        document.getElementById("canvas-container");
+                    const cw = container.clientWidth - 8;
+                    const ch = container.clientHeight - 8;
+                    const isMobile = window.innerWidth < 600;
+                    cellSize = isMobile ? 15 : 20;
+                    cols = Math.max(10, Math.floor(cw / cellSize));
+                    rows = Math.max(10, Math.floor(ch / cellSize));
+                    canvas.width = cols * cellSize;
+                    canvas.height = rows * cellSize;
+                }
+
+                function initGrid() {
+                    grid = Array.from({ length: rows }, () =>
+                        new Uint8Array(cols).fill(WALL),
+                    );
+                    vizGrid = Array.from({ length: rows }, () =>
+                        new Uint8Array(cols).fill(VIZ_NONE),
+                    );
+                    startCell = null;
+                    endCell = null;
+                    visitedCount = 0;
+                    setStats("");
+                }
+
+                function handleResize() {
+                    stopSolving();
+                    const oldRows = rows,
+                        oldCols = cols;
+                    const oldGrid = grid.map((r) => Uint8Array.from(r));
+                    computeGridSize();
+                    // Re-init then re-apply what fits
+                    grid = Array.from({ length: rows }, () =>
+                        new Uint8Array(cols).fill(WALL),
+                    );
+                    vizGrid = Array.from({ length: rows }, () =>
+                        new Uint8Array(cols).fill(VIZ_NONE),
+                    );
+                    for (let r = 0; r < Math.min(rows, oldRows); r++)
+                        for (let c = 0; c < Math.min(cols, oldCols); c++)
+                            grid[r][c] = oldGrid[r][c];
+                    // Re-validate start/end
+                    if (
+                        startCell &&
+                        (startCell.row >= rows || startCell.col >= cols)
+                    )
+                        startCell = null;
+                    if (endCell && (endCell.row >= rows || endCell.col >= cols))
+                        endCell = null;
+                    drawGrid();
+                }
+
+                // ── Event helpers ──────────────────────────────────────────────────────────
+                function cellFromXY(clientX, clientY) {
+                    const rect = canvas.getBoundingClientRect();
+                    const c = Math.floor((clientX - rect.left) / cellSize);
+                    const r = Math.floor((clientY - rect.top) / cellSize);
+                    if (r >= 0 && r < rows && c >= 0 && c < cols)
+                        return { row: r, col: c };
+                    return null;
+                }
+
+                function cellsEqual(a, b) {
+                    return a && b && a.row === b.row && a.col === b.col;
+                }
+
+                function attachEvents() {
+                    // Tool buttons
+                    document
+                        .getElementById("tool-group")
+                        .addEventListener("click", (e) => {
+                            const btn = e.target.closest("[data-tool]");
+                            if (!btn) return;
+                            setTool(btn.dataset.tool);
+                        });
+
+                    document
+                        .getElementById("btn-solve")
+                        .addEventListener("click", startSolve);
+                    document
+                        .getElementById("btn-stop")
+                        .addEventListener("click", stopSolving);
+                    document
+                        .getElementById("btn-reset")
+                        .addEventListener("click", resetMaze);
+
+                    // Mouse
+                    canvas.addEventListener("mousedown", (e) => {
+                        if (isSolving) return;
+                        e.preventDefault();
+                        isDrawing = true;
+                        lastCell = null;
+                        const cell = cellFromXY(e.clientX, e.clientY);
+                        applyTool(cell);
+                    });
+                    canvas.addEventListener("mousemove", (e) => {
+                        if (!isDrawing || isSolving) return;
+                        e.preventDefault();
+                        const cell = cellFromXY(e.clientX, e.clientY);
+                        if (cell && !cellsEqual(cell, lastCell))
+                            applyTool(cell);
+                    });
+                    window.addEventListener("mouseup", () => {
+                        isDrawing = false;
+                        lastCell = null;
+                    });
+
+                    // Touch
+                    canvas.addEventListener(
+                        "touchstart",
+                        (e) => {
+                            if (isSolving) return;
+                            e.preventDefault();
+                            isDrawing = true;
+                            lastCell = null;
+                            const t = e.touches[0];
+                            applyTool(cellFromXY(t.clientX, t.clientY));
+                        },
+                        { passive: false },
+                    );
+                    canvas.addEventListener(
+                        "touchmove",
+                        (e) => {
+                            if (!isDrawing || isSolving) return;
+                            e.preventDefault();
+                            const t = e.touches[0];
+                            const cell = cellFromXY(t.clientX, t.clientY);
+                            if (cell && !cellsEqual(cell, lastCell))
+                                applyTool(cell);
+                        },
+                        { passive: false },
+                    );
+                    canvas.addEventListener("touchend", () => {
+                        isDrawing = false;
+                        lastCell = null;
+                    });
+                }
+
+                // ── Tool application ───────────────────────────────────────────────────────
+                function setTool(tool) {
+                    currentTool = tool;
+                    document.querySelectorAll("[data-tool]").forEach((btn) => {
+                        btn.className =
+                            "tool-btn" +
+                            (btn.dataset.tool === tool
+                                ? ` active-${tool}`
+                                : "");
+                    });
+                }
+
+                function applyTool(cell) {
+                    if (!cell) return;
+                    const { row, col } = cell;
+                    const isStart = cellsEqual(cell, startCell);
+                    const isEnd = cellsEqual(cell, endCell);
+
+                    // Clear viz whenever user edits
+                    clearViz(false);
+
+                    switch (currentTool) {
+                        case "open":
+                            if (!isStart && !isEnd) {
+                                grid[row][col] = OPEN;
+                                lastCell = cell;
+                            }
+                            break;
+                        case "wall":
+                            if (!isStart && !isEnd) {
+                                grid[row][col] = WALL;
+                                lastCell = cell;
+                            }
+                            break;
+                        case "start":
+                            if (isEnd) break;
+                            if (startCell)
+                                grid[startCell.row][startCell.col] = OPEN;
+                            startCell = cell;
+                            grid[row][col] = START;
+                            lastCell = cell;
+                            break;
+                        case "end":
+                            if (isStart) break;
+                            if (endCell) grid[endCell.row][endCell.col] = OPEN;
+                            endCell = cell;
+                            grid[row][col] = END;
+                            lastCell = cell;
+                            break;
+                    }
+                    drawGrid();
+                }
+
+                // ── Reset ──────────────────────────────────────────────────────────────────
+                function resetMaze() {
+                    stopSolving();
+                    initGrid();
+                    setStatus("Board reset. Draw your maze!", "");
+                    drawGrid();
+                }
+
+                // ── Viz helpers ────────────────────────────────────────────────────────────
+                function clearViz(redraw = true) {
+                    for (let r = 0; r < rows; r++) vizGrid[r].fill(VIZ_NONE);
+                    visitedCount = 0;
+                    if (redraw) drawGrid();
+                }
+
+                // ── Drawing ────────────────────────────────────────────────────────────────
+                function getCellColor(r, c) {
+                    const s = grid[r][c];
+                    if (s === START) return C.start;
+                    if (s === END) return C.end;
+                    if (s === WALL) return C.wall;
+                    // OPEN – check viz
+                    const v = vizGrid[r][c];
+                    if (v === VIZ_PATH) return C.path;
+                    if (v === VIZ_VISITED) return C.visited;
+                    if (v === VIZ_FRONTIER) return C.frontier;
+                    return C.open;
+                }
+
+                function drawGrid() {
+                    for (let r = 0; r < rows; r++)
+                        for (let c = 0; c < cols; c++) drawCell(r, c);
+                }
+
+                function drawCell(r, c) {
+                    const x = c * cellSize;
+                    const y = r * cellSize;
+                    ctx.fillStyle = getCellColor(r, c);
+                    ctx.fillRect(x, y, cellSize, cellSize);
+                    // Subtle grid lines on open cells
+                    if (grid[r][c] !== WALL) {
+                        ctx.strokeStyle = C.gridLine;
+                        ctx.lineWidth = 0.5;
+                        ctx.strokeRect(
+                            x + 0.5,
+                            y + 0.5,
+                            cellSize - 1,
+                            cellSize - 1,
+                        );
+                    }
+                }
+
+                // ── Status helpers ─────────────────────────────────────────────────────────
+                function setStatus(msg, type) {
+                    const el = document.getElementById("status-msg");
+                    el.textContent = msg;
+                    el.className = type || "";
+                }
+                function setStats(msg) {
+                    document.getElementById("stats").textContent = msg;
+                }
+
+                // ── Solver entry ───────────────────────────────────────────────────────────
+                function startSolve() {
+                    if (isSolving) return;
+                    if (!startCell) {
+                        setStatus(
+                            "⚠️ Place a Start point first (🟢 Start tool).",
+                            "error",
+                        );
+                        return;
+                    }
+                    if (!endCell) {
+                        setStatus(
+                            "⚠️ Place an End point first (🔴 End tool).",
+                            "error",
+                        );
+                        return;
+                    }
+
+                    clearViz(true);
+                    isSolving = true;
+                    visitedCount = 0;
+
+                    document.getElementById("btn-solve").disabled = true;
+                    document.getElementById("btn-stop").style.display =
+                        "inline-block";
+
+                    const algo = document.getElementById("algorithm").value;
+                    setStatus(`Solving with ${algo.toUpperCase()}…`, "solving");
+
+                    switch (algo) {
+                        case "bfs":
+                            solveGen = bfs();
+                            break;
+                        case "dfs":
+                            solveGen = dfs();
+                            break;
+                        case "astar":
+                            solveGen = astar();
+                            break;
+                    }
+
+                    scheduleStep();
+                }
+
+                function stopSolving() {
+                    if (solveTimerId !== null) {
+                        clearTimeout(solveTimerId);
+                        solveTimerId = null;
+                    }
+                    isSolving = false;
+                    solveGen = null;
+                    document.getElementById("btn-solve").disabled = false;
+                    document.getElementById("btn-stop").style.display = "none";
+                }
+
+                function getDelay() {
+                    const s = parseInt(
+                        document.getElementById("speed").value,
+                        10,
+                    ); // 1‥100
+                    // Exponential: s=1 → ~300ms, s=50 → ~17ms, s=100 → ~1ms
+                    return Math.max(
+                        0,
+                        Math.round(300 * Math.pow(0.955, s - 1)),
+                    );
+                }
+
+                function scheduleStep() {
+                    if (!isSolving) return;
+                    const delay = getDelay();
+                    if (delay === 0) {
+                        // Batch many steps per animation frame for max speed
+                        solveTimerId = requestAnimationFrame(batchStep);
+                    } else {
+                        solveTimerId = setTimeout(singleStep, delay);
+                    }
+                }
+
+                function singleStep() {
+                    if (!isSolving || !solveGen) return;
+                    const { value, done } = solveGen.next();
+                    handleStep(value, done);
+                    if (!done && isSolving) scheduleStep();
+                }
+
+                function batchStep() {
+                    if (!isSolving || !solveGen) return;
+                    const BATCH = 60;
+                    for (let i = 0; i < BATCH; i++) {
+                        const { value, done } = solveGen.next();
+                        handleStep(value, done);
+                        if (done || !isSolving) return;
+                    }
+                    drawGrid();
+                    scheduleStep();
+                }
+
+                function handleStep(step, done) {
+                    if (!step) return;
+                    switch (step.type) {
+                        case "frontier": {
+                            const { row, col } = step.cell;
+                            if (grid[row][col] === OPEN) {
+                                vizGrid[row][col] = VIZ_FRONTIER;
+                                if (getDelay() > 0) drawCell(row, col);
+                            }
+                            break;
+                        }
+                        case "visit": {
+                            const { row, col } = step.cell;
+                            if (grid[row][col] === OPEN) {
+                                vizGrid[row][col] = VIZ_VISITED;
+                                visitedCount++;
+                                if (getDelay() > 0) drawCell(row, col);
+                            }
+                            setStats(`Visited: ${visitedCount}`);
+                            break;
+                        }
+                        case "found": {
+                            stopSolving();
+                            // Animate path
+                            animatePath(step.path);
+                            break;
+                        }
+                        case "no_solution": {
+                            stopSolving();
+                            drawGrid();
+                            setStatus(
+                                "❌ No solution found — the end is unreachable.",
+                                "error",
+                            );
+                            setStats(`Visited: ${visitedCount}`);
+                            break;
+                        }
+                    }
+                }
+
+                // ── Path animation ─────────────────────────────────────────────────────────
+                function animatePath(path) {
+                    drawGrid();
+                    let i = 0;
+                    const step = () => {
+                        if (i >= path.length) {
+                            setStatus(
+                                `✅ Solved! Path length: ${path.length} steps.`,
+                                "success",
+                            );
+                            setStats(
+                                `Visited: ${visitedCount} | Path: ${path.length}`,
+                            );
+                            return;
+                        }
+                        const { row, col } = path[i];
+                        if (grid[row][col] === OPEN) {
+                            vizGrid[row][col] = VIZ_PATH;
+                            drawCell(row, col);
+                        }
+                        i++;
+                        setTimeout(step, Math.max(20, getDelay()));
+                    };
+                    step();
+                }
+
+                // ── Graph helpers ──────────────────────────────────────────────────────────
+                function key(r, c) {
+                    return r * 10000 + c;
+                }
+
+                function neighbors(r, c) {
+                    const result = [];
+                    if (r > 0 && grid[r - 1][c] !== WALL)
+                        result.push([r - 1, c]);
+                    if (r < rows - 1 && grid[r + 1][c] !== WALL)
+                        result.push([r + 1, c]);
+                    if (c > 0 && grid[r][c - 1] !== WALL)
+                        result.push([r, c - 1]);
+                    if (c < cols - 1 && grid[r][c + 1] !== WALL)
+                        result.push([r, c + 1]);
+                    return result;
+                }
+
+                function tracePath(parent, endR, endC) {
+                    const path = [];
+                    let cur = key(endR, endC);
+                    const startK = key(startCell.row, startCell.col);
+                    while (cur !== startK) {
+                        const [r, c] = [Math.floor(cur / 10000), cur % 10000];
+                        path.push({ row: r, col: c });
+                        cur = parent.get(cur);
+                        if (cur === undefined) return [];
+                    }
+                    path.push({ row: startCell.row, col: startCell.col });
+                    return path.reverse();
+                }
+
+                // ── BFS ────────────────────────────────────────────────────────────────────
+                function* bfs() {
+                    const { row: sr, col: sc } = startCell;
+                    const { row: er, col: ec } = endCell;
+                    const parent = new Map();
+                    const visited = new Set();
+                    const queue = [[sr, sc]];
+                    const startK = key(sr, sc);
+                    visited.add(startK);
+
+                    while (queue.length > 0) {
+                        const [r, c] = queue.shift();
+                        yield { type: "visit", cell: { row: r, col: c } };
+
+                        if (r === er && c === ec) {
+                            yield {
+                                type: "found",
+                                path: tracePath(parent, er, ec),
+                            };
+                            return;
+                        }
+
+                        for (const [nr, nc] of neighbors(r, c)) {
+                            const k = key(nr, nc);
+                            if (!visited.has(k)) {
+                                visited.add(k);
+                                parent.set(k, key(r, c));
+                                queue.push([nr, nc]);
+                                yield {
+                                    type: "frontier",
+                                    cell: { row: nr, col: nc },
+                                };
+                            }
+                        }
+                    }
+                    yield { type: "no_solution" };
+                }
+
+                // ── DFS ────────────────────────────────────────────────────────────────────
+                function* dfs() {
+                    const { row: sr, col: sc } = startCell;
+                    const { row: er, col: ec } = endCell;
+                    const parent = new Map();
+                    const visited = new Set();
+                    const stack = [[sr, sc]];
+
+                    while (stack.length > 0) {
+                        const [r, c] = stack.pop();
+                        const k = key(r, c);
+                        if (visited.has(k)) continue;
+                        visited.add(k);
+                        yield { type: "visit", cell: { row: r, col: c } };
+
+                        if (r === er && c === ec) {
+                            yield {
+                                type: "found",
+                                path: tracePath(parent, er, ec),
+                            };
+                            return;
+                        }
+
+                        for (const [nr, nc] of neighbors(r, c)) {
+                            const nk = key(nr, nc);
+                            if (!visited.has(nk)) {
+                                if (!parent.has(nk)) parent.set(nk, k);
+                                stack.push([nr, nc]);
+                                yield {
+                                    type: "frontier",
+                                    cell: { row: nr, col: nc },
+                                };
+                            }
+                        }
+                    }
+                    yield { type: "no_solution" };
+                }
+
+                // ── A* ─────────────────────────────────────────────────────────────────────
+                function* astar() {
+                    const { row: sr, col: sc } = startCell;
+                    const { row: er, col: ec } = endCell;
+                    const h = (r, c) => Math.abs(r - er) + Math.abs(c - ec);
+
+                    const parent = new Map();
+                    const gScore = new Map();
+                    const visited = new Set();
+                    const open = new MinHeap((a, b) => a.f - b.f);
+
+                    const startK = key(sr, sc);
+                    gScore.set(startK, 0);
+                    open.push({ r: sr, c: sc, f: h(sr, sc) });
+
+                    while (!open.isEmpty()) {
+                        const { r, c } = open.pop();
+                        const k = key(r, c);
+                        if (visited.has(k)) continue;
+                        visited.add(k);
+                        yield { type: "visit", cell: { row: r, col: c } };
+
+                        if (r === er && c === ec) {
+                            yield {
+                                type: "found",
+                                path: tracePath(parent, er, ec),
+                            };
+                            return;
+                        }
+
+                        const g = gScore.get(k);
+                        for (const [nr, nc] of neighbors(r, c)) {
+                            const nk = key(nr, nc);
+                            if (visited.has(nk)) continue;
+                            const ng = g + 1;
+                            if (ng < (gScore.get(nk) ?? Infinity)) {
+                                parent.set(nk, k);
+                                gScore.set(nk, ng);
+                                const f = ng + h(nr, nc);
+                                open.push({ r: nr, c: nc, f });
+                                yield {
+                                    type: "frontier",
+                                    cell: { row: nr, col: nc },
+                                };
+                            }
+                        }
+                    }
+                    yield { type: "no_solution" };
+                }
+
+                // ── MinHeap ────────────────────────────────────────────────────────────────
+                class MinHeap {
+                    constructor(cmp) {
+                        this._data = [];
+                        this._cmp = cmp;
+                    }
+                    push(item) {
+                        this._data.push(item);
+                        this._bubbleUp(this._data.length - 1);
+                    }
+                    pop() {
+                        const top = this._data[0];
+                        const last = this._data.pop();
+                        if (this._data.length > 0) {
+                            this._data[0] = last;
+                            this._siftDown(0);
+                        }
+                        return top;
+                    }
+                    isEmpty() {
+                        return this._data.length === 0;
+                    }
+                    _bubbleUp(i) {
+                        while (i > 0) {
+                            const p = (i - 1) >> 1;
+                            if (this._cmp(this._data[i], this._data[p]) < 0) {
+                                [this._data[i], this._data[p]] = [
+                                    this._data[p],
+                                    this._data[i],
+                                ];
+                                i = p;
+                            } else break;
+                        }
+                    }
+                    _siftDown(i) {
+                        const n = this._data.length;
+                        while (true) {
+                            let smallest = i;
+                            const l = 2 * i + 1,
+                                r = 2 * i + 2;
+                            if (
+                                l < n &&
+                                this._cmp(this._data[l], this._data[smallest]) <
+                                    0
+                            )
+                                smallest = l;
+                            if (
+                                r < n &&
+                                this._cmp(this._data[r], this._data[smallest]) <
+                                    0
+                            )
+                                smallest = r;
+                            if (smallest === i) break;
+                            [this._data[i], this._data[smallest]] = [
+                                this._data[smallest],
+                                this._data[i],
+                            ];
+                            i = smallest;
+                        }
+                    }
+                }
+
+                // ── Debounce ───────────────────────────────────────────────────────────────
+                function debounce(fn, ms) {
+                    let timer;
+                    return (...args) => {
+                        clearTimeout(timer);
+                        timer = setTimeout(() => fn(...args), ms);
+                    };
+                }
+
+                // ── Boot ───────────────────────────────────────────────────────────────────
+                document.addEventListener("DOMContentLoaded", init);
+            })();
+        </script>
+    </body>
+</html>
