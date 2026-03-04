@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CVC Spin-a-Word Game</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --machine-bg: #1b2140;
+      --machine-border: #ffd54f;
+      --accent: #ffca28;
+      --accent-strong: #ff6f00;
+      --text-main: #ffffff;
+      --text-muted: #d0d4f0;
+      --button-bg: #283056;
+      --button-bg-active: #39447a;
+      --button-disabled: #555a7a;
+      --reel-bg: #111628;
+      --reel-border: #f5f5f5;
+      --winner-glow: 0 0 20px rgba(255, 202, 40, 0.9);
+      --danger: #ff5252;
+      --success: #00e676;
+      --focus-ring: 0 0 0 3px rgba(255, 202, 40, 0.8);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #20295a 0, var(--bg) 55%, #050814 100%);
+      color: var(--text-main);
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .game-container {
+      width: 100%;
+      max-width: 480px;
+      background: radial-gradient(circle at top, #2b335f 0, var(--machine-bg) 55%, #11162b 100%);
+      border-radius: 24px;
+      border: 4px solid var(--machine-border);
+      box-shadow:
+        0 0 0 4px rgba(0, 0, 0, 0.4),
+        0 24px 40px rgba(0, 0, 0, 0.7);
+      padding: 18px 16px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .game-container::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.04), transparent 55%),
+        radial-gradient(circle at 90% 0%, rgba(255, 255, 255, 0.04), transparent 55%);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .game-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .game-header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .game-header h1 {
+      margin: 0 0 4px;
+      font-size: 1.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow:
+        0 0 12px rgba(255, 202, 40, 0.6),
+        0 0 24px rgba(0, 0, 0, 0.9);
+    }
+
+    .game-header p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .game-main {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+
+    .reels {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 10px;
+      background: linear-gradient(to bottom, #0d1224, #171c33);
+      border-radius: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      box-shadow:
+        inset 0 0 10px rgba(0, 0, 0, 0.7),
+        0 8px 18px rgba(0, 0, 0, 0.7);
+    }
+
+    .reel-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .letter-window {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      max-height: 110px;
+      border-radius: 14px;
+      background: radial-gradient(circle at top, #2d355a 0, var(--reel-bg) 70%);
+      border: 3px solid var(--reel-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        inset 0 6px 10px rgba(255, 255, 255, 0.15),
+        inset 0 -8px 16px rgba(0, 0, 0, 0.7);
+    }
+
+    .letter {
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-shadow:
+        0 0 10px rgba(0, 0, 0, 0.9),
+        0 2px 0 rgba(0, 0, 0, 0.7);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    button {
+      font: inherit;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.22);
+      background: radial-gradient(circle at top, #48507e 0, var(--button-bg) 60%);
+      color: var(--text-main);
+      padding: 8px 14px;
+      cursor: pointer;
+      transition:
+        transform 0.08s ease-out,
+        box-shadow 0.08s ease-out,
+        background 0.12s ease-out,
+        border-color 0.12s ease-out;
+      box-shadow:
+        0 4px 0 rgba(0, 0, 0, 0.6),
+        0 6px 14px rgba(0, 0, 0, 0.6);
+      min-width: 44px;
+      min-height: 44px;
+      position: relative;
+      z-index: 1;
+    }
+
+    button:focus-visible {
+      outline: none;
+      box-shadow:
+        0 4px 0 rgba(0, 0, 0, 0.6),
+        0 6px 14px rgba(0, 0, 0, 0.6),
+        var(--focus-ring);
+    }
+
+    button:active {
+      transform: translateY(1px);
+      box-shadow:
+        0 3px 0 rgba(0, 0, 0, 0.6),
+        0 4px 10px rgba(0, 0, 0, 0.6);
+      background: radial-gradient(circle at top, #5b658f 0, var(--button-bg-active) 60%);
+    }
+
+    button:disabled {
+      cursor: default;
+      background: radial-gradient(circle at top, #394057 0, #2b3045 60%);
+      color: rgba(255, 255, 255, 0.5);
+      border-color: rgba(255, 255, 255, 0.1);
+      box-shadow:
+        0 3px 0 rgba(0, 0, 0, 0.6),
+        0 4px 12px rgba(0, 0, 0, 0.6);
+    }
+
+    .arrow-button {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-size: 1.3rem;
+      background: radial-gradient(circle at top, #4f5c8a 0, #323d63 60%);
+    }
+
+    .main-button {
+      padding-inline: 20px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    #spin-button {
+      background: radial-gradient(circle at top, #ffd54f 0, #ffb300 45%, #f57c00 90%);
+      color: #261000;
+      border-color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+
+    #spin-button:active {
+      background: radial-gradient(circle at top, #ffe082 0, #ffc107 45%, #ef6c00 90%);
+    }
+
+    #check-button {
+      background: radial-gradient(circle at top, #4caf50 0, #1b5e20 90%);
+      border-color: rgba(255, 255, 255, 0.8);
+    }
+
+    #check-button:active {
+      background: radial-gradient(circle at top, #81c784 0, #2e7d32 90%);
+    }
+
+    .result {
+      margin-top: 2px;
+      padding: 10px 10px 8px;
+      border-radius: 14px;
+      background: radial-gradient(circle at top, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.7));
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      min-height: 70px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 4px;
+    }
+
+    .result-word {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      text-shadow:
+        0 0 10px rgba(0, 0, 0, 0.9),
+        0 2px 0 rgba(0, 0, 0, 0.8);
+      white-space: nowrap;
+    }
+
+    .result-message {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      min-height: 1.2em;
+    }
+
+    .result-message--success {
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    .result-message--try {
+      color: var(--danger);
+    }
+
+    .game-container.winner {
+      box-shadow:
+        0 0 0 4px rgba(0, 0, 0, 0.8),
+        0 0 24px rgba(255, 202, 40, 0.8),
+        var(--winner-glow);
+      border-color: #ffe082;
+    }
+
+    .game-footer {
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: rgba(245, 245, 255, 0.7);
+      text-align: center;
+    }
+
+    .game-footer strong {
+      color: var(--accent);
+    }
+
+    @media (max-width: 420px) {
+      .game-container {
+        padding-inline: 12px;
+      }
+
+      .letter {
+        font-size: 2.6rem;
+      }
+
+      .result-word {
+        font-size: 1.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="game-inner">
+      <header class="game-header">
+        <h1>Spin-a-Word</h1>
+        <p>Spin or tap the arrows to build a word. Then press <strong>Check Word</strong>.</p>
+      </header>
+
+      <main class="game-main">
+        <section class="reels" aria-label="Letter reels">
+          <div class="reel-column">
+            <button
+              type="button"
+              class="arrow-button up"
+              data-reel="0"
+              aria-label="Move first letter up"
+            >
+              ▲
+            </button>
+            <div class="letter-window" aria-hidden="true">
+              <div class="letter" id="reel-0">C</div>
+            </div>
+            <button
+              type="button"
+              class="arrow-button down"
+              data-reel="0"
+              aria-label="Move first letter down"
+            >
+              ▼
+            </button>
+          </div>
+
+          <div class="reel-column">
+            <button
+              type="button"
+              class="arrow-button up"
+              data-reel="1"
+              aria-label="Move middle letter up"
+            >
+              ▲
+            </button>
+            <div class="letter-window" aria-hidden="true">
+              <div class="letter" id="reel-1">A</div>
+            </div>
+            <button
+              type="button"
+              class="arrow-button down"
+              data-reel="1"
+              aria-label="Move middle letter down"
+            >
+              ▼
+            </button>
+          </div>
+
+          <div class="reel-column">
+            <button
+              type="button"
+              class="arrow-button up"
+              data-reel="2"
+              aria-label="Move last letter up"
+            >
+              ▲
+            </button>
+            <div class="letter-window" aria-hidden="true">
+              <div class="letter" id="reel-2">T</div>
+            </div>
+            <button
+              type="button"
+              class="arrow-button down"
+              data-reel="2"
+              aria-label="Move last letter down"
+            >
+              ▼
+            </button>
+          </div>
+        </section>
+
+        <section class="controls" aria-label="Game controls">
+          <button id="spin-button" class="main-button" type="button">
+            Spin 🎰
+          </button>
+          <button id="check-button" class="main-button" type="button">
+            Check Word ✅
+          </button>
+        </section>
+
+        <section class="result" aria-live="polite">
+          <div id="result-word" class="result-word"></div>
+          <div id="result-message" class="result-message"></div>
+        </section>
+      </main>
+
+      <footer class="game-footer">
+        <p>
+          <strong>Grown-up tip:</strong>
+          Ask your child to say each sound:
+          first letter, middle letter, last letter.
+        </p>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // A kid-safe CVC-style word list.
+      // Each word is three letters and uses friendly, early-reader vocabulary.
+      const WORDS = {
+        bag: { display: "Bag 👜" },
+        bat: { display: "Bat 🦇" },
+        bed: { display: "Bed 🛏️" },
+        beg: { display: "Beg 🙏" },
+        bib: { display: "Bib 🍼" },
+        big: { display: "Big ⭐" },
+        bin: { display: "Bin 🗑️" },
+        bit: { display: "Bit 🔹" },
+        bog: { display: "Bog 🐸" },
+        bug: { display: "Bug 🐞" },
+        bun: { display: "Bun 🥯" },
+        bus: { display: "Bus 🚌" },
+        cab: { display: "Cab 🚕" },
+        can: { display: "Can 🥫" },
+        cap: { display: "Cap 🧢" },
+        car: { display: "Car 🚗" },
+        cat: { display: "Cat 🐱" },
+        cop: { display: "Cop 🚓" },
+        cub: { display: "Cub 🐻" },
+        cup: { display: "Cup ☕" },
+        cut: { display: "Cut ✂️" },
+        dad: { display: "Dad 👨" },
+        den: { display: "Den 🏠" },
+        dig: { display: "Dig 🪣" },
+        dim: { display: "Dim 💡" },
+        din: { display: "Din 🔊" },
+        dog: { display: "Dog 🐶" },
+        dot: { display: "Dot 🔵" },
+        dug: { display: "Dug 🕳️" },
+        fan: { display: "Fan 🌀" },
+        fat: { display: "Fat 🧈" },
+        fed: { display: "Fed 🍽️" },
+        fig: { display: "Fig 🫐" },
+        fin: { display: "Fin 🐟" },
+        fog: { display: "Fog 🌫️" },
+        fun: { display: "Fun 🎈" },
+        gap: { display: "Gap ↔️" },
+        gas: { display: "Gas ⛽" },
+        get: { display: "Get 🎁" },
+        gig: { display: "Gig 🎵" },
+        got: { display: "Got ✔️" },
+        gum: { display: "Gum 🍬" },
+        had: { display: "Had ✔️" },
+        ham: { display: "Ham 🍖" },
+        hat: { display: "Hat 🎩" },
+        hen: { display: "Hen 🐔" },
+        hid: { display: "Hid 🙈" },
+        him: { display: "Him 🧍‍♂️" },
+        hip: { display: "Hip 🕺" },
+        hit: { display: "Hit 🎯" },
+        hog: { display: "Hog 🐷" },
+        hop: { display: "Hop 🐰" },
+        hot: { display: "Hot 🔥" },
+        hug: { display: "Hug 🤗" },
+        hut: { display: "Hut 🛖" },
+        jam: { display: "Jam 🍓" },
+        jet: { display: "Jet ✈️" },
+        job: { display: "Job 💼" },
+        jog: { display: "Jog 🏃" },
+        kid: { display: "Kid 🧒" },
+        kit: { display: "Kit 🎒" },
+        lab: { display: "Lab 🧪" },
+        lap: { display: "Lap 🪑" },
+        leg: { display: "Leg 🦵" },
+        let: { display: "Let ✅" },
+        lid: { display: "Lid 🥫" },
+        lip: { display: "Lip 😊" },
+        lit: { display: "Lit 💡" },
+        log: { display: "Log 🌲" },
+        lot: { display: "Lot 📦" },
+        mad: { display: "Mad 😠" },
+        man: { display: "Man 👨" },
+        map: { display: "Map 🗺️" },
+        mat: { display: "Mat 🧺" },
+        men: { display: "Men 🧍‍♂️🧍‍♂️" },
+        met: { display: "Met 🤝" },
+        mom: { display: "Mom 👩" },
+        mop: { display: "Mop 🧹" },
+        mud: { display: "Mud 🪵" },
+        mug: { display: "Mug ☕" },
+        nap: { display: "Nap 😴" },
+        net: { display: "Net 🥅" },
+        nib: { display: "Nib ✒️" },
+        nip: { display: "Nip 🐶" },
+        nod: { display: "Nod 🙂" },
+        not: { display: "Not 🚫" },
+        nut: { display: "Nut 🌰" },
+        pad: { display: "Pad 📒" },
+        pan: { display: "Pan 🍳" },
+        pat: { display: "Pat 👋" },
+        peg: { display: "Peg 📎" },
+        pen: { display: "Pen 🖊️" },
+        pet: { display: "Pet 🐾" },
+        pig: { display: "Pig 🐷" },
+        pin: { display: "Pin 📍" },
+        pit: { display: "Pit 🕳️" },
+        pod: { display: "Pod 🌱" },
+        pot: { display: "Pot 🍲" },
+        pup: { display: "Pup 🐶" },
+        rag: { display: "Rag 🧽" },
+        ram: { display: "Ram 🐏" },
+        ran: { display: "Ran 🏃" },
+        rat: { display: "Rat 🐭" },
+        red: { display: "Red 🟥" },
+        rid: { display: "Rid 🧹" },
+        rig: { display: "Rig 🚛" },
+        rip: { display: "Rip ✂️" },
+        rod: { display: "Rod 🎣" },
+        rot: { display: "Rot 🦴" },
+        run: { display: "Run 🏃‍♀️" },
+        sad: { display: "Sad 😢" },
+        sap: { display: "Sap 🌳" },
+        sat: { display: "Sat 💺" },
+        set: { display: "Set ✅" },
+        sip: { display: "Sip 🥤" },
+        sit: { display: "Sit 🪑" },
+        sob: { display: "Sob 😭" },
+        sub: { display: "Sub 🚢" },
+        sud: { display: "Sud 🫧" },
+        sum: { display: "Sum ➕" },
+        sun: { display: "Sun ☀️" },
+        tab: { display: "Tab 📑" },
+        tag: { display: "Tag 🏷️" },
+        tap: { display: "Tap 🚰" },
+        tan: { display: "Tan 🌞" },
+        ten: { display: "Ten 🔟" },
+        tip: { display: "Tip 💡" },
+        top: { display: "Top 🔝" },
+        tub: { display: "Tub 🛁" },
+        tug: { display: "Tug 🚢" },
+        van: { display: "Van 🚐" },
+        vat: { display: "Vat 🛢️" },
+        vet: { display: "Vet 🐕‍🦺" },
+        web: { display: "Web 🕸️" },
+        wed: { display: "Wed 💍" },
+        wet: { display: "Wet 💧" },
+        wig: { display: "Wig 💇" },
+        win: { display: "Win 🏆" },
+        wit: { display: "Wit 🤓" },
+        yak: { display: "Yak 🐃" },
+        yam: { display: "Yam 🍠" },
+        yap: { display: "Yap 🐶" },
+        yes: { display: "Yes ✅" },
+        yet: { display: "Yet ⏳" },
+        zip: { display: "Zip 🔐" }
+      };
+
+      function buildLetterSetsFromWords(words) {
+        const first = new Set();
+        const middle = new Set();
+        const last = new Set();
+
+        Object.keys(words).forEach(function (word) {
+          if (!word || word.length !== 3) return;
+          first.add(word[0]);
+          middle.add(word[1]);
+          last.add(word[2]);
+        });
+
+        const makeSortedArray = function (set) {
+          return Array.from(set).sort();
+        };
+
+        return {
+          consonantsFirst: makeSortedArray(first),
+          vowelsMiddle: makeSortedArray(middle),
+          consonantsLast: makeSortedArray(last)
+        };
+      }
+
+      const letterSets = buildLetterSetsFromWords(WORDS);
+
+      const letterEls = [
+        document.getElementById("reel-0"),
+        document.getElementById("reel-1"),
+        document.getElementById("reel-2")
+      ];
+
+      const spinButton = document.getElementById("spin-button");
+      const checkButton = document.getElementById("check-button");
+      const arrowButtons = Array.prototype.slice.call(
+        document.querySelectorAll(".arrow-button")
+      );
+      const resultWordEl = document.getElementById("result-word");
+      const resultMessageEl = document.getElementById("result-message");
+      const container = document.querySelector(".game-container");
+
+      const reels = [
+        {
+          letters: letterSets.consonantsFirst,
+          index: 0,
+          el: letterEls[0]
+        },
+        {
+          letters: letterSets.vowelsMiddle,
+          index: 0,
+          el: letterEls[1]
+        },
+        {
+          letters: letterSets.consonantsLast,
+          index: 0,
+          el: letterEls[2]
+        }
+      ];
+
+      let isSpinning = false;
+      let spinIntervals = [];
+      let spinTimeouts = [];
+
+      function updateLetterDisplays() {
+        reels.forEach(function (reel) {
+          reel.el.textContent = reel.letters[reel.index].toUpperCase();
+        });
+      }
+
+      // Simple Web Audio sound engine without external files
+      var audioCtx = null;
+
+      function getAudioContext() {
+        if (!audioCtx) {
+          var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) {
+            return null;
+          }
+          audioCtx = new AudioContextClass();
+        }
+        return audioCtx;
+      }
+
+      function playTone(options) {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+
+        var freq = options.frequency || 440;
+        var duration = options.duration || 0.15;
+        var type = options.type || "sine";
+        var volume = options.volume || 0.2;
+
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+        gain.gain.setValueAtTime(volume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(
+          0.001,
+          ctx.currentTime + duration
+        );
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      }
+
+      function playClick() {
+        playTone({
+          frequency: 700,
+          duration: 0.05,
+          type: "square",
+          volume: 0.18
+        });
+      }
+
+      function playSpinStart() {
+        playTone({
+          frequency: 300,
+          duration: 0.15,
+          type: "sawtooth",
+          volume: 0.25
+        });
+      }
+
+      function playSpinStop() {
+        playTone({
+          frequency: 220,
+          duration: 0.15,
+          type: "triangle",
+          volume: 0.25
+        });
+      }
+
+      function playSuccess() {
+        playTone({
+          frequency: 880,
+          duration: 0.18,
+          type: "sine",
+          volume: 0.25
+        });
+        setTimeout(function () {
+          playTone({
+            frequency: 1320,
+            duration: 0.22,
+            type: "sine",
+            volume: 0.2
+          });
+        }, 160);
+      }
+
+      function clearTimers() {
+        spinIntervals.forEach(function (id) {
+          clearInterval(id);
+        });
+        spinTimeouts.forEach(function (id) {
+          clearTimeout(id);
+        });
+        spinIntervals = [];
+        spinTimeouts = [];
+      }
+
+      function disableButtons(disabled) {
+        spinButton.disabled = disabled;
+        checkButton.disabled = disabled;
+        arrowButtons.forEach(function (btn) {
+          btn.disabled = disabled;
+        });
+      }
+
+      function getCurrentWord() {
+        return reels
+          .map(function (reel) {
+            return reel.letters[reel.index];
+          })
+          .join("");
+      }
+
+      function clearResult() {
+        container.classList.remove("winner");
+        resultWordEl.textContent = "";
+        resultMessageEl.textContent = "";
+        resultMessageEl.className = "result-message";
+      }
+
+      function showSuccess(word, info) {
+        container.classList.add("winner");
+        resultWordEl.textContent = (info.display || word).toUpperCase();
+        resultMessageEl.textContent =
+          "Yes! “" + word.toUpperCase() + "” is a word.";
+        resultMessageEl.className = "result-message result-message--success";
+        playSuccess();
+      }
+
+      function showTryAgain(word) {
+        container.classList.remove("winner");
+        resultWordEl.textContent = word.toUpperCase();
+        resultMessageEl.textContent =
+          "That one is not on my list. Try another combination.";
+        resultMessageEl.className = "result-message result-message--try";
+      }
+
+      function moveReel(reelIndex, direction) {
+        if (isSpinning) return;
+        var reel = reels[reelIndex];
+        var len = reel.letters.length;
+        reel.index = (reel.index + direction + len) % len;
+        updateLetterDisplays();
+        clearResult();
+        playClick();
+      }
+
+      function spinReels() {
+        if (isSpinning) return;
+        isSpinning = true;
+        clearResult();
+        clearTimers();
+        disableButtons(true);
+        playSpinStart();
+
+        var baseDuration = 700;
+        var stepDuration = 260;
+        var spinSpeed = 80;
+
+        reels.forEach(function (reel, index) {
+          var intervalId = setInterval(function () {
+            reel.index = (reel.index + 1) % reel.letters.length;
+            reel.el.textContent = reel.letters[reel.index].toUpperCase();
+          }, spinSpeed);
+          spinIntervals.push(intervalId);
+
+          var duration = baseDuration + stepDuration * index;
+          var timeoutId = setTimeout(function () {
+            clearInterval(intervalId);
+            spinIntervals = spinIntervals.filter(function (id) {
+              return id !== intervalId;
+            });
+            reel.index = Math.floor(Math.random() * reel.letters.length);
+            reel.el.textContent = reel.letters[reel.index].toUpperCase();
+
+            if (index === reels.length - 1) {
+              isSpinning = false;
+              disableButtons(false);
+              playSpinStop();
+            }
+          }, duration);
+
+          spinTimeouts.push(timeoutId);
+        });
+      }
+
+      function checkWord() {
+        if (isSpinning) return;
+        var word = getCurrentWord();
+        var info = WORDS[word];
+        if (info) {
+          showSuccess(word, info);
+        } else {
+          showTryAgain(word);
+        }
+      }
+
+      // Event wiring
+      arrowButtons.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var reelIndex = parseInt(btn.getAttribute("data-reel"), 10) || 0;
+          var direction = btn.classList.contains("up") ? -1 : 1;
+          moveReel(reelIndex, direction);
+        });
+      });
+
+      spinButton.addEventListener("click", function () {
+        spinReels();
+      });
+
+      checkButton.addEventListener("click", function () {
+        checkWord();
+      });
+
+      // Initialize reels with first letters from sets and focus spin button.
+      reels.forEach(function (reel) {
+        reel.index = 0;
+      });
+      updateLetterDisplays();
+      try {
+        spinButton.focus();
+      } catch (e) {
+        // ignore
+      }
+    })();
+  </script>
+</body>
+</html>
+
