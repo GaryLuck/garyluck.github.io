@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CVC Word Machine</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #1a0533;
+    font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
+    touch-action: manipulation;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: radial-gradient(ellipse at top, #3d0f7a 0%, #1a0533 60%);
+  }
+
+  /* ── TITLE ── */
+  #title {
+    color: #FFE066;
+    font-size: clamp(1.2rem, 4vw, 2.2rem);
+    font-weight: 900;
+    text-shadow: 0 0 20px #FF6B35, 3px 3px 0 #c44a00;
+    letter-spacing: 2px;
+    margin-bottom: clamp(4px, 1.5vh, 12px);
+    text-transform: uppercase;
+  }
+
+  /* ── MACHINE SHELL ── */
+  #machine {
+    background: linear-gradient(160deg, #c0392b 0%, #922b21 40%, #7b241c 100%);
+    border-radius: clamp(16px, 4vw, 32px);
+    padding: clamp(10px, 2.5vw, 24px);
+    box-shadow:
+      0 0 0 4px #FFD700,
+      0 0 0 8px #c0392b,
+      0 20px 60px rgba(0,0,0,0.7),
+      inset 0 2px 4px rgba(255,255,255,0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(6px, 1.5vh, 14px);
+    width: min(95vw, 480px);
+  }
+
+  /* ── REELS SECTION ── */
+  #reels-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(4px, 1vh, 10px);
+    width: 100%;
+  }
+
+  .arrow-row {
+    display: flex;
+    justify-content: center;
+    gap: clamp(10px, 4vw, 28px);
+    width: 100%;
+  }
+
+  .arrow-btn {
+    width: clamp(44px, 11vw, 72px);
+    height: clamp(32px, 6vh, 48px);
+    border: none;
+    border-radius: 10px;
+    font-size: clamp(1rem, 3.5vw, 1.6rem);
+    cursor: pointer;
+    transition: transform 0.1s, filter 0.1s;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .arrow-btn.up {
+    background: linear-gradient(180deg, #fff176 0%, #ffd600 100%);
+    box-shadow: 0 4px 0 #b8a000, 0 6px 12px rgba(0,0,0,0.3);
+    color: #5d4000;
+  }
+  .arrow-btn.down {
+    background: linear-gradient(180deg, #80deea 0%, #00acc1 100%);
+    box-shadow: 0 4px 0 #006f7f, 0 6px 12px rgba(0,0,0,0.3);
+    color: #003a47;
+  }
+  .arrow-btn:active { transform: scale(0.92) translateY(2px); filter: brightness(0.9); }
+
+  /* ── REELS ── */
+  #reels {
+    display: flex;
+    gap: clamp(8px, 3vw, 20px);
+    background: #000;
+    border-radius: 16px;
+    padding: clamp(8px, 2vw, 16px);
+    box-shadow: inset 0 4px 20px rgba(0,0,0,0.8), 0 0 0 3px #FFD700;
+  }
+
+  .reel-window {
+    width: clamp(64px, 16vw, 110px);
+    height: clamp(64px, 13vh, 100px);
+    overflow: hidden;
+    border-radius: 10px;
+    position: relative;
+    background: #111;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.6);
+  }
+
+  /* gradient overlays top/bottom */
+  .reel-window::before,
+  .reel-window::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 28%;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .reel-window::before {
+    top: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+  }
+  .reel-window::after {
+    bottom: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  }
+
+  .reel-strip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+  }
+
+  .reel-letter {
+    width: clamp(64px, 16vw, 110px);
+    height: clamp(64px, 13vh, 100px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(2rem, 8vw, 4.5rem);
+    font-weight: 900;
+    color: #FFE066;
+    text-shadow: 0 0 20px rgba(255,220,100,0.8), 2px 2px 0 rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+  .reel-letter.consonant { color: #80deea; text-shadow: 0 0 20px rgba(0,200,230,0.8); }
+  .reel-letter.vowel     { color: #f48fb1; text-shadow: 0 0 20px rgba(244,100,160,0.8); }
+
+  /* spinning animation */
+  @keyframes reel-spin {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(-200%); }
+  }
+  .spinning .reel-strip {
+    animation: reel-blur 0.08s linear infinite;
+  }
+  @keyframes reel-blur {
+    0%   { transform: translateY(0);     filter: blur(2px); }
+    50%  { transform: translateY(-100%); filter: blur(4px); }
+    100% { transform: translateY(0);     filter: blur(2px); }
+  }
+
+  /* ── BUTTONS ROW ── */
+  #buttons {
+    display: flex;
+    gap: clamp(8px, 3vw, 18px);
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .main-btn {
+    flex: 1;
+    max-width: 160px;
+    height: clamp(44px, 8vh, 64px);
+    border: none;
+    border-radius: 14px;
+    font-size: clamp(0.85rem, 2.8vw, 1.2rem);
+    font-weight: 900;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: transform 0.1s, filter 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .main-btn:active { transform: scale(0.93) translateY(2px); filter: brightness(0.85); }
+
+  #spin-btn {
+    background: linear-gradient(180deg, #66bb6a 0%, #2e7d32 100%);
+    box-shadow: 0 5px 0 #1b5e20, 0 8px 20px rgba(0,0,0,0.4);
+    color: #fff;
+    text-shadow: 1px 1px 0 #1b5e20;
+  }
+  #check-btn {
+    background: linear-gradient(180deg, #ff8a65 0%, #e64a19 100%);
+    box-shadow: 0 5px 0 #bf360c, 0 8px 20px rgba(0,0,0,0.4);
+    color: #fff;
+    text-shadow: 1px 1px 0 #bf360c;
+  }
+
+  /* ── RESULT DISPLAY ── */
+  #result-area {
+    width: 100%;
+    min-height: clamp(50px, 12vh, 90px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  #result-emoji {
+    font-size: clamp(2rem, 8vw, 4rem);
+    line-height: 1;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform: scale(0);
+  }
+  #result-emoji.show { transform: scale(1); }
+
+  #result-word {
+    font-size: clamp(1rem, 3.5vw, 1.6rem);
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #fff;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #result-word.show { opacity: 1; }
+
+  #result-msg {
+    font-size: clamp(0.75rem, 2.5vw, 1rem);
+    color: #ffe066;
+    font-weight: 700;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #result-msg.show { opacity: 1; }
+
+  /* lights decoration */
+  #lights {
+    display: flex;
+    gap: clamp(6px, 2vw, 14px);
+    flex-wrap: nowrap;
+  }
+  .light {
+    width: clamp(8px, 2vw, 14px);
+    height: clamp(8px, 2vw, 14px);
+    border-radius: 50%;
+    animation: blink 1.2s infinite alternate;
+  }
+  .light:nth-child(odd)  { animation-delay: 0s; }
+  .light:nth-child(even) { animation-delay: 0.6s; }
+  @keyframes blink {
+    0%   { opacity: 0.3; box-shadow: none; }
+    100% { opacity: 1;   box-shadow: 0 0 8px 3px currentColor; }
+  }
+  .light.r { color: #ff4444; background: #ff4444; }
+  .light.y { color: #ffee00; background: #ffee00; }
+  .light.g { color: #44ff44; background: #44ff44; }
+  .light.b { color: #44aaff; background: #44aaff; }
+
+  /* ── CONFETTI ── */
+  .confetti-piece {
+    position: fixed;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 999;
+    animation: confetti-fall 1.8s ease-in forwards;
+  }
+  @keyframes confetti-fall {
+    0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="title">⭐ Word Machine ⭐</div>
+
+<div id="machine">
+
+  <!-- top lights -->
+  <div id="lights">
+    <div class="light r"></div><div class="light y"></div><div class="light g"></div>
+    <div class="light b"></div><div class="light r"></div><div class="light y"></div>
+    <div class="light g"></div><div class="light b"></div><div class="light r"></div>
+    <div class="light y"></div><div class="light g"></div><div class="light b"></div>
+  </div>
+
+  <div id="reels-section">
+    <!-- up arrows -->
+    <div class="arrow-row" id="up-row">
+      <button class="arrow-btn up" onclick="stepLetter(0,-1)" aria-label="Left letter up">▲</button>
+      <button class="arrow-btn up" onclick="stepLetter(1,-1)" aria-label="Middle letter up">▲</button>
+      <button class="arrow-btn up" onclick="stepLetter(2,-1)" aria-label="Right letter up">▲</button>
+    </div>
+
+    <!-- reels -->
+    <div id="reels">
+      <div class="reel-window" id="reel-0"><div class="reel-strip" id="strip-0"></div></div>
+      <div class="reel-window" id="reel-1"><div class="reel-strip" id="strip-1"></div></div>
+      <div class="reel-window" id="reel-2"><div class="reel-strip" id="strip-2"></div></div>
+    </div>
+
+    <!-- down arrows -->
+    <div class="arrow-row" id="down-row">
+      <button class="arrow-btn down" onclick="stepLetter(0,1)" aria-label="Left letter down">▼</button>
+      <button class="arrow-btn down" onclick="stepLetter(1,1)" aria-label="Middle letter down">▼</button>
+      <button class="arrow-btn down" onclick="stepLetter(2,1)" aria-label="Right letter down">▼</button>
+    </div>
+  </div>
+
+  <!-- action buttons -->
+  <div id="buttons">
+    <button class="main-btn" id="spin-btn" onclick="spinReels()">🎰 Spin!</button>
+    <button class="main-btn" id="check-btn" onclick="checkWord()">✅ Check!</button>
+  </div>
+
+  <!-- result -->
+  <div id="result-area">
+    <div id="result-emoji"></div>
+    <div id="result-word"></div>
+    <div id="result-msg"></div>
+  </div>
+
+  <!-- bottom lights -->
+  <div id="lights" style="transform:scaleX(-1)">
+    <div class="light b"></div><div class="light g"></div><div class="light y"></div>
+    <div class="light r"></div><div class="light b"></div><div class="light g"></div>
+    <div class="light y"></div><div class="light r"></div><div class="light b"></div>
+    <div class="light g"></div><div class="light y"></div><div class="light r"></div>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   LETTER SETS
+═══════════════════════════════════════════════════ */
+const CONSONANTS = ['b','c','d','f','g','h','j','k','l','m','n','p','r','s','t','v','w','y','z'];
+const VOWELS     = ['a','e','i','o','u'];
+
+/* ═══════════════════════════════════════════════════
+   FULL CVC WORD LIST  (appropriate for children)
+   Each entry: [word, emoji or '⭐']
+═══════════════════════════════════════════════════ */
+const CVC_WORDS = {
+  // A vowel
+  bad:'😠', bag:'👜', ban:'🚫', bat:'🦇', bed:'🛏️', beg:'🙏',
+  bet:'💰', bid:'💵', big:'🐘', bin:'🗑️', bit:'🔩', bob:'🎣',
+  bog:'🌿', bop:'🎵', bot:'🤖', bud:'🌸', bug:'🐛', bun:'🍞',
+  bus:'🚌', but:'⭐', cab:'🚕', can:'🥫', cap:'🧢', cat:'🐱',
+  cob:'🌽', cod:'🐟', cog:'⚙️', cop:'👮', cot:'🛏️', cub:'🐻',
+  cup:'☕', cut:'✂️', dab:'⭐', dad:'👨', dam:'🌊', den:'🦁',
+  dew:'💧', did:'⭐', dig:'⛏️', dim:'💡', din:'🔊', dip:'🫙',
+  dog:'🐶', dot:'⭐', dub:'🎙️', dug:'⛏️', dun:'⭐', fan:'🌀',
+  fat:'⭐', fed:'🥄', fen:'🌿', fig:'🫐', fin:'🦈', fit:'💪',
+  fix:'🔧', fob:'⭐', fog:'🌫️', fop:'⭐', fub:'⭐', fug:'⭐',
+  fun:'🎉', fur:'🐾', gab:'💬', gal:'👩', gap:'⭐', gas:'⛽',
+  gig:'🎸', gin:'🍸', gnu:'🦬', god:'✝️', got:'⭐', gum:'🍬',
+  gun:'⭐', gut:'⭐', guy:'👦', had:'⭐', ham:'🍖', has:'⭐',
+  hat:'🎩', hen:'🐔', hid:'⭐', him:'⭐', hip:'🕺', his:'⭐',
+  hit:'⭐', hob:'⭐', hog:'🐖', hop:'🐇', hot:'🌶️', hug:'🤗',
+  hum:'🎵', hut:'🛖', jab:'🥊', jag:'⭐', jam:'🍓', jar:'🫙',
+  jet:'✈️', jib:'⛵', jig:'💃', job:'💼', jog:'🏃', jot:'📝',
+  jug:'🫗', jut:'⭐', keg:'🪣', kid:'👧', kin:'👨‍👩‍👧', kit:'🧰',
+  lab:'🔬', lad:'👦', lap:'🐾', led:'⭐', leg:'🦵', let:'⭐',
+  lid:'🫙', lip:'💋', lit:'🕯️', log:'🪵', lot:'⭐', lug:'🧳',
+  mad:'😡', man:'👨', map:'🗺️', mat:'🪃', men:'👨‍👨', met:'⭐',
+  mid:'⭐', mix:'🥄', mob:'👥', mop:'🧹', mom:'👩', mud:'💩',
+  mug:'☕', mum:'👩', nab:'⭐', nag:'🐴', nap:'😴', net:'🥅',
+  nip:'⭐', nit:'⭐', nob:'⭐', nod:'⭐', nor:'⭐', not:'⭐',
+  nun:'⛪', nut:'🥜', pad:'📝', pal:'👫', pan:'🍳', pat:'✋',
+  peg:'⭐', pen:'🖊️', pet:'🐾', pig:'🐷', pin:'📌', pit:'⛳',
+  pod:'🫛', pop:'🎈', pot:'🪴', pub:'🍺', pug:'🐶', pun:'😄',
+  pup:'🐶', put:'⭐', rag:'⭐', ram:'🐏', ran:'⭐', rap:'🎤',
+  rat:'🐀', red:'🔴', ref:'🏁', rep:'⭐', rid:'⭐', rig:'⚙️',
+  rim:'⭐', rip:'✂️', rob:'⭐', rod:'🎣', rot:'⭐', rub:'⭐',
+  rug:'🛋️', rum:'⭐', run:'🏃', rut:'⭐', sad:'😢', sag:'⭐',
+  sap:'⭐', sat:'⭐', set:'🎬', sip:'☕', sit:'🪑', six:'6️⃣',
+  sob:'😭', sod:'🌱', son:'👦', sop:'⭐', sub:'🥖', sum:'➕',
+  sun:'☀️', tab:'📑', tan:'🌅', tap:'🚰', ten:'🔟', tip:'💡',
+  top:'🏆', tub:'🛁', tug:'💪', van:'🚐', vat:'🪣', vet:'👨‍⚕️',
+  vim:'⭐', vow:'💍', wag:'🐕', was:'⭐', web:'🕷️', wed:'💒',
+  wet:'💦', win:'🏆', wit:'🧠', wok:'🥘', won:'🥇', yam:'🍠',
+  yap:'🗣️', yep:'✅', yet:'⭐', yip:'⭐', yob:'⭐', yuk:'🤢',
+  zap:'⚡', zen:'🧘', zig:'⭐', zip:'🤐', zit:'⭐', zap:'⚡',
+};
+
+// Block inappropriate words
+const BLOCKED = new Set(['sex','fuk','ass','dum','cum','cun','tit','nob','nun']);
+// (mild ones already excluded from map or given ⭐)
+
+/* ═══════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════ */
+let indices = [0, 0, 0];  // index into each letter list
+let isSpinning = false;
+let audioCtx = null;
+
+function getLetterList(col) {
+  return col === 1 ? VOWELS : CONSONANTS;
+}
+
+function currentWord() {
+  return [0,1,2].map(i => getLetterList(i)[indices[i]]).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   AUDIO (Web Audio API)
+═══════════════════════════════════════════════════ */
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playClick() {
+  try {
+    const ctx = getAudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(800, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.08);
+    g.gain.setValueAtTime(0.3, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime + 0.12);
+  } catch(e) {}
+}
+
+function playSpinTick() {
+  try {
+    const ctx = getAudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(200 + Math.random()*300, ctx.currentTime);
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime + 0.05);
+  } catch(e) {}
+}
+
+function playSuccess() {
+  try {
+    const ctx = getAudioCtx();
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C E G C
+    notes.forEach((freq, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine';
+      const t = ctx.currentTime + i * 0.12;
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.35, t + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      o.start(t);
+      o.stop(t + 0.4);
+    });
+  } catch(e) {}
+}
+
+function playWrong() {
+  try {
+    const ctx = getAudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'square';
+    o.frequency.setValueAtTime(180, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.3);
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+/* ═══════════════════════════════════════════════════
+   REEL RENDERING
+═══════════════════════════════════════════════════ */
+function buildStrip(col) {
+  const strip = document.getElementById('strip-' + col);
+  const list  = getLetterList(col);
+  const cls   = col === 1 ? 'vowel' : 'consonant';
+  strip.innerHTML = '';
+  // render prev, current, next for smooth scrolling
+  [-1, 0, 1].forEach(offset => {
+    const idx = ((indices[col] + offset) % list.length + list.length) % list.length;
+    const div = document.createElement('div');
+    div.className = 'reel-letter ' + cls;
+    div.textContent = list[idx].toUpperCase();
+    strip.appendChild(div);
+  });
+  // center on middle item
+  const h = document.querySelector('.reel-window').clientHeight;
+  strip.style.transition = 'none';
+  strip.style.transform  = `translateY(-${h}px)`;
+}
+
+function initReels() {
+  // Random start positions
+  indices[0] = Math.floor(Math.random() * CONSONANTS.length);
+  indices[1] = Math.floor(Math.random() * VOWELS.length);
+  indices[2] = Math.floor(Math.random() * CONSONANTS.length);
+  [0,1,2].forEach(col => buildStrip(col));
+}
+
+/* ═══════════════════════════════════════════════════
+   STEP (arrow buttons)
+═══════════════════════════════════════════════════ */
+function stepLetter(col, dir) {
+  if (isSpinning) return;
+  playClick();
+  clearResult();
+
+  const list = getLetterList(col);
+  const strip = document.getElementById('strip-' + col);
+  const h     = document.querySelector('.reel-window').clientHeight;
+
+  // Animate strip in the direction
+  strip.style.transition = 'transform 0.18s cubic-bezier(0.25,0.46,0.45,0.94)';
+  strip.style.transform  = `translateY(${dir === -1 ? 0 : -h*2}px)`;
+
+  setTimeout(() => {
+    indices[col] = ((indices[col] + dir) % list.length + list.length) % list.length;
+    buildStrip(col);
+  }, 180);
+}
+
+/* ═══════════════════════════════════════════════════
+   SPIN
+═══════════════════════════════════════════════════ */
+function spinReels() {
+  if (isSpinning) return;
+  isSpinning = true;
+  clearResult();
+
+  const spinDurations = [900, 1150, 1400]; // staggered stop
+  const tickInterval  = 70;
+  const tickers = [];
+
+  [0,1,2].forEach(col => {
+    const reel = document.getElementById('reel-' + col);
+    reel.classList.add('spinning');
+
+    // Random final index
+    const list = getLetterList(col);
+    const finalIdx = Math.floor(Math.random() * list.length);
+
+    const ticker = setInterval(playSpinTick, tickInterval + col * 20);
+    tickers.push(ticker);
+
+    setTimeout(() => {
+      reel.classList.remove('spinning');
+      clearInterval(ticker);
+      indices[col] = finalIdx;
+      buildStrip(col);
+      if (col === 2) isSpinning = false;
+    }, spinDurations[col]);
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   CHECK WORD
+═══════════════════════════════════════════════════ */
+function checkWord() {
+  if (isSpinning) return;
+  const word = currentWord();
+
+  if (BLOCKED.has(word)) {
+    showResult(false, word, null);
+    return;
+  }
+
+  const emoji = CVC_WORDS[word];
+  if (emoji !== undefined) {
+    showResult(true, word, emoji || '⭐');
+    playSuccess();
+    launchConfetti();
+  } else {
+    showResult(false, word, null);
+    playWrong();
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   RESULT DISPLAY
+═══════════════════════════════════════════════════ */
+function clearResult() {
+  const el = document.getElementById('result-emoji');
+  const ew = document.getElementById('result-word');
+  const em = document.getElementById('result-msg');
+  el.classList.remove('show'); ew.classList.remove('show'); em.classList.remove('show');
+  setTimeout(() => { el.textContent=''; ew.textContent=''; em.textContent=''; }, 300);
+}
+
+function showResult(correct, word, emoji) {
+  const el = document.getElementById('result-emoji');
+  const ew = document.getElementById('result-word');
+  const em = document.getElementById('result-msg');
+
+  if (correct) {
+    el.textContent = emoji;
+    ew.textContent = word.toUpperCase();
+    em.textContent = '🌟 Great job! That\'s a real word! 🌟';
+  } else {
+    el.textContent = '❓';
+    ew.textContent = word.toUpperCase();
+    em.textContent = 'Keep trying! Spin or change the letters!';
+  }
+
+  requestAnimationFrame(() => {
+    el.classList.add('show');
+    ew.classList.add('show');
+    em.classList.add('show');
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   CONFETTI
+═══════════════════════════════════════════════════ */
+function launchConfetti() {
+  const colors = ['#ff4444','#ffee00','#44ff44','#44aaff','#ff44ff','#ff8800'];
+  for (let i = 0; i < 40; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.cssText = `
+      left:${Math.random()*100}vw;
+      top:-10px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      animation-duration:${1.2+Math.random()*1}s;
+      animation-delay:${Math.random()*0.4}s;
+      transform:rotate(${Math.random()*360}deg);
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2500);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════ */
+window.addEventListener('load', () => {
+  initReels();
+});
+</script>
+</body>
+</html>
