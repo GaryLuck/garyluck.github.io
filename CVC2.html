@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CVC Word Slot Machine</title>
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+  background: radial-gradient(circle at center, #ffe066, #ff6ec7);
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.machine {
+  width: 95vw;
+  height: 95vh;
+  background: white;
+  border-radius: 40px;
+  border: 12px solid orange;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1vh;
+  box-sizing: border-box;
+  position: relative;
+}
+
+h1 {
+  font-size: clamp(28px, 4vh, 56px);
+  margin: 0;
+  color: #ff006e;
+}
+
+#score {
+  font-size: clamp(18px, 3vh, 32px);
+}
+
+.reels {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3vw;
+}
+
+.reel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.letter {
+  width: clamp(70px, 12vw, 150px);
+  height: clamp(70px, 12vw, 150px);
+  font-size: clamp(40px, 8vw, 100px);
+  background: linear-gradient(#90dbf4, #48cae4);
+  border-radius: 25px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 1vh;
+}
+
+button {
+  font-size: clamp(18px, 3vh, 32px);
+  padding: 1vh 2vw;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+}
+
+.controls {
+  display: flex;
+  gap: 3vw;
+}
+
+#result {
+  font-size: clamp(30px, 6vh, 60px);
+}
+
+.flash {
+  box-shadow: 0 0 40px yellow;
+}
+
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="machine" id="machine">
+    <canvas id="confetti"></canvas>
+    <h1>🎰 CVC Word Machine</h1>
+    <div id="score">Score: 0</div>
+
+    <div class="reels" id="reels"></div>
+
+    <div class="controls">
+      <button onclick="spin()">🎲 SPIN</button>
+      <button onclick="checkWord()">✅ CHECK</button>
+    </div>
+
+    <div id="result"></div>
+  </div>
+</div>
+
+<script>
+const consonants = "bcdfghjklmnpqrstvwxyz".split("");
+const vowels = ["a","e","i","o","u"];
+let current = ["b","a","t"];
+let score = 0;
+
+function generateAllCVC() {
+  const list = new Set();
+  consonants.forEach(c1 => {
+    vowels.forEach(v => {
+      consonants.forEach(c2 => {
+        list.add(c1+v+c2);
+      });
+    });
+  });
+  return list;
+}
+
+const fullCVC = generateAllCVC();
+
+const emojiMap = {
+  dog:"🐶", cat:"🐱", sun:"☀️", hat:"🎩", pig:"🐷", bus:"🚌",
+  bed:"🛏️", pen:"🖊️", cup:"☕", map:"🗺️", bug:"🐞", bat:"🦇",
+  cap:"🧢", jam:"🍓", log:"🪵", fan:"🪭", net:"🥅", hop:"🐰",
+  red:"🟥", box:"📦", fox:"🦊", hen:"🐔", cow:"🐮"
+};
+
+function speak(text) {
+  if ("speechSynthesis" in window) {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 0.8;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
+  }
+}
+
+function playClick() {
+  new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg").play().catch(()=>{});
+}
+
+function playWin() {
+  new Audio("https://actions.google.com/sounds/v1/cartoon/concussive_drum_hit.ogg").play().catch(()=>{});
+}
+
+function buildReels() {
+  const reels = document.getElementById("reels");
+  reels.innerHTML = "";
+  current.forEach((letter,i)=>{
+    const reel = document.createElement("div");
+    reel.className="reel";
+
+    const up = document.createElement("button");
+    up.innerText="⬆";
+    up.onclick=()=>move(i,1);
+
+    const box = document.createElement("div");
+    box.className="letter";
+    box.id="letter"+i;
+    box.innerText=letter;
+
+    const down = document.createElement("button");
+    down.innerText="⬇";
+    down.onclick=()=>move(i,-1);
+
+    reel.appendChild(up);
+    reel.appendChild(box);
+    reel.appendChild(down);
+    reels.appendChild(reel);
+  });
+}
+
+function move(index,dir){
+  playClick();
+  const pool = index===1 ? vowels : consonants;
+  const pos = pool.indexOf(current[index]);
+  const next = (pos+dir+pool.length)%pool.length;
+  current[index]=pool[next];
+  document.getElementById("letter"+index).innerText=current[index];
+  speak(current[index]);
+  document.getElementById("result").innerText="";
+}
+
+function spin(){
+  const machine=document.getElementById("machine");
+  machine.classList.add("flash");
+  let count=0;
+  const interval=setInterval(()=>{
+    current=[
+      consonants[Math.floor(Math.random()*consonants.length)],
+      vowels[Math.floor(Math.random()*vowels.length)],
+      consonants[Math.floor(Math.random()*consonants.length)]
+    ];
+    buildReels();
+    count++;
+    if(count>15){
+      clearInterval(interval);
+      machine.classList.remove("flash");
+    }
+  },100);
+}
+
+function checkWord(){
+  const word=current.join("");
+  if(fullCVC.has(word)){
+    score++;
+    document.getElementById("score").innerText="Score: "+score;
+    playWin();
+    speak(word);
+    const display = emojiMap[word] ? emojiMap[word] : word+" ⭐";
+    document.getElementById("result").innerText="🎉 "+display;
+    launchConfetti();
+  } else {
+    speak("Try again");
+    document.getElementById("result").innerText="❌ Try Again";
+  }
+}
+
+// 🎉 CONFETTI ANIMATION
+const canvas = document.getElementById("confetti");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas(){
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+function launchConfetti(){
+  const pieces = [];
+  for(let i=0;i<120;i++){
+    pieces.push({
+      x: Math.random()*canvas.width,
+      y: -20,
+      size: Math.random()*8+4,
+      speed: Math.random()*3+2,
+      color: `hsl(${Math.random()*360},100%,50%)`
+    });
+  }
+
+  let frame=0;
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pieces.forEach(p=>{
+      ctx.fillStyle=p.color;
+      ctx.fillRect(p.x,p.y,p.size,p.size);
+      p.y+=p.speed;
+    });
+    frame++;
+    if(frame<120){
+      requestAnimationFrame(draw);
+    } else {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+  }
+  draw();
+}
+
+buildReels();
+</script>
+</body>
+</html>
