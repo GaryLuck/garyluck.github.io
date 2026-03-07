@@ -1,0 +1,173 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Talking Hour Clock</title>
+<style>
+html,body{
+    margin:0;
+    height:100%;
+    font-family: Arial, Helvetica, sans-serif;
+    background:#87CEFA;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+}
+
+#app{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+}
+
+#clock{
+    width:min(85vw,85vh);
+    height:min(85vw,85vh);
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+<svg id="clock" viewBox="0 0 300 300">
+
+<!-- clock face -->
+<circle cx="150" cy="150" r="140" fill="white" stroke="black" stroke-width="6"/>
+
+<!-- numbers -->
+<g id="numbers" font-size="26" font-weight="bold" text-anchor="middle" dominant-baseline="middle"></g>
+
+<!-- minute hand (fixed) -->
+<line id="minuteHand"
+      x1="150"
+      y1="150"
+      x2="150"
+      y2="35"
+      stroke="black"
+      stroke-width="4"
+      stroke-linecap="round"
+/>
+
+<!-- hour hand -->
+<line id="hourHand"
+      x1="150"
+      y1="150"
+      x2="150"
+      y2="80"
+      stroke="black"
+      stroke-width="8"
+      stroke-linecap="round"
+/>
+
+<!-- center pivot -->
+<circle cx="150" cy="150" r="6" fill="black"/>
+
+</svg>
+
+</div>
+
+<script>
+
+const centerX = 150
+const centerY = 150
+let hour = 12
+
+const hourHand = document.getElementById("hourHand")
+const numbersGroup = document.getElementById("numbers")
+const clock = document.getElementById("clock")
+
+// draw numbers
+for(let i=1;i<=12;i++){
+    const angle = (i/12)*2*Math.PI - Math.PI/2
+    const r = 110
+    const x = centerX + Math.cos(angle)*r
+    const y = centerY + Math.sin(angle)*r
+
+    const text = document.createElementNS("http://www.w3.org/2000/svg","text")
+    text.setAttribute("x",x)
+    text.setAttribute("y",y)
+    text.textContent = i
+    text.style.cursor="pointer"
+
+    text.addEventListener("click",()=>{
+        setHour(i)
+    })
+
+    numbersGroup.appendChild(text)
+}
+
+function speakHour(h){
+
+    let phrase
+
+    if(h===12)
+        phrase = "twelve o'clock"
+    else
+        phrase = h + " o'clock"
+
+    const utter = new SpeechSynthesisUtterance(phrase)
+    utter.rate = 0.9
+
+    speechSynthesis.cancel()
+    speechSynthesis.speak(utter)
+}
+
+function setHour(h){
+
+    if(h === hour) return
+
+    hour = h
+    const angle = h * 30
+    hourHand.setAttribute("transform","rotate("+angle+" 150 150)")
+
+    speakHour(hour)
+}
+
+function forceSetHour(h){
+    hour = h
+    const angle = h * 30
+    hourHand.setAttribute("transform","rotate("+angle+" 150 150)")
+}
+
+forceSetHour(12)
+
+// dragging
+let dragging = false
+
+clock.addEventListener("pointerdown",e=>{
+    dragging = true
+    moveHand(e)
+})
+
+window.addEventListener("pointerup",()=>dragging=false)
+
+window.addEventListener("pointermove",e=>{
+    if(dragging) moveHand(e)
+})
+
+function moveHand(e){
+
+    const rect = clock.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
+    const dx = x - rect.width/2
+    const dy = y - rect.height/2
+
+    let angle = Math.atan2(dy,dx) * 180/Math.PI + 90
+    if(angle < 0) angle += 360
+
+    const h = Math.round(angle/30) || 12
+
+    setHour(h)
+}
+
+</script>
+
+</body>
+</html>
