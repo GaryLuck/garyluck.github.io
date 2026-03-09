@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Maze Generator & Solver</title>
+  <meta name="description" content="Generate random mazes and watch them being solved with animated DFS, BFS, and A* algorithms.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Base ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-dark: #0d0f17;
+      --bg-panel: #161926;
+      --bg-card: #1c2033;
+      --border: #2a2f48;
+      --text: #e4e6f0;
+      --text-dim: #8a8faa;
+      --accent: #7c6aef;
+      --accent-glow: rgba(124,106,239,.35);
+      --green: #34d399;
+      --green-glow: rgba(52,211,153,.25);
+      --red: #f87171;
+      --red-glow: rgba(248,113,113,.25);
+      --visited: #4f46e5;
+      --frontier: #a78bfa;
+      --path: #fbbf24;
+      --wall: #0f1119;
+      --passage: #2d3250;
+      --radius: 12px;
+      --transition: .25s cubic-bezier(.4,0,.2,1);
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ──────────────────────────────────── */
+    header {
+      width: 100%;
+      padding: 18px 28px 10px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    header .logo {
+      font-size: 1.6rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -.5px;
+    }
+    header .tagline {
+      color: var(--text-dim);
+      font-size: .85rem;
+      font-weight: 300;
+    }
+
+    /* ── Controls Bar ────────────────────────────── */
+    .controls {
+      width: 100%;
+      padding: 8px 28px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .control-group label {
+      font-size: .78rem;
+      font-weight: 500;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    select, input[type=range] {
+      font-family: inherit;
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: .85rem;
+      outline: none;
+      transition: border var(--transition);
+    }
+    select:hover, select:focus { border-color: var(--accent); }
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      padding: 0;
+      border: none;
+      border-radius: 3px;
+      background: var(--border);
+      width: 110px;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+      cursor: pointer;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+      border: none;
+      cursor: pointer;
+    }
+    .speed-value {
+      font-size: .8rem;
+      color: var(--text-dim);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    /* Buttons */
+    .btn {
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: 600;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all var(--transition);
+      letter-spacing: .3px;
+    }
+    .btn:active { transform: scale(.96); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #9b6aef);
+      color: #fff;
+      box-shadow: 0 2px 14px var(--accent-glow);
+    }
+    .btn-primary:hover { box-shadow: 0 4px 22px var(--accent-glow); filter: brightness(1.1); }
+    .btn-primary:disabled { opacity: .45; cursor: not-allowed; filter: none; box-shadow: none; }
+
+    .btn-green {
+      background: linear-gradient(135deg, #22c55e, var(--green));
+      color: #fff;
+      box-shadow: 0 2px 14px var(--green-glow);
+    }
+    .btn-green:hover { box-shadow: 0 4px 22px var(--green-glow); filter: brightness(1.1); }
+    .btn-green:disabled { opacity: .45; cursor: not-allowed; filter: none; box-shadow: none; }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Canvas Area ─────────────────────────────── */
+    .canvas-wrap {
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 28px 12px;
+      min-height: 0;
+      width: 100%;
+    }
+    canvas {
+      border-radius: var(--radius);
+      box-shadow: 0 0 40px rgba(0,0,0,.5), 0 0 80px var(--accent-glow);
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    /* ── Status Bar ──────────────────────────────── */
+    .status-bar {
+      width: 100%;
+      padding: 8px 28px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      flex-shrink: 0;
+    }
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .8rem;
+    }
+    .stat .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .stat .label { color: var(--text-dim); }
+    .stat .value { font-weight: 600; }
+
+    /* ── Legend helper colors ─────────────────────── */
+    .dot-wall     { background: var(--wall); border: 1px solid var(--border); }
+    .dot-passage  { background: var(--passage); }
+    .dot-start    { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+    .dot-end      { background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+    .dot-visited  { background: var(--visited); }
+    .dot-frontier { background: var(--frontier); }
+    .dot-path     { background: var(--path); }
+
+    /* ── Responsive tweaks ───────────────────────── */
+    @media (max-width: 640px) {
+      header { padding: 12px 14px 6px; }
+      .controls, .status-bar { padding-left: 14px; padding-right: 14px; }
+      .canvas-wrap { padding: 6px 10px 8px; }
+      header .logo { font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="logo">⬡ MazeForge</span>
+    <span class="tagline">Generate &amp; Solve</span>
+  </header>
+
+  <div class="controls" id="controls">
+    <div class="control-group">
+      <label for="sizeSelect">Size</label>
+      <select id="sizeSelect">
+        <option value="15">15 × 15</option>
+        <option value="21" selected>21 × 21</option>
+        <option value="31">31 × 31</option>
+        <option value="41">41 × 41</option>
+        <option value="61">61 × 61</option>
+        <option value="81">81 × 81</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="algoSelect">Algorithm</label>
+      <select id="algoSelect">
+        <option value="dfs">DFS</option>
+        <option value="bfs">BFS</option>
+        <option value="astar" selected>A*</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="speedSlider">Speed</label>
+      <input type="range" id="speedSlider" min="1" max="100" value="50">
+      <span class="speed-value" id="speedValue">50</span>
+    </div>
+
+    <button class="btn btn-primary" id="btnGenerate">Generate</button>
+    <button class="btn btn-green" id="btnSolve" disabled>Solve</button>
+    <button class="btn btn-outline" id="btnReset">Reset</button>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="mazeCanvas"></canvas>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="stat"><span class="dot dot-wall"></span><span class="label">Wall</span></div>
+    <div class="stat"><span class="dot dot-passage"></span><span class="label">Passage</span></div>
+    <div class="stat"><span class="dot dot-start"></span><span class="label">Start</span></div>
+    <div class="stat"><span class="dot dot-end"></span><span class="label">End</span></div>
+    <div class="stat"><span class="dot dot-visited"></span><span class="label">Visited</span></div>
+    <div class="stat"><span class="dot dot-frontier"></span><span class="label">Frontier</span></div>
+    <div class="stat"><span class="dot dot-path"></span><span class="label">Path</span></div>
+    <div class="stat" id="statCells"><span class="label">Cells explored:</span><span class="value">0</span></div>
+    <div class="stat" id="statPath"><span class="label">Path length:</span><span class="value">—</span></div>
+    <div class="stat" id="statStatus"><span class="label">Status:</span><span class="value">Idle</span></div>
+  </div>
+
+<script>
+/* ══════════════════════════════════════════════
+   Maze Generator & Solver — all logic
+   ══════════════════════════════════════════════ */
+
+// ── DOM refs ──
+const canvas   = document.getElementById('mazeCanvas');
+const ctx      = canvas.getContext('2d');
+const btnGen   = document.getElementById('btnGenerate');
+const btnSolve = document.getElementById('btnSolve');
+const btnReset = document.getElementById('btnReset');
+const selSize  = document.getElementById('sizeSelect');
+const selAlgo  = document.getElementById('algoSelect');
+const speedSlider = document.getElementById('speedSlider');
+const speedValue  = document.getElementById('speedValue');
+const statCells   = document.querySelector('#statCells .value');
+const statPath    = document.querySelector('#statPath .value');
+const statStatus  = document.querySelector('#statStatus .value');
+
+// ── State ──
+const WALL    = 0;
+const PASSAGE = 1;
+const START   = 2;
+const END     = 3;
+const VISITED = 4;
+const FRONTIER= 5;
+const PATH    = 6;
+
+let grid = [];
+let rows = 0, cols = 0;
+let startR = 0, startC = 0, endR = 0, endC = 0;
+let cellSize = 1;
+let solving  = false;
+let cancelSolve = false;
+
+// ── Colors ──
+const COLORS = {
+  [WALL]:    '#0f1119',
+  [PASSAGE]: '#2d3250',
+  [START]:   '#34d399',
+  [END]:     '#f87171',
+  [VISITED]: '#4f46e5',
+  [FRONTIER]:'#a78bfa',
+  [PATH]:    '#fbbf24',
+};
+
+// ── Speed ──
+speedSlider.addEventListener('input', () => { speedValue.textContent = speedSlider.value; });
+
+function getDelay() {
+  // Map slider 1‑100 to delay in ms (150 → 1)
+  const v = +speedSlider.value;
+  return Math.max(1, Math.round(160 - v * 1.59));
+}
+
+// ── Canvas sizing ──
+function sizeCanvas() {
+  const wrap = document.querySelector('.canvas-wrap');
+  const maxW = wrap.clientWidth - 20;
+  const maxH = wrap.clientHeight - 20;
+  const dim  = Math.min(maxW, maxH);
+  cellSize   = Math.floor(dim / cols);
+  canvas.width  = cellSize * cols;
+  canvas.height = cellSize * rows;
+}
+
+function drawCell(r, c) {
+  ctx.fillStyle = COLORS[grid[r][c]];
+  ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+
+  // Small glow for start/end
+  if (grid[r][c] === START || grid[r][c] === END) {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.shadowColor = grid[r][c] === START ? '#34d399' : '#f87171';
+    ctx.shadowBlur  = cellSize * 1.2;
+    ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+    ctx.restore();
+  }
+}
+
+function drawAll() {
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      drawCell(r, c);
+}
+
+// ══════════════════════════════════════════════
+// ── Maze Generation (Recursive Backtracker) ──
+// ══════════════════════════════════════════════
+
+function generateMaze(size) {
+  // Ensure odd size so walls align properly
+  rows = cols = size % 2 === 0 ? size + 1 : size;
+  grid = Array.from({ length: rows }, () => Array(cols).fill(WALL));
+
+  // Carve using iterative backtracker
+  const sr = 1, sc = 1;
+  grid[sr][sc] = PASSAGE;
+  const stack = [[sr, sc]];
+  const dirs  = [[0,2],[0,-2],[2,0],[-2,0]];
+
+  while (stack.length) {
+    const [cr, cc] = stack[stack.length - 1];
+    // Shuffle directions
+    const shuffled = dirs.slice().sort(() => Math.random() - 0.5);
+    let carved = false;
+    for (const [dr, dc] of shuffled) {
+      const nr = cr + dr, nc = cc + dc;
+      if (nr > 0 && nr < rows - 1 && nc > 0 && nc < cols - 1 && grid[nr][nc] === WALL) {
+        grid[cr + dr/2][cc + dc/2] = PASSAGE;
+        grid[nr][nc] = PASSAGE;
+        stack.push([nr, nc]);
+        carved = true;
+        break;
+      }
+    }
+    if (!carved) stack.pop();
+  }
+
+  // Place start (top-left area) and end (bottom-right area)
+  startR = 1; startC = 1;
+  endR   = rows - 2; endC = cols - 2;
+  grid[startR][startC] = START;
+  grid[endR][endC]     = END;
+}
+
+// ══════════════════════════════════════════════
+// ── Solving Algorithms ──────────────────────
+// ══════════════════════════════════════════════
+const DIR4 = [[0,1],[1,0],[0,-1],[-1,0]];
+
+function neighbors(r, c) {
+  const out = [];
+  for (const [dr, dc] of DIR4) {
+    const nr = r + dr, nc = c + dc;
+    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) out.push([nr, nc]);
+  }
+  return out;
+}
+
+// Utility: sleep with cancellation check
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ── DFS ──
+async function solveDFS() {
+  const parent = Array.from({length:rows}, ()=> Array(cols).fill(null));
+  const visited = Array.from({length:rows}, ()=> Array(cols).fill(false));
+  const stack = [[startR, startC]];
+  visited[startR][startC] = true;
+  let explored = 0;
+
+  while (stack.length && !cancelSolve) {
+    const [cr, cc] = stack.pop();
+    explored++;
+    statCells.textContent = explored;
+
+    if (cr === endR && cc === endC) {
+      await tracePath(parent, explored);
+      return;
+    }
+
+    if (grid[cr][cc] !== START && grid[cr][cc] !== END) {
+      grid[cr][cc] = VISITED;
+      drawCell(cr, cc);
+    }
+
+    const nbrs = neighbors(cr, cc).sort(() => Math.random() - 0.5);
+    for (const [nr, nc] of nbrs) {
+      if (!visited[nr][nc] && grid[nr][nc] !== WALL) {
+        visited[nr][nc] = true;
+        parent[nr][nc] = [cr, cc];
+        // Mark frontier
+        if (grid[nr][nc] !== START && grid[nr][nc] !== END) {
+          grid[nr][nc] = FRONTIER;
+          drawCell(nr, nc);
+        }
+        stack.push([nr, nc]);
+      }
+    }
+
+    await sleep(getDelay());
+  }
+
+  if (!cancelSolve) { statStatus.textContent = 'No solution!'; }
+}
+
+// ── BFS ──
+async function solveBFS() {
+  const parent  = Array.from({length:rows}, ()=> Array(cols).fill(null));
+  const visited = Array.from({length:rows}, ()=> Array(cols).fill(false));
+  const queue   = [[startR, startC]];
+  visited[startR][startC] = true;
+  let explored = 0;
+
+  while (queue.length && !cancelSolve) {
+    const [cr, cc] = queue.shift();
+    explored++;
+    statCells.textContent = explored;
+
+    if (cr === endR && cc === endC) {
+      await tracePath(parent, explored);
+      return;
+    }
+
+    if (grid[cr][cc] !== START && grid[cr][cc] !== END) {
+      grid[cr][cc] = VISITED;
+      drawCell(cr, cc);
+    }
+
+    for (const [nr, nc] of neighbors(cr, cc)) {
+      if (!visited[nr][nc] && grid[nr][nc] !== WALL) {
+        visited[nr][nc] = true;
+        parent[nr][nc] = [cr, cc];
+        if (grid[nr][nc] !== START && grid[nr][nc] !== END) {
+          grid[nr][nc] = FRONTIER;
+          drawCell(nr, nc);
+        }
+        queue.push([nr, nc]);
+      }
+    }
+
+    await sleep(getDelay());
+  }
+
+  if (!cancelSolve) { statStatus.textContent = 'No solution!'; }
+}
+
+// ── A* ──
+async function solveAStar() {
+  // Manhattan distance heuristic
+  function h(r, c) { return Math.abs(r - endR) + Math.abs(c - endC); }
+
+  const gScore  = Array.from({length:rows}, ()=> Array(cols).fill(Infinity));
+  const parent  = Array.from({length:rows}, ()=> Array(cols).fill(null));
+  const inOpen  = Array.from({length:rows}, ()=> Array(cols).fill(false));
+
+  gScore[startR][startC] = 0;
+
+  // Simple binary-heap priority queue (min f-score)
+  const open = []; // entries: [f, g, r, c]
+  function pushOpen(f, g, r, c) { open.push([f,g,r,c]); bubbleUp(open.length-1); }
+  function popOpen() { const top=open[0]; const end=open.pop(); if(open.length){open[0]=end; sinkDown(0);} return top; }
+  function bubbleUp(i){while(i>0){const p=(i-1)>>1;if(open[p][0]<=open[i][0])break;[open[p],open[i]]=[open[i],open[p]];i=p;}}
+  function sinkDown(i){const n=open.length;while(true){let s=i;const l=2*i+1,r=2*i+2;if(l<n&&open[l][0]<open[s][0])s=l;if(r<n&&open[r][0]<open[s][0])s=r;if(s===i)break;[open[s],open[i]]=[open[i],open[s]];i=s;}}
+
+  pushOpen(h(startR, startC), 0, startR, startC);
+  inOpen[startR][startC] = true;
+  let explored = 0;
+
+  while (open.length && !cancelSolve) {
+    const [,g, cr, cc] = popOpen();
+    inOpen[cr][cc] = false;
+    explored++;
+    statCells.textContent = explored;
+
+    if (cr === endR && cc === endC) {
+      await tracePath(parent, explored);
+      return;
+    }
+
+    if (grid[cr][cc] !== START && grid[cr][cc] !== END) {
+      grid[cr][cc] = VISITED;
+      drawCell(cr, cc);
+    }
+
+    for (const [nr, nc] of neighbors(cr, cc)) {
+      if (grid[nr][nc] === WALL) continue;
+      const ng = g + 1;
+      if (ng < gScore[nr][nc]) {
+        gScore[nr][nc] = ng;
+        parent[nr][nc] = [cr, cc];
+        if (grid[nr][nc] !== START && grid[nr][nc] !== END) {
+          grid[nr][nc] = FRONTIER;
+          drawCell(nr, nc);
+        }
+        if (!inOpen[nr][nc]) {
+          pushOpen(ng + h(nr, nc), ng, nr, nc);
+          inOpen[nr][nc] = true;
+        }
+      }
+    }
+
+    await sleep(getDelay());
+  }
+
+  if (!cancelSolve) { statStatus.textContent = 'No solution!'; }
+}
+
+// ── Trace & animate the solution path ──
+async function tracePath(parent, explored) {
+  const path = [];
+  let cur = [endR, endC];
+  while (cur) {
+    path.push(cur);
+    cur = parent[cur[0]][cur[1]];
+  }
+  path.reverse();
+
+  for (const [r, c] of path) {
+    if (cancelSolve) return;
+    if (grid[r][c] !== START && grid[r][c] !== END) {
+      grid[r][c] = PATH;
+      drawCell(r, c);
+    }
+    await sleep(Math.max(8, getDelay() / 2));
+  }
+
+  statPath.textContent   = path.length;
+  statCells.textContent  = explored;
+  statStatus.textContent = 'Solved ✓';
+}
+
+// ══════════════════════════════════════════════
+// ── Event Handlers ──────────────────────────
+// ══════════════════════════════════════════════
+
+btnGen.addEventListener('click', () => {
+  if (solving) return;
+  const size = +selSize.value;
+  generateMaze(size);
+  sizeCanvas();
+  drawAll();
+  btnSolve.disabled = false;
+  statCells.textContent  = '0';
+  statPath.textContent   = '—';
+  statStatus.textContent = 'Ready';
+});
+
+btnSolve.addEventListener('click', async () => {
+  if (solving) return;
+  solving = true;
+  cancelSolve = false;
+  btnSolve.disabled = true;
+  btnGen.disabled   = true;
+  statStatus.textContent = 'Solving…';
+
+  // Clear previous solve visuals but keep maze structure
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] === VISITED || grid[r][c] === FRONTIER || grid[r][c] === PATH) {
+        grid[r][c] = PASSAGE;
+        drawCell(r, c);
+      }
+    }
+  }
+  grid[startR][startC] = START;
+  grid[endR][endC]     = END;
+  drawCell(startR, startC);
+  drawCell(endR, endC);
+
+  const algo = selAlgo.value;
+  if      (algo === 'dfs')   await solveDFS();
+  else if (algo === 'bfs')   await solveBFS();
+  else if (algo === 'astar') await solveAStar();
+
+  solving = false;
+  btnGen.disabled = false;
+  // Keep solve disabled until next generate
+});
+
+btnReset.addEventListener('click', () => {
+  cancelSolve = true;
+  solving = false;
+  grid = [];
+  rows = cols = 0;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.width = 0; canvas.height = 0;
+  btnSolve.disabled = true;
+  btnGen.disabled   = false;
+  statCells.textContent  = '0';
+  statPath.textContent   = '—';
+  statStatus.textContent = 'Idle';
+});
+
+// Handle resize
+window.addEventListener('resize', () => {
+  if (rows > 0) { sizeCanvas(); drawAll(); }
+});
+
+// ── Auto-generate on load ──
+window.addEventListener('DOMContentLoaded', () => {
+  btnGen.click();
+});
+</script>
+</body>
+</html>
