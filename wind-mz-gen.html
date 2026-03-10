@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Generator &amp; Solver</title>
+    <style>
+        :root {
+            --bg:         #0d1117;
+            --surface:    #161b22;
+            --border:     #30363d;
+            --text:       #c9d1d9;
+            --muted:      #8b949e;
+            --accent:     #58a6ff;
+            --btn-bg:     #21262d;
+            --btn-hover:  #30363d;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px 40px;
+            gap: 18px;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 0.3px;
+            margin-top: 4px;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px 20px;
+            align-items: flex-end;
+            justify-content: center;
+            max-width: 860px;
+            width: 100%;
+        }
+
+        .ctrl {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 120px;
+        }
+
+        label {
+            font-size: 0.7rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.9px;
+            font-weight: 600;
+        }
+
+        select {
+            background: var(--btn-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        select:focus { border-color: var(--accent); }
+
+        .slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        input[type="range"] {
+            width: 110px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        .slider-val {
+            font-size: 0.8rem;
+            color: var(--muted);
+            min-width: 28px;
+            text-align: right;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        button {
+            padding: 7px 18px;
+            border-radius: 7px;
+            border: 1px solid var(--border);
+            background: var(--btn-bg);
+            color: var(--text);
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+            white-space: nowrap;
+        }
+        button:hover:not(:disabled) {
+            background: var(--btn-hover);
+            border-color: var(--accent);
+        }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        button.btn-gen {
+            background: #1a7f37;
+            border-color: #2ea043;
+            color: #fff;
+        }
+        button.btn-gen:hover:not(:disabled) { background: #238636; }
+
+        button.btn-solve {
+            background: #1158c7;
+            border-color: #388bfd;
+            color: #fff;
+        }
+        button.btn-solve:hover:not(:disabled) { background: #1a69e5; }
+
+        .canvas-wrap {
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+            line-height: 0;
+        }
+
+        canvas { display: block; }
+
+        .statusbar {
+            font-size: 0.875rem;
+            color: var(--muted);
+            min-height: 1.3em;
+            text-align: center;
+        }
+        .statusbar.info    { color: var(--accent); }
+        .statusbar.success { color: #3fb950; }
+        .statusbar.error   { color: #f85149; }
+        .statusbar.running { color: #e3b341; }
+
+        .legend {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+        .legend-dot {
+            width: 13px;
+            height: 13px;
+            border-radius: 3px;
+            flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+    </style>
+</head>
+<body>
+
+<h1>Maze Generator &amp; Solver</h1>
+
+<div class="panel">
+    <div class="ctrl">
+        <label>Maze Size</label>
+        <select id="sizeSelect">
+            <option value="10">Small (10&times;10)</option>
+            <option value="15" selected>Medium (15&times;15)</option>
+            <option value="20">Large (20&times;20)</option>
+            <option value="30">XL (30&times;30)</option>
+            <option value="40">XXL (40&times;40)</option>
+        </select>
+    </div>
+
+    <div class="ctrl">
+        <label>Generation Algorithm</label>
+        <select id="genAlgo">
+            <option value="dfs">Recursive Backtracker</option>
+            <option value="prim">Prim's Algorithm</option>
+            <option value="kruskal">Kruskal's Algorithm</option>
+        </select>
+    </div>
+
+    <div class="ctrl">
+        <label>Solving Algorithm</label>
+        <select id="solveAlgo">
+            <option value="bfs">Breadth-First Search (BFS)</option>
+            <option value="dfs">Depth-First Search (DFS)</option>
+            <option value="astar">A* Search</option>
+        </select>
+    </div>
+
+    <div class="ctrl">
+        <label>Animation Speed</label>
+        <div class="slider-wrap">
+            <input type="range" id="speedSlider" min="1" max="80" value="12">
+            <span class="slider-val" id="speedVal">12</span>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-gen"   id="btnGen"  >Generate</button>
+        <button class="btn-solve" id="btnSolve" disabled>Solve</button>
+        <button                   id="btnReset" disabled>Reset</button>
+    </div>
+</div>
+
+<div class="statusbar info" id="status">Click "Generate" to create a maze.</div>
+
+<div class="canvas-wrap">
+    <canvas id="canvas"></canvas>
+</div>
+
+<div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#111827"></div>Wall</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb"></div>Path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Start</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>End</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>Frontier</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div>Visited</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div>Solution</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Cell state constants
+// ─────────────────────────────────────────────
+const WALL     = 0;
+const PATH     = 1;
+const VISITED  = 2;
+const SOLUTION = 3;
+const FRONTIER = 4;
+const START    = 5;
+const END      = 6;
+
+const COLOR = {
+    [WALL]:     '#111827',
+    [PATH]:     '#e5e7eb',
+    [VISITED]:  '#4c1d95',
+    [SOLUTION]: '#fbbf24',
+    [FRONTIER]: '#2563eb',
+    [START]:    '#10b981',
+    [END]:      '#ef4444',
+};
+
+// ─────────────────────────────────────────────
+// Global state
+// ─────────────────────────────────────────────
+let N = 15;           // rooms per side
+let rows, cols;       // actual grid dimensions = 2*N+1
+let mazeGrid  = [];   // 0/1 — the generated maze (read-only after generation)
+let dispGrid  = [];   // display overlay (visited, solution markers etc.)
+let startCell, endCell;
+let animId    = null;
+let steps     = [];   // pre-computed animation steps
+let stepIdx   = 0;
+let cellSize;
+const CANVAS_SIZE = 580;
+
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const btnGen  = document.getElementById('btnGen');
+const btnSolve= document.getElementById('btnSolve');
+const btnReset= document.getElementById('btnReset');
+const speedSl = document.getElementById('speedSlider');
+const speedVal= document.getElementById('speedVal');
+
+// ─────────────────────────────────────────────
+// Utility
+// ─────────────────────────────────────────────
+function makeGrid(r, c, v) {
+    return Array.from({length: r}, () => new Uint8Array(c).fill(v));
+}
+function copyGrid(g) {
+    return g.map(row => new Uint8Array(row));
+}
+function setStatus(msg, cls = '') {
+    statusEl.textContent = msg;
+    statusEl.className = 'statusbar ' + cls;
+}
+function stopAnim() {
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
+}
+
+// ─────────────────────────────────────────────
+// Canvas setup
+// ─────────────────────────────────────────────
+function setupCanvas() {
+    rows = 2 * N + 1;
+    cols = 2 * N + 1;
+    cellSize = Math.max(3, Math.floor(CANVAS_SIZE / rows));
+    canvas.width  = cols * cellSize;
+    canvas.height = rows * cellSize;
+}
+
+// ─────────────────────────────────────────────
+// Drawing
+// ─────────────────────────────────────────────
+function draw() {
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            ctx.fillStyle = COLOR[dispGrid[r][c]];
+            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// Maze Generation — Recursive Backtracker (DFS)
+// ─────────────────────────────────────────────
+function generateDFS() {
+    const grid = makeGrid(rows, cols, WALL);
+    const stack = [[1, 1]];
+    grid[1][1] = PATH;
+
+    while (stack.length) {
+        const [r, c] = stack[stack.length - 1];
+        const nb = [];
+        if (r - 2 > 0        && grid[r-2][c] === WALL) nb.push([r-2, c, r-1, c]);
+        if (r + 2 < rows - 1 && grid[r+2][c] === WALL) nb.push([r+2, c, r+1, c]);
+        if (c - 2 > 0        && grid[r][c-2] === WALL) nb.push([r, c-2, r, c-1]);
+        if (c + 2 < cols - 1 && grid[r][c+2] === WALL) nb.push([r, c+2, r, c+1]);
+
+        if (!nb.length) { stack.pop(); continue; }
+        const [nr, nc, wr, wc] = nb[Math.random() * nb.length | 0];
+        grid[nr][nc] = PATH;
+        grid[wr][wc] = PATH;
+        stack.push([nr, nc]);
+    }
+    return grid;
+}
+
+// ─────────────────────────────────────────────
+// Maze Generation — Prim's Algorithm
+// ─────────────────────────────────────────────
+function generatePrim() {
+    const grid = makeGrid(rows, cols, WALL);
+    grid[1][1] = PATH;
+    const walls = [];
+
+    function addWalls(r, c) {
+        if (r - 2 > 0        && grid[r-2][c] === WALL) walls.push([r-2, c, r-1, c]);
+        if (r + 2 < rows - 1 && grid[r+2][c] === WALL) walls.push([r+2, c, r+1, c]);
+        if (c - 2 > 0        && grid[r][c-2] === WALL) walls.push([r, c-2, r, c-1]);
+        if (c + 2 < cols - 1 && grid[r][c+2] === WALL) walls.push([r, c+2, r, c+1]);
+    }
+    addWalls(1, 1);
+
+    while (walls.length) {
+        const idx = Math.random() * walls.length | 0;
+        const [nr, nc, wr, wc] = walls.splice(idx, 1)[0];
+        if (grid[nr][nc] === WALL) {
+            grid[nr][nc] = PATH;
+            grid[wr][wc] = PATH;
+            addWalls(nr, nc);
+        }
+    }
+    return grid;
+}
+
+// ─────────────────────────────────────────────
+// Maze Generation — Kruskal's Algorithm
+// ─────────────────────────────────────────────
+function generateKruskal() {
+    const grid = makeGrid(rows, cols, WALL);
+
+    // Mark all room cells
+    for (let r = 1; r < rows - 1; r += 2)
+        for (let c = 1; c < cols - 1; c += 2)
+            grid[r][c] = PATH;
+
+    // Union-Find
+    const parent = new Int32Array(rows * cols);
+    const rank   = new Uint8Array(rows * cols);
+    for (let i = 0; i < parent.length; i++) parent[i] = i;
+
+    function find(i) {
+        while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+        return i;
+    }
+    function union(a, b) {
+        a = find(a); b = find(b);
+        if (a === b) return false;
+        if (rank[a] < rank[b]) { parent[a] = b; }
+        else if (rank[a] > rank[b]) { parent[b] = a; }
+        else { parent[b] = a; rank[a]++; }
+        return true;
+    }
+
+    // Build and shuffle edge list
+    const edges = [];
+    for (let r = 1; r < rows - 1; r += 2) {
+        for (let c = 1; c < cols - 1; c += 2) {
+            if (r + 2 < rows - 1) edges.push([r, c, r+2, c, r+1, c]);
+            if (c + 2 < cols - 1) edges.push([r, c, r, c+2, r, c+1]);
+        }
+    }
+    for (let i = edges.length - 1; i > 0; i--) {
+        const j = Math.random() * (i + 1) | 0;
+        [edges[i], edges[j]] = [edges[j], edges[i]];
+    }
+
+    for (const [r1, c1, r2, c2, wr, wc] of edges) {
+        if (union(r1 * cols + c1, r2 * cols + c2))
+            grid[wr][wc] = PATH;
+    }
+    return grid;
+}
+
+// ─────────────────────────────────────────────
+// Min-Heap (for A*)
+// ─────────────────────────────────────────────
+class MinHeap {
+    constructor() { this.h = []; }
+    push(item) {
+        this.h.push(item);
+        let i = this.h.length - 1;
+        while (i > 0) {
+            const p = (i - 1) >> 1;
+            if (this.h[p][0] <= this.h[i][0]) break;
+            [this.h[p], this.h[i]] = [this.h[i], this.h[p]];
+            i = p;
+        }
+    }
+    pop() {
+        const top = this.h[0];
+        const last = this.h.pop();
+        if (this.h.length) {
+            this.h[0] = last;
+            let i = 0;
+            for (;;) {
+                let s = i, l = 2*i+1, r = 2*i+2;
+                if (l < this.h.length && this.h[l][0] < this.h[s][0]) s = l;
+                if (r < this.h.length && this.h[r][0] < this.h[s][0]) s = r;
+                if (s === i) break;
+                [this.h[s], this.h[i]] = [this.h[i], this.h[s]];
+                i = s;
+            }
+        }
+        return top;
+    }
+    get size() { return this.h.length; }
+}
+
+// ─────────────────────────────────────────────
+// Path reconstruction helper
+// ─────────────────────────────────────────────
+function reconstructPath(parent, endKey) {
+    const path = [];
+    let cur = endKey;
+    while (cur !== null) {
+        path.unshift(cur.split(',').map(Number));
+        cur = parent.get(cur);
+    }
+    return path;
+}
+
+// ─────────────────────────────────────────────
+// Solver — BFS
+// ─────────────────────────────────────────────
+function solveBFS(grid, [sr, sc], [er, ec]) {
+    const out    = [];
+    const queue  = [[sr, sc]];
+    const vis    = new Set([`${sr},${sc}`]);
+    const parent = new Map([[`${sr},${sc}`, null]]);
+
+    while (queue.length) {
+        const [r, c] = queue.shift();
+        if (r !== sr || c !== sc) out.push({t: 'v', r, c});
+
+        if (r === er && c === ec) {
+            for (const [pr, pc] of reconstructPath(parent, `${r},${c}`))
+                out.push({t: 's', r: pr, c: pc});
+            return out;
+        }
+        for (const [nr, nc] of [[r-1,c],[r+1,c],[r,c-1],[r,c+1]]) {
+            const k = `${nr},${nc}`;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols &&
+                grid[nr][nc] !== WALL && !vis.has(k)) {
+                vis.add(k);
+                parent.set(k, `${r},${c}`);
+                queue.push([nr, nc]);
+                out.push({t: 'f', r: nr, c: nc});
+            }
+        }
+    }
+    return out;
+}
+
+// ─────────────────────────────────────────────
+// Solver — DFS
+// ─────────────────────────────────────────────
+function solveDFS(grid, [sr, sc], [er, ec]) {
+    const out    = [];
+    const stack  = [[sr, sc]];
+    const vis    = new Set();
+    const parent = new Map([[`${sr},${sc}`, null]]);
+
+    while (stack.length) {
+        const [r, c] = stack.pop();
+        const k = `${r},${c}`;
+        if (vis.has(k)) continue;
+        vis.add(k);
+        if (r !== sr || c !== sc) out.push({t: 'v', r, c});
+
+        if (r === er && c === ec) {
+            for (const [pr, pc] of reconstructPath(parent, k))
+                out.push({t: 's', r: pr, c: pc});
+            return out;
+        }
+        for (const [nr, nc] of [[r-1,c],[r+1,c],[r,c-1],[r,c+1]]) {
+            const nk = `${nr},${nc}`;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols &&
+                grid[nr][nc] !== WALL && !vis.has(nk)) {
+                if (!parent.has(nk)) parent.set(nk, k);
+                stack.push([nr, nc]);
+                out.push({t: 'f', r: nr, c: nc});
+            }
+        }
+    }
+    return out;
+}
+
+// ─────────────────────────────────────────────
+// Solver — A*
+// ─────────────────────────────────────────────
+function solveAStar(grid, [sr, sc], [er, ec]) {
+    const out    = [];
+    const h      = (r, c) => Math.abs(r - er) + Math.abs(c - ec);
+    const heap   = new MinHeap();
+    heap.push([h(sr, sc), 0, sr, sc]);
+    const gScore = new Map([[`${sr},${sc}`, 0]]);
+    const parent = new Map([[`${sr},${sc}`, null]]);
+    const vis    = new Set();
+
+    while (heap.size) {
+        const [, g, r, c] = heap.pop();
+        const k = `${r},${c}`;
+        if (vis.has(k)) continue;
+        vis.add(k);
+        if (r !== sr || c !== sc) out.push({t: 'v', r, c});
+
+        if (r === er && c === ec) {
+            for (const [pr, pc] of reconstructPath(parent, k))
+                out.push({t: 's', r: pr, c: pc});
+            return out;
+        }
+        for (const [nr, nc] of [[r-1,c],[r+1,c],[r,c-1],[r,c+1]]) {
+            const nk = `${nr},${nc}`;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols &&
+                grid[nr][nc] !== WALL && !vis.has(nk)) {
+                const ng = g + 1;
+                if (ng < (gScore.get(nk) ?? Infinity)) {
+                    gScore.set(nk, ng);
+                    parent.set(nk, k);
+                    heap.push([ng + h(nr, nc), ng, nr, nc]);
+                    out.push({t: 'f', r: nr, c: nc});
+                }
+            }
+        }
+    }
+    return out;
+}
+
+// ─────────────────────────────────────────────
+// Animation
+// ─────────────────────────────────────────────
+function applyStep({t, r, c}) {
+    const cur = dispGrid[r][c];
+    if (cur === START || cur === END) return;
+    if (t === 'v') dispGrid[r][c] = VISITED;
+    else if (t === 'f' && cur !== VISITED) dispGrid[r][c] = FRONTIER;
+    else if (t === 's') dispGrid[r][c] = SOLUTION;
+}
+
+function animate() {
+    const spd = parseInt(speedSl.value);
+    for (let i = 0; i < spd && stepIdx < steps.length; i++)
+        applyStep(steps[stepIdx++]);
+
+    draw();
+
+    if (stepIdx < steps.length) {
+        animId = requestAnimationFrame(animate);
+    } else {
+        animId = null;
+        const found = steps.some(s => s.t === 's');
+        const vis   = steps.filter(s => s.t === 'v').length;
+        const sol   = steps.filter(s => s.t === 's').length;
+        if (found) {
+            setStatus(`Solution found! Cells visited: ${vis} · Solution length: ${sol - 2} steps`, 'success');
+        } else {
+            setStatus('No solution exists for this maze.', 'error');
+        }
+        btnSolve.disabled = false;
+        btnSolve.textContent = 'Solve Again';
+    }
+}
+
+// ─────────────────────────────────────────────
+// Core: generate a new maze and display it
+// ─────────────────────────────────────────────
+function generateMaze() {
+    stopAnim();
+    N = parseInt(document.getElementById('sizeSelect').value);
+    setupCanvas();
+
+    const algo = document.getElementById('genAlgo').value;
+    if      (algo === 'dfs')     mazeGrid = generateDFS();
+    else if (algo === 'prim')    mazeGrid = generatePrim();
+    else                         mazeGrid = generateKruskal();
+
+    startCell = [1, 1];
+    endCell   = [rows - 2, cols - 2];
+    dispGrid  = copyGrid(mazeGrid);
+    dispGrid[startCell[0]][startCell[1]] = START;
+    dispGrid[endCell[0]][endCell[1]]     = END;
+    draw();
+
+    const algoNames = { dfs: 'Recursive Backtracker', prim: "Prim's", kruskal: "Kruskal's" };
+    setStatus(`${algoNames[algo]} maze generated (${N}×${N}). Click "Solve" to find the path.`, 'info');
+    btnSolve.disabled = false;
+    btnSolve.textContent = 'Solve';
+    btnReset.disabled = false;
+}
+
+// ─────────────────────────────────────────────
+// Core: solve the current maze
+// ─────────────────────────────────────────────
+function solveMaze() {
+    stopAnim();
+    btnSolve.disabled = true;
+    btnSolve.textContent = 'Solving…';
+
+    // Reset display
+    dispGrid = copyGrid(mazeGrid);
+    dispGrid[startCell[0]][startCell[1]] = START;
+    dispGrid[endCell[0]][endCell[1]]     = END;
+    draw();
+
+    const algo = document.getElementById('solveAlgo').value;
+    if      (algo === 'bfs')   steps = solveBFS(mazeGrid, startCell, endCell);
+    else if (algo === 'dfs')   steps = solveDFS(mazeGrid, startCell, endCell);
+    else                       steps = solveAStar(mazeGrid, startCell, endCell);
+
+    stepIdx = 0;
+    const algoNames = { bfs: 'BFS', dfs: 'DFS', astar: 'A*' };
+    setStatus(`Running ${algoNames[algo]}…`, 'running');
+    animId = requestAnimationFrame(animate);
+}
+
+// ─────────────────────────────────────────────
+// Core: reset to clean maze
+// ─────────────────────────────────────────────
+function resetMaze() {
+    stopAnim();
+    dispGrid = copyGrid(mazeGrid);
+    dispGrid[startCell[0]][startCell[1]] = START;
+    dispGrid[endCell[0]][endCell[1]]     = END;
+    draw();
+    btnSolve.disabled = false;
+    btnSolve.textContent = 'Solve';
+    setStatus('Reset. Click "Solve" to try again.', '');
+}
+
+// ─────────────────────────────────────────────
+// Event listeners
+// ─────────────────────────────────────────────
+btnGen  .addEventListener('click', generateMaze);
+btnSolve.addEventListener('click', solveMaze);
+btnReset.addEventListener('click', resetMaze);
+
+speedSl.addEventListener('input', () => {
+    speedVal.textContent = speedSl.value;
+});
+
+// ─────────────────────────────────────────────
+// Boot: generate an initial maze on load
+// ─────────────────────────────────────────────
+generateMaze();
+</script>
+</body>
+</html>
