@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>What Time Is It?</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      background: linear-gradient(160deg, #0d47a1 0%, #1976d2 50%, #42a5f5 100%);
+      font-family: 'Arial Rounded MT Bold', 'Nunito', 'Arial', sans-serif;
+    }
+
+    .game-wrapper {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(8px, 2vh, 18px);
+      padding: clamp(8px, 2vw, 20px);
+    }
+
+    .title {
+      color: #fff;
+      font-size: clamp(22px, 5.5vw, 42px);
+      font-weight: 900;
+      text-shadow: 0 3px 8px rgba(0,0,0,0.35);
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    #clock-svg {
+      /* Responsive: fill available space, max capped so it never crowds layout */
+      width: min(82vw, 46vh, 400px);
+      height: min(82vw, 46vh, 400px);
+      touch-action: none;
+      filter: drop-shadow(0 10px 30px rgba(0,0,0,0.45));
+      flex-shrink: 0;
+    }
+
+    .digital-display {
+      background: rgba(255,255,255,0.18);
+      border: 3px solid rgba(255,255,255,0.45);
+      border-radius: 18px;
+      padding: 6px 28px;
+      color: #fff;
+      font-size: clamp(30px, 8vw, 56px);
+      font-weight: 900;
+      letter-spacing: 5px;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      min-width: 150px;
+      text-align: center;
+    }
+
+    .speak-btn {
+      background: linear-gradient(145deg, #66bb6a, #2e7d32);
+      border: none;
+      border-radius: 60px;
+      padding: clamp(10px, 2.5vh, 16px) clamp(24px, 6vw, 48px);
+      color: #fff;
+      font-size: clamp(18px, 4.5vw, 30px);
+      font-family: inherit;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 6px 22px rgba(0,0,0,0.35), 0 3px 0 #1b5e20;
+      letter-spacing: 1px;
+      transition: transform 0.1s, box-shadow 0.1s;
+      white-space: nowrap;
+    }
+
+    .speak-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 3px 10px rgba(0,0,0,0.3), 0 0px 0 #1b5e20;
+    }
+
+    .hint {
+      color: rgba(255,255,255,0.75);
+      font-size: clamp(12px, 3vw, 17px);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-wrapper">
+    <div class="title">What Time Is It?</div>
+
+    <svg id="clock-svg" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="digital-display" id="digital-time">3:00</div>
+
+    <button class="speak-btn" id="speak-btn">&#128266; Say the Time!</button>
+
+    <div class="hint">Drag the hands to set the time!</div>
+  </div>
+
+  <script>
+    // ── Clock state ────────────────────────────────────────────────────────────
+    let hours = 3;
+    let minutes = 0;
+
+    // ── SVG geometry constants ─────────────────────────────────────────────────
+    const CX = 150, CY = 150, R = 128;
+    const HOUR_LEN   = 72;
+    const MIN_LEN    = 100;
+    const SECOND_DOT = 8;   // center cap radius
+
+    const svg = document.getElementById('clock-svg');
+    const NS  = 'http://www.w3.org/2000/svg';
+
+    function el(tag, attrs) {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      return e;
+    }
+
+    // ── Build static clock face ───────────────────────────────────────────────
+    function buildFace() {
+      // Outer decorative ring
+      svg.appendChild(el('circle', { cx: CX, cy: CY, r: R + 12,
+        fill: '#0d47a1', stroke: '#ffd54f', 'stroke-width': '5' }));
+
+      // White face
+      svg.appendChild(el('circle', { cx: CX, cy: CY, r: R,
+        fill: '#e8f4fd', stroke: '#1565c0', 'stroke-width': '4' }));
+
+      // Tick marks (60 total)
+      for (let i = 0; i < 60; i++) {
+        const rad     = ((i * 6) - 90) * Math.PI / 180;
+        const isMajor = i % 5 === 0;
+        const outer   = R;
+        const inner   = isMajor ? R - 14 : R - 7;
+        svg.appendChild(el('line', {
+          x1: CX + outer * Math.cos(rad), y1: CY + outer * Math.sin(rad),
+          x2: CX + inner * Math.cos(rad), y2: CY + inner * Math.sin(rad),
+          stroke: isMajor ? '#1565c0' : '#90caf9',
+          'stroke-width': isMajor ? '3' : '1.5',
+          'stroke-linecap': 'round'
+        }));
+      }
+
+      // Hour numbers 1-12 in fun colours
+      const numColors = [
+        '#e53935','#e91e63','#8e24aa','#1565c0',
+        '#0277bd','#00838f','#2e7d32','#f9a825',
+        '#e65100','#4e342e','#546e7a','#283593'
+      ];
+      for (let n = 1; n <= 12; n++) {
+        const rad = ((n * 30) - 90) * Math.PI / 180;
+        const nr  = R - 26;
+        const t   = el('text', {
+          x: CX + nr * Math.cos(rad), y: CY + nr * Math.sin(rad),
+          'text-anchor': 'middle', 'dominant-baseline': 'central',
+          'font-family': 'Arial Rounded MT Bold, Arial, sans-serif',
+          'font-size': '20', 'font-weight': 'bold',
+          fill: numColors[n - 1]
+        });
+        t.textContent = n;
+        svg.appendChild(t);
+      }
+    }
+
+    // ── Dynamic hand elements ─────────────────────────────────────────────────
+    const hourHand = el('line', {
+      x1: CX, y1: CY,
+      stroke: '#ff6f00', 'stroke-width': '9', 'stroke-linecap': 'round'
+    });
+
+    const minHand = el('line', {
+      x1: CX, y1: CY,
+      stroke: '#2e7d32', 'stroke-width': '6', 'stroke-linecap': 'round'
+    });
+
+    // Centre cap (drawn last so it's on top)
+    const capOuter = el('circle', { cx: CX, cy: CY, r: SECOND_DOT + 3,
+      fill: '#ffd54f', stroke: '#ff8f00', 'stroke-width': '2' });
+    const capInner = el('circle', { cx: CX, cy: CY, r: SECOND_DOT - 3,
+      fill: '#fff' });
+
+    // Invisible drag handles at hand tips (larger hit area for small fingers)
+    const hourHandle = el('circle', {
+      r: '20', fill: 'rgba(255,111,0,0.20)',
+      stroke: '#ff6f00', 'stroke-width': '2.5',
+      cursor: 'grab', 'stroke-dasharray': '4 3'
+    });
+
+    const minHandle = el('circle', {
+      r: '17', fill: 'rgba(46,125,50,0.20)',
+      stroke: '#2e7d32', 'stroke-width': '2',
+      cursor: 'grab', 'stroke-dasharray': '4 3'
+    });
+
+    // ── Angle helpers ─────────────────────────────────────────────────────────
+    function hourAngle(h, m)  { return ((h % 12) * 30 + m * 0.5 - 90) * Math.PI / 180; }
+    function minAngle(m)      { return (m * 6 - 90) * Math.PI / 180; }
+    function tip(angle, len)  { return { x: CX + len * Math.cos(angle), y: CY + len * Math.sin(angle) }; }
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    function render() {
+      const hTip = tip(hourAngle(hours, minutes), HOUR_LEN);
+      const mTip = tip(minAngle(minutes), MIN_LEN);
+
+      hourHand.setAttribute('x2', hTip.x);
+      hourHand.setAttribute('y2', hTip.y);
+      minHand.setAttribute('x2',  mTip.x);
+      minHand.setAttribute('y2',  mTip.y);
+
+      hourHandle.setAttribute('cx', hTip.x);
+      hourHandle.setAttribute('cy', hTip.y);
+      minHandle.setAttribute('cx',  mTip.x);
+      minHandle.setAttribute('cy',  mTip.y);
+
+      const h12 = hours % 12 === 0 ? 12 : hours % 12;
+      document.getElementById('digital-time').textContent =
+        `${h12}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    // ── Drag logic ────────────────────────────────────────────────────────────
+    let dragging = null; // 'hour' | 'min' | null
+
+    function svgPoint(clientX, clientY) {
+      const r = svg.getBoundingClientRect();
+      return {
+        x: (clientX - r.left) * (300 / r.width),
+        y: (clientY - r.top)  * (300 / r.height)
+      };
+    }
+
+    function angleFromCenter(px, py) {
+      return Math.atan2(py - CY, px - CX);
+    }
+
+    function move(clientX, clientY) {
+      if (!dragging) return;
+      const pt  = svgPoint(clientX, clientY);
+      const ang = angleFromCenter(pt.x, pt.y);
+      let deg   = (ang * 180 / Math.PI + 90 + 360) % 360;
+
+      if (dragging === 'min') {
+        minutes = Math.round(deg / 6) % 60;
+      } else {
+        hours = Math.floor(deg / 30) % 12;
+      }
+      render();
+    }
+
+    // Mouse
+    hourHandle.addEventListener('mousedown', e => { e.preventDefault(); dragging = 'hour'; });
+    minHandle.addEventListener('mousedown',  e => { e.preventDefault(); dragging = 'min'; });
+    document.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+    document.addEventListener('mouseup',   () => { dragging = null; });
+
+    // Touch
+    hourHandle.addEventListener('touchstart', e => { e.preventDefault(); dragging = 'hour'; }, { passive: false });
+    minHandle.addEventListener('touchstart',  e => { e.preventDefault(); dragging = 'min';  }, { passive: false });
+    document.addEventListener('touchmove', e => {
+      if (dragging) { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); }
+    }, { passive: false });
+    document.addEventListener('touchend', () => { dragging = null; });
+
+    // ── Speak the time ────────────────────────────────────────────────────────
+    document.getElementById('speak-btn').addEventListener('click', () => {
+      if (!window.speechSynthesis) return;
+
+      const h12 = hours % 12 === 0 ? 12 : hours % 12;
+      const m   = minutes;
+      let phrase;
+
+      if      (m === 0)  phrase = `It's ${h12} o'clock!`;
+      else if (m === 15) phrase = `It's quarter past ${h12}!`;
+      else if (m === 30) phrase = `It's half past ${h12}!`;
+      else if (m === 45) phrase = `It's quarter to ${h12 === 12 ? 1 : h12 + 1}!`;
+      else               phrase = `It's ${h12}:${String(m).padStart(2, '0')}!`;
+
+      window.speechSynthesis.cancel();
+      const utt  = new SpeechSynthesisUtterance(phrase);
+      utt.rate   = 0.88;
+      utt.pitch  = 1.15;
+      utt.volume = 1;
+      window.speechSynthesis.speak(utt);
+    });
+
+    // ── Assemble SVG & init ───────────────────────────────────────────────────
+    buildFace();
+    svg.appendChild(hourHand);
+    svg.appendChild(minHand);
+    svg.appendChild(capOuter);
+    svg.appendChild(capInner);
+    svg.appendChild(hourHandle);
+    svg.appendChild(minHandle);
+
+    render();
+  </script>
+</body>
+</html>
