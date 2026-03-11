@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robot Builder Math Game</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Comic Sans MS', 'Chalkboard SE', 'Arial Rounded MT Bold', sans-serif;
+      background: #FFF9C4;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 8px;
+      gap: 6px;
+      user-select: none;
+    }
+
+    /* Question zone */
+    #question-zone {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+      padding: 6px 20px 4px;
+      text-align: center;
+      width: 100%;
+      max-width: 500px;
+      flex-shrink: 0;
+    }
+
+    #question-text {
+      font-size: clamp(28px, 8vw, 52px);
+      color: #222;
+      letter-spacing: 3px;
+      line-height: 1.15;
+    }
+
+    #feedback-text {
+      font-size: clamp(13px, 3.5vw, 18px);
+      min-height: 1.3em;
+      font-weight: bold;
+      transition: opacity 0.4s;
+    }
+
+    .feedback-correct { color: #2E7D32; }
+    .feedback-wrong   { color: #E65100; }
+
+    /* Robot zone */
+    #robot-zone {
+      background: #E3F2FD;
+      border-radius: 16px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.10);
+      padding: 6px 10px 4px;
+      width: 100%;
+      max-width: 500px;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #robot-svg {
+      flex: 1;
+      min-height: 0;
+      width: auto;
+      max-width: 100%;
+    }
+
+    /* Pip progress row */
+    #pips {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 3px 0 1px;
+    }
+
+    .pip {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #B0BEC5;
+      border: 2px solid #78909C;
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    .pip.filled {
+      background: #FFD600;
+      border-color: #F9A825;
+    }
+
+    /* 4-choice answer buttons */
+    #choices-zone {
+      width: 100%;
+      max-width: 500px;
+      flex-shrink: 0;
+    }
+
+    #choices {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .choice-btn {
+      background: #1976D2;
+      color: #fff;
+      font-family: inherit;
+      font-size: clamp(26px, 8vw, 46px);
+      font-weight: bold;
+      border: none;
+      border-radius: 14px;
+      padding: 10px 0;
+      min-height: 64px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #0D47A1;
+      transition: transform 0.08s, box-shadow 0.08s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .choice-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #0D47A1;
+    }
+
+    /* Play again button — replaces choices on completion */
+    #play-again-btn {
+      display: none;
+      background: #7B1FA2;
+      color: #fff;
+      font-family: inherit;
+      font-size: clamp(18px, 5vw, 26px);
+      font-weight: bold;
+      border: none;
+      border-radius: 16px;
+      padding: 14px 0;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #4A148C;
+      width: 100%;
+      letter-spacing: 1px;
+    }
+
+    /* Confetti canvas */
+    #confetti-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      display: none;
+      z-index: 999;
+    }
+
+    /* Intro overlay */
+    #intro {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(92,61,153,0.93);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      text-align: center;
+      padding: 24px;
+      transition: opacity 0.6s;
+    }
+
+    #intro h2 {
+      font-size: clamp(26px, 7vw, 48px);
+      margin-bottom: 14px;
+    }
+
+    #intro p {
+      font-size: clamp(15px, 4vw, 22px);
+      max-width: 420px;
+      line-height: 1.5;
+      margin-bottom: 26px;
+    }
+
+    #start-btn {
+      background: #FFD600;
+      color: #333;
+      font-family: inherit;
+      font-size: clamp(20px, 5vw, 30px);
+      font-weight: bold;
+      border: none;
+      border-radius: 16px;
+      padding: 14px 40px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #F9A825;
+    }
+
+    /* Animations */
+    @keyframes partPop {
+      0%   { transform: scale(0.2); opacity: 0; }
+      70%  { transform: scale(1.18); opacity: 1; }
+      100% { transform: scale(1);    opacity: 1; }
+    }
+
+    @keyframes choiceShake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-7px); }
+      40%      { transform: translateX(7px); }
+      60%      { transform: translateX(-5px); }
+      80%      { transform: translateX(5px); }
+    }
+
+    .part-pop {
+      animation: partPop 0.5s ease-out forwards;
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+
+    .choice-wrong {
+      animation: choiceShake 0.45s ease-in-out;
+      background: #C62828 !important;
+      box-shadow: 0 4px 0 #7f0000 !important;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Intro overlay -->
+<div id="intro">
+  <h2>Robot Builder!</h2>
+  <p>Answer the math problems to build your robot. Each right answer adds a new part!</p>
+  <button id="start-btn" onclick="startGame()">Let's Go!</button>
+</div>
+
+<!-- Confetti canvas -->
+<canvas id="confetti-canvas"></canvas>
+
+<!-- Question zone -->
+<div id="question-zone">
+  <div id="question-text">? + ? = ?</div>
+  <div id="feedback-text">&nbsp;</div>
+</div>
+
+<!-- Robot zone -->
+<div id="robot-zone">
+  <svg id="robot-svg" viewBox="0 0 200 330" xmlns="http://www.w3.org/2000/svg">
+
+    <!-- Silhouette (always visible) -->
+    <g id="silhouette" opacity="0.18">
+      <line x1="100" y1="52" x2="100" y2="34" stroke="#555" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="100" cy="28" r="7" stroke="#555" stroke-width="3" fill="none"/>
+      <rect x="68" y="54" width="64" height="62" rx="10" stroke="#555" stroke-width="3" fill="none"/>
+      <circle cx="88" cy="78" r="9" stroke="#555" stroke-width="3" fill="none"/>
+      <circle cx="112" cy="78" r="9" stroke="#555" stroke-width="3" fill="none"/>
+      <path d="M84,102 Q100,114 116,102" stroke="#555" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <rect x="56" y="126" width="88" height="96" rx="10" stroke="#555" stroke-width="3" fill="none"/>
+      <rect x="22" y="130" width="30" height="74" rx="10" stroke="#555" stroke-width="3" fill="none"/>
+      <rect x="148" y="130" width="30" height="74" rx="10" stroke="#555" stroke-width="3" fill="none"/>
+      <rect x="63" y="226" width="30" height="80" rx="10" stroke="#555" stroke-width="3" fill="none"/>
+      <rect x="107" y="226" width="30" height="80" rx="10" stroke="#555" stroke-width="3" fill="none"/>
+    </g>
+
+    <!-- Part 1: Torso -->
+    <g id="part-torso" visibility="hidden">
+      <rect x="56" y="126" width="88" height="96" rx="10" fill="#42A5F5" stroke="#1565C0" stroke-width="2"/>
+      <rect x="72" y="142" width="56" height="36" rx="6" fill="#1976D2" opacity="0.5"/>
+      <circle cx="84" cy="160" r="5" fill="#FFD600"/>
+      <circle cx="100" cy="160" r="5" fill="#FF7043"/>
+      <circle cx="116" cy="160" r="5" fill="#66BB6A"/>
+      <rect x="76" y="184" width="48" height="6" rx="3" fill="#1565C0" opacity="0.4"/>
+      <rect x="76" y="196" width="32" height="6" rx="3" fill="#1565C0" opacity="0.4"/>
+    </g>
+
+    <!-- Part 2: Head -->
+    <g id="part-head" visibility="hidden">
+      <rect x="68" y="54" width="64" height="62" rx="10" fill="#FFF9C4" stroke="#F9A825" stroke-width="2"/>
+      <circle cx="68" cy="82" r="5" fill="#BDBDBD" stroke="#9E9E9E" stroke-width="1.5"/>
+      <circle cx="132" cy="82" r="5" fill="#BDBDBD" stroke="#9E9E9E" stroke-width="1.5"/>
+    </g>
+
+    <!-- Part 3: Left leg -->
+    <g id="part-left-leg" visibility="hidden">
+      <rect x="63" y="226" width="30" height="80" rx="10" fill="#42A5F5" stroke="#1565C0" stroke-width="2"/>
+      <rect x="58" y="292" width="38" height="16" rx="8" fill="#1976D2"/>
+    </g>
+
+    <!-- Part 4: Right leg -->
+    <g id="part-right-leg" visibility="hidden">
+      <rect x="107" y="226" width="30" height="80" rx="10" fill="#42A5F5" stroke="#1565C0" stroke-width="2"/>
+      <rect x="104" y="292" width="38" height="16" rx="8" fill="#1976D2"/>
+    </g>
+
+    <!-- Part 5: Left arm -->
+    <g id="part-left-arm" visibility="hidden">
+      <rect x="22" y="130" width="30" height="74" rx="10" fill="#42A5F5" stroke="#1565C0" stroke-width="2"/>
+      <ellipse cx="37" cy="208" rx="14" ry="10" fill="#1976D2"/>
+    </g>
+
+    <!-- Part 6: Right arm -->
+    <g id="part-right-arm" visibility="hidden">
+      <rect x="148" y="130" width="30" height="74" rx="10" fill="#42A5F5" stroke="#1565C0" stroke-width="2"/>
+      <ellipse cx="163" cy="208" rx="14" ry="10" fill="#1976D2"/>
+    </g>
+
+    <!-- Part 7: Left eye -->
+    <g id="part-left-eye" visibility="hidden">
+      <circle cx="88" cy="78" r="9" fill="#fff" stroke="#FFA000" stroke-width="2"/>
+      <circle cx="88" cy="78" r="5" fill="#1A237E"/>
+      <circle cx="90" cy="76" r="2" fill="#fff"/>
+    </g>
+
+    <!-- Part 8: Right eye -->
+    <g id="part-right-eye" visibility="hidden">
+      <circle cx="112" cy="78" r="9" fill="#fff" stroke="#FFA000" stroke-width="2"/>
+      <circle cx="112" cy="78" r="5" fill="#1A237E"/>
+      <circle cx="114" cy="76" r="2" fill="#fff"/>
+    </g>
+
+    <!-- Part 9: Mouth -->
+    <g id="part-mouth" visibility="hidden">
+      <path d="M84,100 Q100,116 116,100" stroke="#E91E63" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Part 10: Antenna -->
+    <g id="part-antenna" visibility="hidden">
+      <line x1="100" y1="54" x2="100" y2="34" stroke="#78909C" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="100" cy="28" r="8" fill="#FF5722" stroke="#BF360C" stroke-width="2"/>
+      <circle cx="100" cy="28" r="12" fill="none" stroke="#FF5722" stroke-width="1.5" opacity="0.4"/>
+      <circle cx="100" cy="28" r="16" fill="none" stroke="#FF5722" stroke-width="1" opacity="0.2"/>
+    </g>
+
+  </svg>
+
+  <div id="pips"></div>
+</div>
+
+<!-- Answer choices -->
+<div id="choices-zone">
+  <div id="choices"></div>
+  <button id="play-again-btn" onclick="resetGame()" aria-label="Play again">Build Another Robot!</button>
+</div>
+
+<script>
+  const PART_ORDER = [
+    'part-torso', 'part-head', 'part-left-leg', 'part-right-leg',
+    'part-left-arm', 'part-right-arm', 'part-left-eye', 'part-right-eye',
+    'part-mouth', 'part-antenna'
+  ];
+
+  const state = {
+    partsRevealed: 0,
+    currentQuestion: null,
+    gameActive: false,
+    answerLocked: false
+  };
+
+  // ── Audio ──────────────────────────────────────────────────────────────
+  let audioCtx = null;
+
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function playTone(freq, duration, type = 'triangle', volume = 0.3, startDelay = 0) {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    const t = ctx.currentTime + startDelay;
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    osc.start(t);
+    osc.stop(t + duration + 0.01);
+  }
+
+  function playCorrectChime() {
+    playTone(523, 0.18, 'triangle', 0.3, 0);
+    playTone(659, 0.18, 'triangle', 0.3, 0.12);
+    playTone(784, 0.25, 'triangle', 0.3, 0.24);
+  }
+
+  function playWrongTone() {
+    playTone(300, 0.12, 'triangle', 0.25, 0);
+    playTone(250, 0.20, 'triangle', 0.25, 0.13);
+  }
+
+  function playFanfare() {
+    [523, 659, 784, 1047, 1319].forEach((f, i) =>
+      playTone(f, 0.35, 'triangle', 0.35, i * 0.14));
+  }
+
+  // ── Question & choices ─────────────────────────────────────────────────
+  function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function generateQuestion() {
+    const isAdd = Math.random() < 0.5;
+    let a, b, op, answer;
+    if (isAdd) {
+      a = randInt(0, 9); b = randInt(0, 9 - a);
+      op = '+'; answer = a + b;
+    } else {
+      a = randInt(1, 9); b = randInt(0, a);
+      op = '−'; answer = a - b;
+    }
+    return { a, b, op, answer };
+  }
+
+  function generateChoices(correct) {
+    const pool = new Set([correct]);
+    // prefer nearby values; fill from full 0-9 range if needed
+    const nearby = Array.from({length: 10}, (_, i) => i)
+      .filter(n => n !== correct)
+      .sort(() => Math.random() - 0.5);
+    for (const n of nearby) {
+      pool.add(n);
+      if (pool.size === 4) break;
+    }
+    return [...pool].sort(() => Math.random() - 0.5);
+  }
+
+  function renderQuestion(q) {
+    document.getElementById('question-text').textContent =
+      `${q.a} ${q.op} ${q.b} = ?`;
+    const choices = generateChoices(q.answer);
+    const container = document.getElementById('choices');
+    container.innerHTML = '';
+    choices.forEach(val => {
+      const btn = document.createElement('button');
+      btn.className = 'choice-btn';
+      btn.textContent = val;
+      btn.setAttribute('aria-label', `Answer ${val}`);
+      btn.onclick = () => selectChoice(val, btn);
+      container.appendChild(btn);
+    });
+  }
+
+  // ── Answer selection ───────────────────────────────────────────────────
+  function selectChoice(value, btn) {
+    if (!state.gameActive || state.answerLocked) return;
+    state.answerLocked = true;
+
+    if (value === state.currentQuestion.answer) {
+      btn.style.background = '#2E7D32';
+      btn.style.boxShadow = '0 4px 0 #1B5E20';
+      playCorrectChime();
+      showFeedback('Great job!', true);
+      revealNextPart();
+      if (state.partsRevealed < PART_ORDER.length) {
+        setTimeout(() => {
+          clearFeedback();
+          state.currentQuestion = generateQuestion();
+          renderQuestion(state.currentQuestion);
+          state.answerLocked = false;
+        }, 900);
+      }
+    } else {
+      btn.classList.add('choice-wrong');
+      playWrongTone();
+      showFeedback('Try again!', false);
+      setTimeout(() => {
+        btn.classList.remove('choice-wrong');
+        state.answerLocked = false;
+      }, 500);
+      setTimeout(clearFeedback, 1100);
+    }
+  }
+
+  // ── Feedback ───────────────────────────────────────────────────────────
+  function showFeedback(msg, correct) {
+    const el = document.getElementById('feedback-text');
+    el.textContent = msg;
+    el.className = correct ? 'feedback-correct' : 'feedback-wrong';
+    el.style.opacity = '1';
+  }
+
+  function clearFeedback() {
+    const el = document.getElementById('feedback-text');
+    el.style.opacity = '0';
+    setTimeout(() => {
+      el.innerHTML = '&nbsp;';
+      el.className = '';
+      el.style.opacity = '1';
+    }, 350);
+  }
+
+  // ── Robot parts ────────────────────────────────────────────────────────
+  function revealNextPart() {
+    if (state.partsRevealed >= PART_ORDER.length) return;
+    const el = document.getElementById(PART_ORDER[state.partsRevealed]);
+    el.setAttribute('visibility', 'visible');
+    el.classList.remove('part-pop');
+    void el.getBoundingClientRect();
+    el.classList.add('part-pop');
+
+    document.querySelectorAll('.pip')[state.partsRevealed]?.classList.add('filled');
+    state.partsRevealed++;
+
+    if (state.partsRevealed === PART_ORDER.length) {
+      setTimeout(triggerCompletion, 700);
+    }
+  }
+
+  // ── Pips ───────────────────────────────────────────────────────────────
+  function buildPips() {
+    const container = document.getElementById('pips');
+    container.innerHTML = '';
+    PART_ORDER.forEach(() => {
+      const pip = document.createElement('div');
+      pip.className = 'pip';
+      pip.setAttribute('aria-hidden', 'true');
+      container.appendChild(pip);
+    });
+  }
+
+  // ── Completion ─────────────────────────────────────────────────────────
+  function triggerCompletion() {
+    state.gameActive = false;
+    playFanfare();
+    launchConfetti();
+    showFeedback('You built the robot!', true);
+    document.getElementById('choices').innerHTML = '';
+    document.getElementById('play-again-btn').style.display = 'block';
+  }
+
+  // ── Confetti ───────────────────────────────────────────────────────────
+  function launchConfetti() {
+    const canvas = document.getElementById('confetti-canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.display = 'block';
+    const ctx = canvas.getContext('2d');
+    const COLORS = ['#FF5252','#FFD600','#00E676','#40C4FF','#EA80FC','#FF6D00','#69F0AE','#FF4081'];
+    const particles = Array.from({length: 160}, () => ({
+      x:    Math.random() * canvas.width,
+      y:   -Math.random() * canvas.height * 0.5,
+      vx:   (Math.random() - 0.5) * 3,
+      vy:   Math.random() * 3 + 2,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      w:    Math.random() * 10 + 6,
+      h:    Math.random() * 6 + 4,
+      rot:  Math.random() * Math.PI * 2,
+      rotV: (Math.random() - 0.5) * 0.2
+    }));
+    let frame = 0;
+    (function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.rot += p.rotV;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+      if (++frame < 280) requestAnimationFrame(draw);
+      else canvas.style.display = 'none';
+    })();
+  }
+
+  // ── Game lifecycle ─────────────────────────────────────────────────────
+  function startGame() {
+    const intro = document.getElementById('intro');
+    intro.style.opacity = '0';
+    setTimeout(() => { intro.style.display = 'none'; }, 600);
+    initGame();
+  }
+
+  function initGame() {
+    state.partsRevealed = 0;
+    state.gameActive = true;
+    state.answerLocked = false;
+
+    PART_ORDER.forEach(id => {
+      const el = document.getElementById(id);
+      el.setAttribute('visibility', 'hidden');
+      el.classList.remove('part-pop');
+    });
+
+    buildPips();
+    clearFeedback();
+    document.getElementById('play-again-btn').style.display = 'none';
+
+    state.currentQuestion = generateQuestion();
+    renderQuestion(state.currentQuestion);
+  }
+
+  function resetGame() { initGame(); }
+</script>
+</body>
+</html>
