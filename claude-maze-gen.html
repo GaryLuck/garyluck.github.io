@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maze Explorer</title>
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --panel-bg: #1e1e30;
+    --border: #2d2d4a;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --btn-bg: #2d2d4a;
+    --btn-hover: #3d3d5a;
+    --btn-disabled: #1a1a28;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    letter-spacing: 0.05em;
+    color: #c7d2fe;
+  }
+  .app {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 980px;
+  }
+  .canvas-wrap {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
+  canvas {
+    display: block;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    image-rendering: pixelated;
+  }
+  .controls {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .panel h2 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    margin-top: 8px;
+  }
+  label:first-of-type { margin-top: 0; }
+  select {
+    width: 100%;
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    outline: none;
+  }
+  select:focus { border-color: #4f46e5; }
+  .speed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  input[type=range] {
+    flex: 1;
+    accent-color: #4f46e5;
+    cursor: pointer;
+  }
+  .speed-val {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    min-width: 20px;
+    text-align: right;
+  }
+  .btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  button {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    touch-action: manipulation;
+    min-height: 36px;
+  }
+  button:hover:not(:disabled) { background: var(--btn-hover); border-color: #4f46e5; }
+  button:disabled { background: var(--btn-disabled); color: var(--text-muted); cursor: not-allowed; opacity: 0.5; }
+  #btnGenerate { grid-column: 1 / -1; background: #312e81; border-color: #4f46e5; }
+  #btnGenerate:hover:not(:disabled) { background: #3730a3; }
+  .info-box {
+    background: #12122a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    min-height: 64px;
+    white-space: pre-wrap;
+  }
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  @media (max-width: 680px) {
+    .app { flex-direction: column; align-items: center; }
+    .controls { width: 100%; max-width: 500px; }
+  }
+</style>
+</head>
+<body>
+<h1>Maze Explorer</h1>
+<div class="app">
+  <div class="canvas-wrap">
+    <canvas id="mazeCanvas"></canvas>
+  </div>
+  <div class="controls">
+    <div class="panel">
+      <h2>Configuration</h2>
+      <label for="sizeSelect">Maze Size</label>
+      <select id="sizeSelect">
+        <option value="15">Small (7×7 rooms)</option>
+        <option value="31" selected>Medium (15×15 rooms)</option>
+        <option value="51">Large (25×25 rooms)</option>
+      </select>
+      <label for="genAlgoSelect">Generation Algorithm</label>
+      <select id="genAlgoSelect">
+        <option value="dfs">Recursive Backtracking (DFS)</option>
+        <option value="prims">Prim's Algorithm</option>
+        <option value="kruskals">Kruskal's Algorithm</option>
+      </select>
+      <label for="solveAlgoSelect">Solving Algorithm</label>
+      <select id="solveAlgoSelect">
+        <option value="bfs">BFS (Breadth-First Search)</option>
+        <option value="dfs">DFS (Depth-First Search)</option>
+        <option value="astar">A* Search</option>
+      </select>
+      <label>Animation Speed</label>
+      <div class="speed-row">
+        <input type="range" id="speedSlider" min="1" max="10" value="5">
+        <span class="speed-val" id="speedVal">5</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Controls</h2>
+      <div class="btn-grid">
+        <button id="btnGenerate">Generate Maze</button>
+        <button id="btnSolve" disabled>Solve Maze</button>
+        <button id="btnPlayPause" disabled>Pause</button>
+        <button id="btnReset" disabled>Reset</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Algorithm Info</h2>
+      <div class="info-box" id="algoInfo"></div>
+    </div>
+    <div class="panel">
+      <h2>Legend</h2>
+      <div class="legend">
+        <div class="legend-item"><div class="swatch" style="background:#22c55e"></div>Start cell</div>
+        <div class="legend-item"><div class="swatch" style="background:#ef4444"></div>End cell</div>
+        <div class="legend-item"><div class="swatch" style="background:#a855f7"></div>Explored cells</div>
+        <div class="legend-item"><div class="swatch" style="background:#eab308"></div>Solution path</div>
+        <div class="legend-item"><div class="swatch" style="background:#60a5fa"></div>Current frontier</div>
+        <div class="legend-item"><div class="swatch" style="background:#e8dcc8"></div>Open passage</div>
+        <div class="legend-item"><div class="swatch" style="background:#1a1a2e; border-color:#444"></div>Wall (black square)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ─── Algorithm descriptions ───────────────────────────────────────────────────
+const ALGO_INFO = {
+  gen: {
+    dfs:      'Recursive Backtracking: Drills deep corridors using depth-first search. Creates mazes with long winding paths and few dead ends. O(n) time and space.',
+    prims:    "Prim's: Grows the open area by randomly drilling into the nearest wall. Creates mazes with many short dead ends and a uniform appearance. O(n log n) time.",
+    kruskals: "Kruskal's: Randomly knocks down walls between disconnected regions using Union-Find. Produces balanced passage distribution. O(n log n) time.",
+  },
+  solve: {
+    bfs:   'BFS: Explores all cells level by level. Guarantees the shortest path through the maze. O(n) time and space.',
+    dfs:   'DFS: Drills as far as possible before backtracking. Fast but does not guarantee shortest path. O(n) time and space.',
+    astar: 'A*: Uses Manhattan distance heuristic to steer toward the goal. Finds the optimal path efficiently. O(n log n) time.',
+  }
+};
+
+// ─── MazeGrid ─────────────────────────────────────────────────────────────────
+// The grid is (size × size) cells. Every cell is either WALL (0) or OPEN (1).
+// "Room" cells sit at odd (x, y) positions; wall cells fill even positions.
+// Generation drills open paths by turning wall cells to OPEN.
+class MazeGrid {
+  constructor(size) {
+    this.cols = size;
+    this.rows = size;
+    // All cells start as wall (0)
+    this.cells = new Uint8Array(size * size);
+  }
+
+  get roomCols() { return (this.cols - 1) / 2; }
+  get roomRows() { return (this.rows - 1) / 2; }
+
+  idx(x, y)        { return y * this.cols + x; }
+  inBounds(x, y)   { return x >= 0 && y >= 0 && x < this.cols && y < this.rows; }
+  isOpen(x, y)     { return !!this.cells[this.idx(x, y)]; }
+  open(x, y)       { this.cells[this.idx(x, y)] = 1; }
+
+  // Grid coordinate of room (rx, ry)
+  roomToGrid(rx, ry) { return [rx * 2 + 1, ry * 2 + 1]; }
+
+  // Room-level neighbors: rooms one step away (grid distance 2)
+  roomNeighbors(rx, ry) {
+    return [
+      { drx: 0, dry: -1 }, { drx: 0, dry: 1 },
+      { drx: -1, dry: 0 }, { drx: 1, dry: 0 },
+    ]
+      .map(({ drx, dry }) => ({
+        rx: rx + drx, ry: ry + dry,
+        // wall cell between the two rooms
+        wx: rx * 2 + 1 + drx,
+        wy: ry * 2 + 1 + dry,
+      }))
+      .filter(({ rx, ry }) => rx >= 0 && ry >= 0 && rx < this.roomCols && ry < this.roomRows);
+  }
+
+  // Open cell neighbors (for solving — walks through already-open cells)
+  openNeighbors(x, y) {
+    return [
+      { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
+    ]
+      .map(({ dx, dy }) => ({ x: x + dx, y: y + dy }))
+      .filter(n => this.inBounds(n.x, n.y) && this.isOpen(n.x, n.y));
+  }
+}
+
+// ─── Union-Find ───────────────────────────────────────────────────────────────
+class UnionFind {
+  constructor(n) {
+    this.parent = Array.from({ length: n }, (_, i) => i);
+    this.rank   = new Uint8Array(n);
+  }
+  find(x) {
+    while (this.parent[x] !== x) { this.parent[x] = this.parent[this.parent[x]]; x = this.parent[x]; }
+    return x;
+  }
+  union(a, b) {
+    a = this.find(a); b = this.find(b);
+    if (a === b) return false;
+    if (this.rank[a] < this.rank[b]) [a, b] = [b, a];
+    this.parent[b] = a;
+    if (this.rank[a] === this.rank[b]) this.rank[a]++;
+    return true;
+  }
+}
+
+// ─── MinHeap ──────────────────────────────────────────────────────────────────
+class MinHeap {
+  constructor() { this.h = []; }
+  push(v)   { this.h.push(v); this._up(this.h.length - 1); }
+  pop()     { const t = this.h[0], l = this.h.pop(); if (this.h.length) { this.h[0] = l; this._down(0); } return t; }
+  get size(){ return this.h.length; }
+  _up(i)   { while (i > 0) { const p = (i-1)>>1; if (this.h[p].f <= this.h[i].f) break; [this.h[p],this.h[i]]=[this.h[i],this.h[p]]; i=p; } }
+  _down(i) { const n=this.h.length; while(true){let m=i,l=2*i+1,r=2*i+2; if(l<n&&this.h[l].f<this.h[m].f)m=l; if(r<n&&this.h[r].f<this.h[m].f)m=r; if(m===i)break; [this.h[m],this.h[i]]=[this.h[i],this.h[m]]; i=m;} }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ─── Generators ───────────────────────────────────────────────────────────────
+// Each generator:
+//   1. Modifies grid.cells (drills open paths)
+//   2. Returns an array of {x, y} steps — each step is a grid cell being drilled open
+const Generators = {
+  dfs(grid) {
+    const steps = [];
+    const { roomCols: rc, roomRows: rr } = grid;
+    const visited = new Uint8Array(rc * rr);
+
+    const drillRoom = (rx, ry) => {
+      const [gx, gy] = grid.roomToGrid(rx, ry);
+      grid.open(gx, gy);
+      steps.push({ x: gx, y: gy });
+      visited[ry * rc + rx] = 1;
+    };
+
+    drillRoom(0, 0);
+    const stack = [{ rx: 0, ry: 0 }];
+
+    while (stack.length) {
+      const { rx, ry } = stack[stack.length - 1];
+      const unvisited = shuffle(
+        grid.roomNeighbors(rx, ry).filter(n => !visited[n.ry * rc + n.rx])
+      );
+      if (unvisited.length) {
+        const next = unvisited[0];
+        // Drill through the wall cell between rooms
+        grid.open(next.wx, next.wy);
+        steps.push({ x: next.wx, y: next.wy });
+        drillRoom(next.rx, next.ry);
+        stack.push({ rx: next.rx, ry: next.ry });
+      } else {
+        stack.pop();
+      }
+    }
+    return steps;
+  },
+
+  prims(grid) {
+    const steps = [];
+    const { roomCols: rc, roomRows: rr } = grid;
+    const visited = new Uint8Array(rc * rr);
+
+    const drillRoom = (rx, ry) => {
+      const [gx, gy] = grid.roomToGrid(rx, ry);
+      grid.open(gx, gy);
+      steps.push({ x: gx, y: gy });
+      visited[ry * rc + rx] = 1;
+    };
+
+    // Frontier: edges {rx, ry, nx, ny, wx, wy} connecting visited room to unvisited room
+    const frontier = [];
+    const addFrontier = (rx, ry) => {
+      grid.roomNeighbors(rx, ry).forEach(n => {
+        if (!visited[n.ry * rc + n.rx]) frontier.push({ rx, ry, nx: n.rx, ny: n.ry, wx: n.wx, wy: n.wy });
+      });
+    };
+
+    drillRoom(0, 0);
+    addFrontier(0, 0);
+
+    while (frontier.length) {
+      const ri = Math.floor(Math.random() * frontier.length);
+      const { nx, ny, wx, wy } = frontier[ri];
+      frontier.splice(ri, 1);
+      if (visited[ny * rc + nx]) continue;
+      // Drill wall cell
+      grid.open(wx, wy);
+      steps.push({ x: wx, y: wy });
+      drillRoom(nx, ny);
+      addFrontier(nx, ny);
+    }
+    return steps;
+  },
+
+  kruskals(grid) {
+    const steps = [];
+    const { roomCols: rc, roomRows: rr } = grid;
+    const uf = new UnionFind(rc * rr);
+
+    // Open all room cells upfront (they all exist, walls between them may or may not open)
+    for (let ry = 0; ry < rr; ry++) {
+      for (let rx = 0; rx < rc; rx++) {
+        const [gx, gy] = grid.roomToGrid(rx, ry);
+        grid.open(gx, gy);
+        steps.push({ x: gx, y: gy });
+      }
+    }
+
+    // All internal wall-edges between adjacent rooms
+    const edges = [];
+    for (let ry = 0; ry < rr; ry++) {
+      for (let rx = 0; rx < rc; rx++) {
+        if (rx + 1 < rc) edges.push({ ax: rx, ay: ry, bx: rx+1, by: ry, wx: rx*2+2, wy: ry*2+1 });
+        if (ry + 1 < rr) edges.push({ ax: rx, ay: ry, bx: rx, by: ry+1, wx: rx*2+1, wy: ry*2+2 });
+      }
+    }
+    shuffle(edges);
+
+    for (const { ax, ay, bx, by, wx, wy } of edges) {
+      if (uf.union(ay * rc + ax, by * rc + bx)) {
+        grid.open(wx, wy);
+        steps.push({ x: wx, y: wy });
+      }
+    }
+    return steps;
+  },
+};
+
+// ─── Solvers ──────────────────────────────────────────────────────────────────
+// Each solver returns an array of {type: 'explore'|'solution', x, y} steps.
+// Solvers navigate through already-open grid cells.
+function tracePath(parent, endKey) {
+  const path = [];
+  let k = endKey;
+  while (k !== null) { path.push(k); k = parent[k]; }
+  path.reverse();
+  return path.map(k => { const [x, y] = k.split(',').map(Number); return { x, y }; });
+}
+
+const Solvers = {
+  bfs(grid) {
+    const steps = [];
+    const sx = 1, sy = 1, ex = grid.cols - 2, ey = grid.rows - 2;
+    const visited = new Uint8Array(grid.cols * grid.rows);
+    const parent = {};
+    const startKey = `${sx},${sy}`;
+    visited[grid.idx(sx, sy)] = 1;
+    parent[startKey] = null;
+    const queue = [{ x: sx, y: sy }];
+    let found = false;
+    while (queue.length && !found) {
+      const { x, y } = queue.shift();
+      const key = `${x},${y}`;
+      if (!(x === sx && y === sy)) steps.push({ type: 'explore', x, y });
+      if (x === ex && y === ey) { found = true; break; }
+      for (const n of grid.openNeighbors(x, y)) {
+        if (!visited[grid.idx(n.x, n.y)]) {
+          visited[grid.idx(n.x, n.y)] = 1;
+          parent[`${n.x},${n.y}`] = key;
+          queue.push(n);
+        }
+      }
+    }
+    if (found) tracePath(parent, `${ex},${ey}`).forEach(p => steps.push({ type: 'solution', ...p }));
+    return steps;
+  },
+
+  dfs(grid) {
+    const steps = [];
+    const sx = 1, sy = 1, ex = grid.cols - 2, ey = grid.rows - 2;
+    const visited = new Uint8Array(grid.cols * grid.rows);
+    const parent = {};
+    const startKey = `${sx},${sy}`;
+    visited[grid.idx(sx, sy)] = 1;
+    parent[startKey] = null;
+    const stack = [{ x: sx, y: sy }];
+    let found = false;
+    while (stack.length && !found) {
+      const { x, y } = stack.pop();
+      const key = `${x},${y}`;
+      if (!(x === sx && y === sy)) steps.push({ type: 'explore', x, y });
+      if (x === ex && y === ey) { found = true; break; }
+      for (const n of grid.openNeighbors(x, y)) {
+        if (!visited[grid.idx(n.x, n.y)]) {
+          visited[grid.idx(n.x, n.y)] = 1;
+          parent[`${n.x},${n.y}`] = key;
+          stack.push(n);
+        }
+      }
+    }
+    if (found) tracePath(parent, `${ex},${ey}`).forEach(p => steps.push({ type: 'solution', ...p }));
+    return steps;
+  },
+
+  astar(grid) {
+    const steps = [];
+    const sx = 1, sy = 1, ex = grid.cols - 2, ey = grid.rows - 2;
+    const h = (x, y) => Math.abs(x - ex) + Math.abs(y - ey);
+    const gScore = new Map();
+    const parent = {};
+    const startKey = `${sx},${sy}`;
+    gScore.set(startKey, 0);
+    parent[startKey] = null;
+    const open = new MinHeap();
+    open.push({ f: h(sx, sy), x: sx, y: sy });
+    const closed = new Uint8Array(grid.cols * grid.rows);
+    let found = false;
+    while (open.size && !found) {
+      const { x, y } = open.pop();
+      if (closed[grid.idx(x, y)]) continue;
+      closed[grid.idx(x, y)] = 1;
+      const key = `${x},${y}`;
+      if (!(x === sx && y === sy)) steps.push({ type: 'explore', x, y });
+      if (x === ex && y === ey) { found = true; break; }
+      const gCur = gScore.get(key);
+      for (const n of grid.openNeighbors(x, y)) {
+        if (closed[grid.idx(n.x, n.y)]) continue;
+        const nKey = `${n.x},${n.y}`;
+        const ng = gCur + 1;
+        if (!gScore.has(nKey) || ng < gScore.get(nKey)) {
+          gScore.set(nKey, ng);
+          parent[nKey] = key;
+          open.push({ f: ng + h(n.x, n.y), x: n.x, y: n.y });
+        }
+      }
+    }
+    if (found) tracePath(parent, `${ex},${ey}`).forEach(p => steps.push({ type: 'solution', ...p }));
+    return steps;
+  },
+};
+
+// ─── Renderer ─────────────────────────────────────────────────────────────────
+class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx    = canvas.getContext('2d');
+    this.dpr    = window.devicePixelRatio || 1;
+    this.cs     = 12; // cell size in CSS px
+    this.cols   = 0;
+    this.rows   = 0;
+  }
+
+  resize(cols, rows) {
+    this.cols = cols;
+    this.rows = rows;
+    const maxPx = Math.min(window.innerWidth - 300, window.innerHeight - 80, 620);
+    this.cs = Math.max(4, Math.floor(maxPx / Math.max(cols, rows)));
+    const w = cols * this.cs;
+    const h = rows * this.cs;
+    this.canvas.width  = w * this.dpr;
+    this.canvas.height = h * this.dpr;
+    this.canvas.style.width  = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
+  // Draw the maze given the animation state
+  // state: { revealed: Set<"x,y">, explored: Set, solution: Set, current: {x,y}|null }
+  draw(grid, state) {
+    const { ctx, cs, cols, rows } = this;
+    const ex = cols - 2, ey = rows - 2;
+
+    // Fill everything as wall (black)
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, cols * cs, rows * cs);
+
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const key = `${x},${y}`;
+        if (!state.revealed.has(key)) continue; // still a wall square
+
+        let color;
+        if (x === 1 && y === 1)          color = '#22c55e';
+        else if (x === ex && y === ey)   color = '#ef4444';
+        else if (state.solution.has(key)) color = '#eab308';
+        else if (state.current && state.current.x === x && state.current.y === y) color = '#60a5fa';
+        else if (state.explored.has(key)) color = '#a855f7';
+        else                              color = '#e8dcc8';
+
+        ctx.fillStyle = color;
+        ctx.fillRect(x * cs, y * cs, cs, cs);
+      }
+    }
+  }
+
+  // Draw a solid black grid with no passages (initial state)
+  drawBlank(cols, rows) {
+    const { ctx, cs } = this;
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, cols * cs, rows * cs);
+  }
+}
+
+// ─── AnimationController ──────────────────────────────────────────────────────
+class AnimationController {
+  constructor(renderer, grid, steps, state, onDone) {
+    this.renderer   = renderer;
+    this.grid       = grid;
+    this.steps      = steps;
+    this.state      = state;
+    this.onDone     = onDone;
+    this.stepIndex  = 0;
+    this._playing   = false;
+    this._raf       = null;
+    this._lastTime  = null;
+    this._accum     = 0;
+    this.delay      = 50;
+  }
+
+  setSpeed(v) {
+    this.delay = Math.round(550 / Math.pow(10, (v - 1) / 4.5));
+  }
+
+  get isPlaying() { return this._playing; }
+  get isDone()    { return this.stepIndex >= this.steps.length; }
+
+  play() {
+    if (this._playing || this.isDone) return;
+    this._playing  = true;
+    this._lastTime = null;
+    this._raf = requestAnimationFrame(t => this._tick(t));
+  }
+
+  pause() {
+    this._playing = false;
+    if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
+  }
+
+  skipToEnd() {
+    this.pause();
+    while (!this.isDone) this._applyStep(this.steps[this.stepIndex++]);
+    this.state.current = null;
+    this.renderer.draw(this.grid, this.state);
+    if (this.onDone) this.onDone();
+  }
+
+  _tick(ts) {
+    if (!this._playing) return;
+    if (this._lastTime === null) this._lastTime = ts;
+    this._accum += ts - this._lastTime;
+    this._lastTime = ts;
+
+    let advanced = false;
+    while (this._accum >= this.delay && !this.isDone) {
+      this._applyStep(this.steps[this.stepIndex++]);
+      this._accum -= this.delay;
+      advanced = true;
+    }
+
+    if (advanced) this.renderer.draw(this.grid, this.state);
+
+    if (this.isDone) {
+      this._playing = false;
+      this.state.current = null;
+      this.renderer.draw(this.grid, this.state);
+      if (this.onDone) this.onDone();
+      return;
+    }
+    this._raf = requestAnimationFrame(t => this._tick(t));
+  }
+
+  _applyStep(step) {
+    if (!step.type) {
+      // Generation step: drill a cell open
+      this.state.revealed.add(`${step.x},${step.y}`);
+      this.state.current = { x: step.x, y: step.y };
+    } else if (step.type === 'explore') {
+      this.state.explored.add(`${step.x},${step.y}`);
+      this.state.current = { x: step.x, y: step.y };
+    } else if (step.type === 'solution') {
+      this.state.solution.add(`${step.x},${step.y}`);
+    }
+  }
+}
+
+// ─── UI ───────────────────────────────────────────────────────────────────────
+class UI {
+  constructor() {
+    this.canvas      = document.getElementById('mazeCanvas');
+    this.renderer    = new Renderer(this.canvas);
+    this.grid        = null;
+    this.genState    = null;
+    this.controller  = null;
+    this.genComplete = false;
+
+    this.$size      = document.getElementById('sizeSelect');
+    this.$genAlgo   = document.getElementById('genAlgoSelect');
+    this.$solveAlgo = document.getElementById('solveAlgoSelect');
+    this.$speed     = document.getElementById('speedSlider');
+    this.$speedVal  = document.getElementById('speedVal');
+    this.$btnGen    = document.getElementById('btnGenerate');
+    this.$btnSolve  = document.getElementById('btnSolve');
+    this.$btnPP     = document.getElementById('btnPlayPause');
+    this.$btnReset  = document.getElementById('btnReset');
+    this.$info      = document.getElementById('algoInfo');
+  }
+
+  init() {
+    this.$btnGen.addEventListener('click',    () => this.generate());
+    this.$btnSolve.addEventListener('click',  () => this.solve());
+    this.$btnPP.addEventListener('click',     () => this.togglePlayPause());
+    this.$btnReset.addEventListener('click',  () => this.reset());
+    this.$speed.addEventListener('input', () => {
+      this.$speedVal.textContent = this.$speed.value;
+      if (this.controller) this.controller.setSpeed(+this.$speed.value);
+    });
+    this.$genAlgo.addEventListener('change',   () => this.updateInfo());
+    this.$solveAlgo.addEventListener('change', () => this.updateInfo());
+    window.addEventListener('resize', () => {
+      const s = this.grid ? this.grid.cols : +this.$size.value;
+      this.renderer.resize(s, s);
+      if (this.grid && this.genState) {
+        this.renderer.draw(this.grid, this.genState);
+      } else {
+        this.renderer.drawBlank(s, s);
+      }
+    });
+
+    this.updateInfo();
+    const s = +this.$size.value;
+    this.renderer.resize(s, s);
+    this.renderer.drawBlank(s, s);
+    this.setButtons('idle');
+  }
+
+  updateInfo() {
+    this.$info.textContent =
+      ALGO_INFO.gen[this.$genAlgo.value] + '\n\n' +
+      ALGO_INFO.solve[this.$solveAlgo.value];
+  }
+
+  setButtons(state) {
+    this.$btnGen.disabled   = state === 'generating' || state === 'solving';
+    this.$btnSolve.disabled = state !== 'genDone' && state !== 'solveDone';
+    this.$btnPP.disabled    = state === 'idle' || state === 'genDone' || state === 'solveDone';
+    this.$btnReset.disabled = state === 'idle' || state === 'generating';
+    this.$btnPP.textContent = (state === 'generating' || state === 'solving') ? 'Pause' : 'Play';
+  }
+
+  generate() {
+    if (this.controller) this.controller.pause();
+    const size = +this.$size.value;
+    this.grid = new MazeGrid(size);
+    this.genState = { revealed: new Set(), explored: new Set(), solution: new Set(), current: null };
+    this.genComplete = false;
+    this.renderer.resize(size, size);
+    this.renderer.drawBlank(size, size);
+
+    const steps = Generators[this.$genAlgo.value](this.grid);
+    this.controller = new AnimationController(
+      this.renderer, this.grid, steps, this.genState,
+      () => { this.genComplete = true; this.setButtons('genDone'); }
+    );
+    this.controller.setSpeed(+this.$speed.value);
+    this.setButtons('generating');
+    this.controller.play();
+  }
+
+  solve() {
+    if (!this.genComplete) return;
+    // If generation controller is somehow still alive, finish it
+    if (this.controller && !this.controller.isDone) this.controller.skipToEnd();
+
+    // Reveal the full solved maze (all open cells) before solving
+    const solveState = {
+      revealed: new Set(this.genState.revealed),
+      explored: new Set(),
+      solution: new Set(),
+      current:  null,
+    };
+
+    const steps = Solvers[this.$solveAlgo.value](this.grid);
+    this.controller = new AnimationController(
+      this.renderer, this.grid, steps, solveState,
+      () => this.setButtons('solveDone')
+    );
+    this.controller.setSpeed(+this.$speed.value);
+    // Replace genState so resize re-draws correctly
+    this.genState = solveState;
+    this.setButtons('solving');
+    this.controller.play();
+  }
+
+  togglePlayPause() {
+    if (!this.controller) return;
+    if (this.controller.isPlaying) {
+      this.controller.pause();
+      this.$btnPP.textContent = 'Play';
+    } else {
+      this.controller.play();
+      this.$btnPP.textContent = 'Pause';
+    }
+  }
+
+  reset() {
+    if (this.controller) this.controller.pause();
+    this.controller  = null;
+    this.grid        = null;
+    this.genState    = null;
+    this.genComplete = false;
+    const s = +this.$size.value;
+    this.renderer.resize(s, s);
+    this.renderer.drawBlank(s, s);
+    this.setButtons('idle');
+  }
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => new UI().init());
+</script>
+</body>
+</html>
