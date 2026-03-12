@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What Time Is It?</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: linear-gradient(160deg, #4a90d9 0%, #2255aa 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
+      color: white;
+      padding: 20px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    h1 {
+      font-size: clamp(1.4rem, 5vw, 2.2rem);
+      font-weight: bold;
+      margin-bottom: 16px;
+      text-shadow: 1px 2px 6px rgba(0, 0, 0, 0.35);
+      letter-spacing: 1px;
+    }
+
+    #clock {
+      width: min(90vw, 340px);
+      height: min(90vw, 340px);
+      display: block;
+      touch-action: none;
+      cursor: default;
+      filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.4));
+    }
+
+    #clock.dragging {
+      cursor: grabbing;
+    }
+
+    #digital-display {
+      background: #1a4a99;
+      border: 3px solid #4477cc;
+      border-radius: 10px;
+      padding: 8px 36px;
+      font-size: clamp(2rem, 8vw, 2.8rem);
+      font-weight: bold;
+      letter-spacing: 4px;
+      margin: 18px 0 14px;
+      min-width: 130px;
+      text-align: center;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.45), 0 3px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    #say-btn {
+      background: linear-gradient(180deg, #55dd77 0%, #228844 100%);
+      color: white;
+      border: none;
+      border-radius: 30px;
+      padding: 13px 30px;
+      font-size: 1.15rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+      transition: transform 0.1s, box-shadow 0.1s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: inherit;
+    }
+
+    #say-btn:hover {
+      background: linear-gradient(180deg, #66ee88 0%, #33aa55 100%);
+    }
+
+    #say-btn:active {
+      transform: scale(0.96);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+    }
+
+    #instructions {
+      font-size: 0.85rem;
+      opacity: 0.75;
+      margin-top: 10px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>What Time Is It?</h1>
+
+  <svg id="clock" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+
+    <!-- Clock face -->
+    <circle cx="200" cy="200" r="178" fill="#f8f8f0" stroke="#f0c030" stroke-width="16"/>
+
+    <!-- Tick marks (built by JS) -->
+    <g id="tickMarks"></g>
+
+    <!-- Number labels (built by JS) -->
+    <g id="numberLabels"></g>
+
+    <!-- Hour hand (orange) — drawn pointing UP toward 12; group is rotated to correct position -->
+    <g id="hourHandGroup">
+      <!-- Hand line: tail 22px below center, tip 88px above center -->
+      <line x1="200" y1="222" x2="200" y2="112"
+            stroke="#ff8800" stroke-width="9" stroke-linecap="round"
+            pointer-events="none"/>
+      <!-- Drag control: small dashed circle near tip, lighter orange fill -->
+      <circle id="hourHandle" cx="200" cy="143" r="20"
+              fill="#ffcc88" stroke="#ff8800" stroke-width="2.5"
+              stroke-dasharray="6 4" stroke-linecap="round"
+              cursor="grab" data-hand="hour"/>
+    </g>
+
+    <!-- Minute hand (green) — drawn pointing UP toward 12 -->
+    <g id="minuteHandGroup">
+      <!-- Hand line: tail 22px below center, tip 138px above center -->
+      <line x1="200" y1="222" x2="200" y2="62"
+            stroke="#33aa55" stroke-width="6" stroke-linecap="round"
+            pointer-events="none"/>
+      <!-- Drag control: small dashed circle near tip, lighter green fill -->
+      <circle id="minuteHandle" cx="200" cy="93" r="18"
+              fill="#aaddbb" stroke="#33aa55" stroke-width="2.5"
+              stroke-dasharray="6 4" stroke-linecap="round"
+              cursor="grab" data-hand="minute"/>
+    </g>
+
+    <!-- Center cap (drawn last so it's on top of hands) -->
+    <circle cx="200" cy="200" r="11" fill="#f07800" pointer-events="none"/>
+    <circle cx="200" cy="200" r="5"  fill="#cc5500" pointer-events="none"/>
+
+  </svg>
+
+  <div id="digital-display">3:00</div>
+
+  <button id="say-btn">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+    </svg>
+    Say the Time!
+  </button>
+
+  <p id="instructions">Drag the circles on the hands to set the time!</p>
+
+  <script>
+    const CX = 200, CY = 200;
+    const svgEl          = document.getElementById('clock');
+    const hourHandGroup  = document.getElementById('hourHandGroup');
+    const minuteHandGroup= document.getElementById('minuteHandGroup');
+    const digitalDisplay = document.getElementById('digital-display');
+    const hourHandle     = document.getElementById('hourHandle');
+    const minuteHandle   = document.getElementById('minuteHandle');
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    let state = { hours: 3, minutes: 0 };
+
+    // ── Build tick marks ──────────────────────────────────────────────────────
+    (function buildTicks() {
+      const g = document.getElementById('tickMarks');
+      for (let i = 0; i < 60; i++) {
+        const angleDeg = i * 6 - 90;
+        const rad = angleDeg * Math.PI / 180;
+        const isHour = i % 5 === 0;
+        const r1 = 170;
+        const r2 = isHour ? 154 : 163;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', CX + r1 * Math.cos(rad));
+        line.setAttribute('y1', CY + r1 * Math.sin(rad));
+        line.setAttribute('x2', CX + r2 * Math.cos(rad));
+        line.setAttribute('y2', CY + r2 * Math.sin(rad));
+        line.setAttribute('stroke', isHour ? '#334488' : '#99aabb');
+        line.setAttribute('stroke-width', isHour ? '3' : '1.5');
+        line.setAttribute('stroke-linecap', 'round');
+        line.setAttribute('pointer-events', 'none');
+        g.appendChild(line);
+      }
+    })();
+
+    // ── Build number labels ───────────────────────────────────────────────────
+    (function buildNumbers() {
+      const g = document.getElementById('numberLabels');
+      const R = 140;
+      for (let n = 1; n <= 12; n++) {
+        const rad = (n * 30 - 90) * Math.PI / 180;
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', CX + R * Math.cos(rad));
+        text.setAttribute('y', CY + R * Math.sin(rad));
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'central');
+        text.setAttribute('font-size', '24');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('font-family', 'Arial Rounded MT Bold, Arial, sans-serif');
+        text.setAttribute('fill', '#334488');
+        text.setAttribute('pointer-events', 'none');
+        text.textContent = n;
+        g.appendChild(text);
+      }
+    })();
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    function render() {
+      const { hours, minutes } = state;
+      const minuteAngle = minutes * 6;
+      const hourAngle   = (hours % 12) * 30 + minutes * 0.5;
+      hourHandGroup.setAttribute('transform',   `rotate(${hourAngle},   ${CX}, ${CY})`);
+      minuteHandGroup.setAttribute('transform', `rotate(${minuteAngle}, ${CX}, ${CY})`);
+      digitalDisplay.textContent = `${hours}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    // ── Angle from SVG center to pointer ──────────────────────────────────────
+    function getSVGAngle(e) {
+      const rect = svgEl.getBoundingClientRect();
+      const svgX = (e.clientX - rect.left) * (400 / rect.width);
+      const svgY = (e.clientY - rect.top)  * (400 / rect.height);
+      let angle = Math.atan2(svgX - CX, -(svgY - CY)) * (180 / Math.PI);
+      if (angle < 0) angle += 360;
+      return angle;
+    }
+
+    // ── Drag state ────────────────────────────────────────────────────────────
+    let dragging        = null;
+    let activePointerId = null;
+
+    // ── Audio ─────────────────────────────────────────────────────────────────
+    let audioCtx     = null;
+    let lastTickValue = -1;
+
+    function playTick() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc  = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = 1200;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.07);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.07);
+      } catch (_) {}
+    }
+
+    // ── Drag handlers ─────────────────────────────────────────────────────────
+    function onHandlePointerDown(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (activePointerId !== null) return;
+      dragging        = e.currentTarget.dataset.hand;
+      activePointerId = e.pointerId;
+      svgEl.setPointerCapture(e.pointerId);
+      svgEl.classList.add('dragging');
+      lastTickValue = -1;
+    }
+
+    svgEl.addEventListener('pointermove', (e) => {
+      if (!dragging || e.pointerId !== activePointerId) return;
+      e.preventDefault();
+
+      const angle = getSVGAngle(e);
+
+      if (dragging === 'minute') {
+        const newMinutes = Math.round(angle / 6) % 60;
+        if (newMinutes !== lastTickValue) { playTick(); lastTickValue = newMinutes; }
+        state.minutes = newMinutes;
+      } else {
+        const raw = Math.round(angle / 30) % 12;
+        const newHours = raw === 0 ? 12 : raw;
+        if (newHours !== lastTickValue) { playTick(); lastTickValue = newHours; }
+        state.hours = newHours;
+      }
+
+      render();
+    });
+
+    svgEl.addEventListener('pointerup', (e) => {
+      if (e.pointerId !== activePointerId) return;
+      dragging        = null;
+      activePointerId = null;
+      svgEl.classList.remove('dragging');
+    });
+
+    svgEl.addEventListener('pointercancel', (e) => {
+      if (e.pointerId !== activePointerId) return;
+      dragging        = null;
+      activePointerId = null;
+      svgEl.classList.remove('dragging');
+    });
+
+    hourHandle.addEventListener('pointerdown',   onHandlePointerDown);
+    minuteHandle.addEventListener('pointerdown', onHandlePointerDown);
+
+    // ── Speech ────────────────────────────────────────────────────────────────
+    document.getElementById('say-btn').addEventListener('click', () => {
+      if (!window.speechSynthesis) { alert('Speech not supported in this browser.'); return; }
+
+      const h = state.hours;
+      const m = state.minutes;
+      const nextHour = (h % 12) + 1;
+
+      let timeStr;
+      if      (m === 0)  timeStr = `${h} o'clock`;
+      else if (m === 15) timeStr = `quarter past ${h}`;
+      else if (m === 30) timeStr = `half past ${h}`;
+      else if (m === 45) timeStr = `quarter to ${nextHour}`;
+      else if (m < 30)   timeStr = `${m} minute${m !== 1 ? 's' : ''} past ${h}`;
+      else {
+        const minsTo = 60 - m;
+        timeStr = `${minsTo} minute${minsTo !== 1 ? 's' : ''} to ${nextHour}`;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(`The time is ${timeStr}`);
+      utterance.rate  = 0.88;
+      utterance.pitch = 1.1;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
+    });
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    render();
+  </script>
+</body>
+</html>
