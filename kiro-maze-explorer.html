@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maze Explorer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+      overflow: auto;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 15px;
+      max-width: 1000px;
+      width: 100%;
+      max-height: calc(100vh - 20px);
+      overflow: auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 1.4em;
+    }
+
+    .content {
+      display: flex;
+      gap: 15px;
+    }
+
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    canvas {
+      border: 2px solid #333;
+      background: white;
+    }
+
+    .controls {
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .control-group {
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .control-group h3 {
+      margin-bottom: 6px;
+      color: #555;
+      font-size: 0.9em;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 3px;
+      color: #666;
+      font-size: 0.8em;
+    }
+
+    select, button {
+      width: 100%;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.8em;
+      margin-bottom: 6px;
+    }
+
+    select {
+      background: white;
+      cursor: pointer;
+    }
+
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #5568d3;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .button-group button {
+      margin-bottom: 0;
+    }
+    
+    .button-group-full {
+      display: block;
+    }
+
+    .info-panel {
+      background: #e8f4f8;
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 0.75em;
+      color: #555;
+      line-height: 1.2;
+      min-height: 40px;
+    }
+
+    .legend {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75em;
+    }
+
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border: 1px solid #333;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 900px) {
+      .content {
+        flex-direction: column;
+      }
+
+      .controls {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Maze Explorer</h1>
+    <div class="content">
+      <div class="canvas-container">
+        <canvas id="mazeCanvas" width="450" height="450"></canvas>
+      </div>
+      <div class="controls">
+        <div class="control-group">
+          <h3>Maze Settings</h3>
+          <label>Size:</label>
+          <select id="size-select">
+            <option value="small">Small (15x15)</option>
+            <option value="medium" selected>Medium (25x25)</option>
+            <option value="large">Large (35x35)</option>
+          </select>
+          <label>Generation Algorithm:</label>
+          <select id="gen-algo-select">
+            <option value="recursive-backtracking" selected>Recursive Backtracking</option>
+            <option value="prims">Prim's Algorithm</option>
+            <option value="kruskals">Kruskal's Algorithm</option>
+          </select>
+          <button id="generate-btn">Generate Maze</button>
+        </div>
+
+        <div class="control-group">
+          <h3>Solving Settings</h3>
+          <label>Solving Algorithm:</label>
+          <select id="solve-algo-select">
+            <option value="bfs" selected>Breadth-First Search</option>
+            <option value="dfs">Depth-First Search</option>
+            <option value="astar">A* Search</option>
+          </select>
+          <label>Animation Speed:</label>
+          <select id="speed-select">
+            <option value="slow">Slow</option>
+            <option value="medium" selected>Medium</option>
+            <option value="fast">Fast</option>
+          </select>
+          <div class="button-group">
+            <button id="play-btn">Play</button>
+            <button id="pause-btn">Pause</button>
+            <button id="reset-btn">Reset</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Algorithm Info</h3>
+          <div id="gen-algo-info" class="info-panel">
+            Uses depth-first search with backtracking. Creates long, winding passages with few dead ends.
+          </div>
+          <div id="solve-algo-info" class="info-panel">
+            Explores all cells at distance k before exploring cells at distance k+1. Guarantees shortest path.
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3>Legend</h3>
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: #00FF00;"></div>
+              <span>Start Cell</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #FF0000;"></div>
+              <span>End Cell</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #FFFF00;"></div>
+              <span>Solution Path</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #9370DB;"></div>
+              <span>Explored Cell</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #000000;"></div>
+              <span>Wall</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #FFFFFF;"></div>
+              <span>Path</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // Core Data Models
+    // ============================================================================
+
+    /**
+     * Cell class represents a single cell in the maze grid
+     */
+    class Cell {
+      constructor() {
+        this.isWall = true;        // Start with all walls
+        this.isExplored = false;   // Visited during pathfinding
+        this.isPath = false;       // Part of solution path
+        this.parent = null;        // Parent cell for path reconstruction
+      }
+    }
+
+    /**
+     * Grid class represents the maze as a 2D array of cells
+     */
+    class Grid {
+      constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        this.cells = Array(height).fill(null).map(() => 
+          Array(width).fill(null).map(() => new Cell())
+        );
+        this.start = { row: 0, col: 0 };
+        this.end = { row: height - 1, col: width - 1 };
+      }
+
+      /**
+       * Get cell at specified position
+       * @param {number} row - Row index
+       * @param {number} col - Column index
+       * @returns {Cell|null} Cell at position or null if invalid
+       */
+      getCell(row, col) {
+        if (!this.isValid(row, col)) {
+          return null;
+        }
+        return this.cells[row][col];
+      }
+
+      /**
+       * Get valid neighboring cells (up, down, left, right)
+       * @param {number} row - Row index
+       * @param {number} col - Column index
+       * @returns {Array<{row: number, col: number}>} Array of neighbor positions
+       */
+      getNeighbors(row, col) {
+        const neighbors = [];
+        const directions = [
+          { row: -1, col: 0 },  // Up
+          { row: 1, col: 0 },   // Down
+          { row: 0, col: -1 },  // Left
+          { row: 0, col: 1 }    // Right
+        ];
+
+        for (const dir of directions) {
+          const newRow = row + dir.row;
+          const newCol = col + dir.col;
+          if (this.isValid(newRow, newCol)) {
+            neighbors.push({ row: newRow, col: newCol });
+          }
+        }
+
+        return neighbors;
+      }
+
+      /**
+       * Check if position is within grid bounds
+       * @param {number} row - Row index
+       * @param {number} col - Column index
+       * @returns {boolean} True if position is valid
+       */
+      isValid(row, col) {
+        return row >= 0 && row < this.height && col >= 0 && col < this.width;
+      }
+
+      /**
+       * Reset grid state (clear explored and path markings)
+       */
+      reset() {
+        for (let row = 0; row < this.height; row++) {
+          for (let col = 0; col < this.width; col++) {
+            const cell = this.cells[row][col];
+            cell.isExplored = false;
+            cell.isPath = false;
+            cell.parent = null;
+          }
+        }
+      }
+    }
+
+    // ============================================================================
+    // Maze Generation Algorithms
+    // ============================================================================
+
+    /**
+     * MazeGenerator class handles maze generation using various algorithms
+     */
+    class MazeGenerator {
+      /**
+       * Generate a maze using the specified algorithm
+       * @param {Grid} grid - The grid to generate the maze in
+       * @param {string} algorithm - Algorithm name: 'recursive-backtracking', 'prims', or 'kruskals'
+       */
+      generate(grid, algorithm) {
+        switch(algorithm) {
+          case 'recursive-backtracking':
+            return this.recursiveBacktracking(grid);
+          case 'prims':
+            return this.prims(grid);
+          case 'kruskals':
+            return this.kruskals(grid);
+          default:
+            return this.recursiveBacktracking(grid);
+        }
+      }
+
+      /**
+       * Recursive Backtracking algorithm (DFS-based)
+       * Creates long, winding passages with few dead ends
+       * @param {Grid} grid - The grid to generate the maze in
+       */
+      recursiveBacktracking(grid) {
+        // Start at a random cell
+        const startRow = Math.floor(Math.random() * grid.height);
+        const startCol = Math.floor(Math.random() * grid.width);
+        
+        // Mark starting cell as path
+        grid.getCell(startRow, startCol).isWall = false;
+        
+        // Stack for DFS
+        const stack = [{ row: startRow, col: startCol }];
+        const visited = new Set();
+        visited.add(`${startRow},${startCol}`);
+        
+        while (stack.length > 0) {
+          const current = stack[stack.length - 1];
+          
+          // Get unvisited neighbors (2 cells away to leave walls between)
+          const unvisitedNeighbors = this.getUnvisitedNeighbors(grid, current.row, current.col, visited);
+          
+          if (unvisitedNeighbors.length > 0) {
+            // Choose random unvisited neighbor
+            const next = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)];
+            
+            // Remove wall between current and next
+            const wallRow = Math.floor((current.row + next.row) / 2);
+            const wallCol = Math.floor((current.col + next.col) / 2);
+            grid.getCell(wallRow, wallCol).isWall = false;
+            
+            // Mark next cell as path
+            grid.getCell(next.row, next.col).isWall = false;
+            
+            // Mark as visited and add to stack
+            visited.add(`${next.row},${next.col}`);
+            stack.push(next);
+          } else {
+            // Backtrack
+            stack.pop();
+          }
+        }
+        
+        // Ensure start and end are paths
+        grid.getCell(grid.start.row, grid.start.col).isWall = false;
+        grid.getCell(grid.end.row, grid.end.col).isWall = false;
+      }
+
+      /**
+       * Get unvisited neighbors that are 2 cells away (for maze generation)
+       * @param {Grid} grid - The grid
+       * @param {number} row - Current row
+       * @param {number} col - Current column
+       * @param {Set} visited - Set of visited cell keys
+       * @returns {Array<{row: number, col: number}>} Array of unvisited neighbors
+       */
+      getUnvisitedNeighbors(grid, row, col, visited) {
+        const neighbors = [];
+        const directions = [
+          { row: -2, col: 0 },  // Up
+          { row: 2, col: 0 },   // Down
+          { row: 0, col: -2 },  // Left
+          { row: 0, col: 2 }    // Right
+        ];
+        
+        for (const dir of directions) {
+          const newRow = row + dir.row;
+          const newCol = col + dir.col;
+          const key = `${newRow},${newCol}`;
+          
+          if (grid.isValid(newRow, newCol) && !visited.has(key)) {
+            neighbors.push({ row: newRow, col: newCol });
+          }
+        }
+        
+        return neighbors;
+      }
+
+      /**
+       * Prim's Algorithm (Minimum spanning tree approach)
+       * Creates mazes with many short dead ends
+       * @param {Grid} grid - The grid to generate the maze in
+       */
+      prims(grid) {
+        // Start at a random cell (must be on odd coordinates for proper maze structure)
+        const startRow = Math.floor(Math.random() * Math.floor(grid.height / 2)) * 2;
+        const startCol = Math.floor(Math.random() * Math.floor(grid.width / 2)) * 2;
+        
+        // Mark starting cell as path
+        grid.getCell(startRow, startCol).isWall = false;
+        
+        // Frontier list of walls (cells that are 2 steps away)
+        const frontier = [];
+        const visited = new Set();
+        visited.add(`${startRow},${startCol}`);
+        
+        // Add neighboring cells (2 steps away) to frontier
+        this.addCellsToFrontier(grid, startRow, startCol, frontier, visited);
+        
+        while (frontier.length > 0) {
+          // Pick random cell from frontier
+          const randomIndex = Math.floor(Math.random() * frontier.length);
+          const current = frontier.splice(randomIndex, 1)[0];
+          const currentKey = `${current.row},${current.col}`;
+          
+          if (visited.has(currentKey)) continue;
+          
+          // Find a visited neighbor (2 steps away)
+          const neighbors = this.getNeighborCells(grid, current.row, current.col);
+          const visitedNeighbors = neighbors.filter(n => visited.has(`${n.row},${n.col}`));
+          
+          if (visitedNeighbors.length > 0) {
+            // Pick random visited neighbor
+            const neighbor = visitedNeighbors[Math.floor(Math.random() * visitedNeighbors.length)];
+            
+            // Carve path between current and neighbor (remove wall between them)
+            const wallRow = Math.floor((current.row + neighbor.row) / 2);
+            const wallCol = Math.floor((current.col + neighbor.col) / 2);
+            grid.getCell(wallRow, wallCol).isWall = false;
+            grid.getCell(current.row, current.col).isWall = false;
+            
+            // Mark as visited and add new neighbors to frontier
+            visited.add(currentKey);
+            this.addCellsToFrontier(grid, current.row, current.col, frontier, visited);
+          }
+        }
+        
+        // Ensure start and end are paths
+        grid.getCell(grid.start.row, grid.start.col).isWall = false;
+        grid.getCell(grid.end.row, grid.end.col).isWall = false;
+      }
+
+      /**
+       * Add neighboring cells (2 steps away) to the frontier
+       * @param {Grid} grid - The grid
+       * @param {number} row - Cell row
+       * @param {number} col - Cell column
+       * @param {Array} frontier - Frontier array
+       * @param {Set} visited - Set of visited cells
+       */
+      addCellsToFrontier(grid, row, col, frontier, visited) {
+        const neighbors = this.getNeighborCells(grid, row, col);
+        
+        for (const neighbor of neighbors) {
+          const key = `${neighbor.row},${neighbor.col}`;
+          if (!visited.has(key)) {
+            // Check if already in frontier
+            const alreadyInFrontier = frontier.some(f => f.row === neighbor.row && f.col === neighbor.col);
+            if (!alreadyInFrontier) {
+              frontier.push(neighbor);
+            }
+          }
+        }
+      }
+
+      /**
+       * Get neighboring cells that are 2 steps away
+       * @param {Grid} grid - The grid
+       * @param {number} row - Cell row
+       * @param {number} col - Cell column
+       * @returns {Array<{row: number, col: number}>} Neighbor cells
+       */
+      getNeighborCells(grid, row, col) {
+        const neighbors = [];
+        const directions = [
+          { row: -2, col: 0 },  // Up
+          { row: 2, col: 0 },   // Down
+          { row: 0, col: -2 },  // Left
+          { row: 0, col: 2 }    // Right
+        ];
+        
+        for (const dir of directions) {
+          const newRow = row + dir.row;
+          const newCol = col + dir.col;
+          
+          if (grid.isValid(newRow, newCol)) {
+            neighbors.push({ row: newRow, col: newCol });
+          }
+        }
+        
+        return neighbors;
+      }
+
+      /**
+       * Kruskal's Algorithm (Union-find based approach)
+       * Creates mazes with uniform distribution of passages
+       * @param {Grid} grid - The grid to generate the maze in
+       */
+      kruskals(grid) {
+        // Create union-find structure (each cell is its own set initially)
+        // Only consider cells at even coordinates (cells, not walls)
+        const parent = {};
+        const cells = [];
+        
+        for (let row = 0; row < grid.height; row += 2) {
+          for (let col = 0; col < grid.width; col += 2) {
+            const key = `${row},${col}`;
+            parent[key] = key;
+            cells.push({ row, col });
+            // Mark cell as path
+            grid.getCell(row, col).isWall = false;
+          }
+        }
+        
+        // Helper functions for union-find
+        const find = (key) => {
+          if (parent[key] !== key) {
+            parent[key] = find(parent[key]); // Path compression
+          }
+          return parent[key];
+        };
+        
+        const union = (key1, key2) => {
+          const root1 = find(key1);
+          const root2 = find(key2);
+          if (root1 !== root2) {
+            parent[root1] = root2;
+            return true;
+          }
+          return false;
+        };
+        
+        // Create list of all possible walls between adjacent cells
+        const walls = [];
+        for (let row = 0; row < grid.height; row += 2) {
+          for (let col = 0; col < grid.width; col += 2) {
+            // Add wall to the right (if there's a cell to the right)
+            if (col + 2 < grid.width) {
+              walls.push({
+                cell1: { row, col },
+                cell2: { row, col: col + 2 },
+                wall: { row, col: col + 1 }
+              });
+            }
+            // Add wall below (if there's a cell below)
+            if (row + 2 < grid.height) {
+              walls.push({
+                cell1: { row, col },
+                cell2: { row: row + 2, col },
+                wall: { row: row + 1, col }
+              });
+            }
+          }
+        }
+        
+        // Shuffle walls randomly
+        for (let i = walls.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [walls[i], walls[j]] = [walls[j], walls[i]];
+        }
+        
+        // Process walls: if cells on both sides are in different sets, remove wall and union
+        for (const wallInfo of walls) {
+          const key1 = `${wallInfo.cell1.row},${wallInfo.cell1.col}`;
+          const key2 = `${wallInfo.cell2.row},${wallInfo.cell2.col}`;
+          
+          if (union(key1, key2)) {
+            // Remove the wall between the cells
+            grid.getCell(wallInfo.wall.row, wallInfo.wall.col).isWall = false;
+          }
+        }
+        
+        // Ensure start and end are paths
+        grid.getCell(grid.start.row, grid.start.col).isWall = false;
+        grid.getCell(grid.end.row, grid.end.col).isWall = false;
+      }
+    }
+
+    // ============================================================================
+    // Visualization
+    // ============================================================================
+
+    /**
+     * Visualizer class handles rendering the maze on Canvas
+     */
+    class Visualizer {
+      /**
+       * @param {HTMLCanvasElement} canvas - The canvas element
+       */
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.cellSize = 0;
+        this.grid = null;
+      }
+
+      /**
+       * Set the grid to visualize and render it
+       * @param {Grid} grid - The grid to visualize
+       */
+      setGrid(grid) {
+        this.grid = grid;
+        this.calculateCellSize();
+        this.drawGrid();
+      }
+
+      /**
+       * Calculate cell size to fit grid to canvas with padding
+       */
+      calculateCellSize() {
+        if (!this.grid) return;
+        const padding = 20;
+        const availableWidth = this.canvas.width - 2 * padding;
+        const availableHeight = this.canvas.height - 2 * padding;
+        this.cellSize = Math.min(
+          availableWidth / this.grid.width,
+          availableHeight / this.grid.height
+        );
+        this.padding = padding;
+      }
+
+      /**
+       * Draw the entire grid
+       */
+      drawGrid() {
+        if (!this.grid) return;
+        
+        // Clear canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Draw all cells
+        for (let row = 0; row < this.grid.height; row++) {
+          for (let col = 0; col < this.grid.width; col++) {
+            this.drawCell(row, col);
+          }
+        }
+      }
+
+      /**
+       * Draw a single cell
+       * @param {number} row - Cell row
+       * @param {number} col - Cell column
+       */
+      drawCell(row, col) {
+        if (!this.grid) return;
+        
+        const cell = this.grid.getCell(row, col);
+        if (!cell) return;
+        
+        const padding = this.padding || 0;
+        const x = padding + col * this.cellSize;
+        const y = padding + row * this.cellSize;
+        
+        // Determine color based on cell state
+        let color;
+        if (row === this.grid.start.row && col === this.grid.start.col) {
+          color = '#00FF00'; // Green for start
+        } else if (row === this.grid.end.row && col === this.grid.end.col) {
+          color = '#FF0000'; // Red for end
+        } else if (cell.isPath) {
+          color = '#FFFF00'; // Yellow for solution path
+        } else if (cell.isExplored) {
+          color = '#9370DB'; // Purple for explored
+        } else if (cell.isWall) {
+          color = '#000000'; // Black for walls
+        } else {
+          color = '#FFFFFF'; // White for open paths
+        }
+        
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(x, y, this.cellSize, this.cellSize);
+        
+        // Draw grid lines
+        this.ctx.strokeStyle = '#CCCCCC';
+        this.ctx.strokeRect(x, y, this.cellSize, this.cellSize);
+      }
+    }
+
+    // ============================================================================
+    // Maze Solving Algorithms
+    // ============================================================================
+
+    /**
+     * MazeSolver class handles pathfinding using various algorithms
+     */
+    class MazeSolver {
+      /**
+       * @param {Object} visualizer - Reference to visualizer for animation
+       */
+      constructor(visualizer) {
+        this.visualizer = visualizer;
+        this.animationSpeed = 50;
+        this.isPaused = false;
+        this.isStopped = false;
+      }
+
+      /**
+       * Solve the maze using the specified algorithm
+       * @param {Grid} grid - The grid to solve
+       * @param {string} algorithm - Algorithm name: 'bfs', 'dfs', or 'astar'
+       * @returns {Promise<boolean>} True if solution found, false otherwise
+       */
+      async solve(grid, algorithm) {
+        // Reset grid state before solving
+        grid.reset();
+        
+        switch(algorithm) {
+          case 'bfs':
+            return await this.bfs(grid);
+          case 'dfs':
+            return await this.dfs(grid);
+          case 'astar':
+            return await this.astar(grid);
+          default:
+            return await this.bfs(grid);
+        }
+      }
+
+      /**
+       * Breadth-First Search algorithm
+       * Guarantees shortest path by exploring all cells at distance k before k+1
+       * @param {Grid} grid - The grid to solve
+       * @returns {Promise<boolean>} True if solution found
+       */
+      async bfs(grid) {
+        const queue = [{ row: grid.start.row, col: grid.start.col }];
+        const visited = new Set();
+        visited.add(`${grid.start.row},${grid.start.col}`);
+        
+        const startCell = grid.getCell(grid.start.row, grid.start.col);
+        startCell.isExplored = true;
+        
+        while (queue.length > 0) {
+          if (this.isStopped) return false;
+          
+          const current = queue.shift();
+          
+          // Check if we reached the end
+          if (current.row === grid.end.row && current.col === grid.end.col) {
+            this.reconstructPath(grid, current.row, current.col);
+            return true;
+          }
+          
+          // Explore neighbors
+          const neighbors = grid.getNeighbors(current.row, current.col);
+          for (const neighbor of neighbors) {
+            const key = `${neighbor.row},${neighbor.col}`;
+            const cell = grid.getCell(neighbor.row, neighbor.col);
+            
+            // Skip if already visited, is a wall, or invalid
+            if (visited.has(key) || cell.isWall || !cell) {
+              continue;
+            }
+            
+            // Mark as explored and set parent
+            cell.isExplored = true;
+            cell.parent = { row: current.row, col: current.col };
+            visited.add(key);
+            queue.push(neighbor);
+            
+            // Visualize this step
+            await this.visualizeStep(neighbor.row, neighbor.col);
+          }
+        }
+        
+        return false; // No solution found
+      }
+
+      /**
+       * Depth-First Search algorithm
+       * Explores as far as possible along each branch before backtracking
+       * @param {Grid} grid - The grid to solve
+       * @returns {Promise<boolean>} True if solution found
+       */
+      async dfs(grid) {
+        const stack = [{ row: grid.start.row, col: grid.start.col }];
+        const visited = new Set();
+        visited.add(`${grid.start.row},${grid.start.col}`);
+        
+        const startCell = grid.getCell(grid.start.row, grid.start.col);
+        startCell.isExplored = true;
+        
+        while (stack.length > 0) {
+          if (this.isStopped) return false;
+          
+          const current = stack.pop();
+          
+          // Check if we reached the end
+          if (current.row === grid.end.row && current.col === grid.end.col) {
+            this.reconstructPath(grid, current.row, current.col);
+            return true;
+          }
+          
+          // Explore neighbors
+          const neighbors = grid.getNeighbors(current.row, current.col);
+          for (const neighbor of neighbors) {
+            const key = `${neighbor.row},${neighbor.col}`;
+            const cell = grid.getCell(neighbor.row, neighbor.col);
+            
+            // Skip if already visited, is a wall, or invalid
+            if (visited.has(key) || cell.isWall || !cell) {
+              continue;
+            }
+            
+            // Mark as explored and set parent
+            cell.isExplored = true;
+            cell.parent = { row: current.row, col: current.col };
+            visited.add(key);
+            stack.push(neighbor);
+            
+            // Visualize this step
+            await this.visualizeStep(neighbor.row, neighbor.col);
+          }
+        }
+        
+        return false; // No solution found
+      }
+
+      /**
+       * A* Search algorithm
+       * Uses Manhattan distance heuristic to guide search toward goal
+       * @param {Grid} grid - The grid to solve
+       * @returns {Promise<boolean>} True if solution found
+       */
+      async astar(grid) {
+        // Priority queue implementation using array (sorted by f-score)
+        const openSet = [{
+          row: grid.start.row,
+          col: grid.start.col,
+          g: 0,
+          h: this.manhattanDistance(grid.start.row, grid.start.col, grid.end.row, grid.end.col),
+          f: this.manhattanDistance(grid.start.row, grid.start.col, grid.end.row, grid.end.col)
+        }];
+        
+        const visited = new Set();
+        const gScores = {}; // Track best g-score for each cell
+        gScores[`${grid.start.row},${grid.start.col}`] = 0;
+        
+        const startCell = grid.getCell(grid.start.row, grid.start.col);
+        startCell.isExplored = true;
+        
+        while (openSet.length > 0) {
+          if (this.isStopped) return false;
+          
+          // Get cell with lowest f-score (this is the key difference from BFS)
+          openSet.sort((a, b) => a.f - b.f);
+          const current = openSet.shift();
+          const currentKey = `${current.row},${current.col}`;
+          
+          // Skip if already visited
+          if (visited.has(currentKey)) {
+            continue;
+          }
+          
+          visited.add(currentKey);
+          
+          // Mark as explored and visualize (only when we actually visit it)
+          const currentCell = grid.getCell(current.row, current.col);
+          if (currentCell && !currentCell.isExplored) {
+            currentCell.isExplored = true;
+            await this.visualizeStep(current.row, current.col);
+          }
+          
+          // Check if we reached the end
+          if (current.row === grid.end.row && current.col === grid.end.col) {
+            this.reconstructPath(grid, current.row, current.col);
+            return true;
+          }
+          
+          // Explore neighbors
+          const neighbors = grid.getNeighbors(current.row, current.col);
+          for (const neighbor of neighbors) {
+            const key = `${neighbor.row},${neighbor.col}`;
+            const cell = grid.getCell(neighbor.row, neighbor.col);
+            
+            // Skip if already visited, is a wall, or invalid
+            if (visited.has(key) || cell.isWall || !cell) {
+              continue;
+            }
+            
+            // Calculate scores
+            const tentativeG = current.g + 1;
+            
+            // Skip if we've found a better path to this cell already
+            if (gScores[key] !== undefined && tentativeG >= gScores[key]) {
+              continue;
+            }
+            
+            // This is the best path to this cell so far
+            gScores[key] = tentativeG;
+            const h = this.manhattanDistance(neighbor.row, neighbor.col, grid.end.row, grid.end.col);
+            const f = tentativeG + h;
+            
+            // Set parent for path reconstruction
+            cell.parent = { row: current.row, col: current.col };
+            
+            // Add to open set (don't mark as explored yet - only when we visit it)
+            openSet.push({
+              row: neighbor.row,
+              col: neighbor.col,
+              g: tentativeG,
+              h: h,
+              f: f
+            });
+          }
+        }
+        
+        return false; // No solution found
+      }
+
+      /**
+       * Calculate Manhattan distance between two points
+       * @param {number} row1 - First point row
+       * @param {number} col1 - First point column
+       * @param {number} row2 - Second point row
+       * @param {number} col2 - Second point column
+       * @returns {number} Manhattan distance
+       */
+      manhattanDistance(row1, col1, row2, col2) {
+        return Math.abs(row1 - row2) + Math.abs(col1 - col2);
+      }
+
+      /**
+       * Reconstruct the solution path by following parent pointers
+       * @param {Grid} grid - The grid
+       * @param {number} endRow - End cell row
+       * @param {number} endCol - End cell column
+       */
+      reconstructPath(grid, endRow, endCol) {
+        let current = { row: endRow, col: endCol };
+        
+        while (current) {
+          const cell = grid.getCell(current.row, current.col);
+          if (cell) {
+            cell.isPath = true;
+            current = cell.parent;
+          } else {
+            break;
+          }
+        }
+        
+        // Redraw the grid to show the solution path
+        if (this.visualizer) {
+          this.visualizer.drawGrid();
+        }
+      }
+
+      /**
+       * Visualize a single step of the algorithm with animation delay
+       * @param {number} row - Cell row
+       * @param {number} col - Cell column
+       */
+      async visualizeStep(row, col) {
+        if (this.isStopped) return;
+        
+        // Wait while paused
+        while (this.isPaused && !this.isStopped) {
+          await this.sleep(100);
+        }
+        
+        // Draw the cell
+        if (this.visualizer) {
+          this.visualizer.drawCell(row, col);
+        }
+        
+        // Animation delay
+        await this.sleep(this.animationSpeed);
+      }
+
+      /**
+       * Sleep for specified milliseconds
+       * @param {number} ms - Milliseconds to sleep
+       * @returns {Promise} Promise that resolves after delay
+       */
+      sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+    }
+
+    // ============================================================================
+    // Control Panel
+    // ============================================================================
+
+    /**
+     * ControlPanel class handles UI interactions and coordinates components
+     */
+    class ControlPanel {
+      /**
+       * @param {MazeGenerator} mazeGenerator - Maze generator instance
+       * @param {MazeSolver} mazeSolver - Maze solver instance
+       * @param {Visualizer} visualizer - Visualizer instance
+       */
+      constructor(mazeGenerator, mazeSolver, visualizer) {
+        this.mazeGenerator = mazeGenerator;
+        this.mazeSolver = mazeSolver;
+        this.visualizer = visualizer;
+        this.currentGrid = null;
+        
+        this.initializeEventListeners();
+      }
+
+      /**
+       * Initialize all event listeners for UI controls
+       */
+      initializeEventListeners() {
+        // Size selection
+        document.getElementById('size-select').addEventListener('change', 
+          (e) => this.handleSizeChange(e.target.value));
+        
+        // Generation algorithm selection
+        document.getElementById('gen-algo-select').addEventListener('change',
+          (e) => this.handleGenAlgoChange(e.target.value));
+        
+        // Solving algorithm selection
+        document.getElementById('solve-algo-select').addEventListener('change',
+          (e) => this.handleSolveAlgoChange(e.target.value));
+        
+        // Control buttons
+        document.getElementById('generate-btn').addEventListener('click',
+          () => this.generateMaze());
+        document.getElementById('play-btn').addEventListener('click',
+          () => this.play());
+        document.getElementById('pause-btn').addEventListener('click',
+          () => this.pause());
+        document.getElementById('reset-btn').addEventListener('click',
+          () => this.reset());
+        
+        // Speed control
+        document.getElementById('speed-select').addEventListener('change',
+          (e) => this.handleSpeedChange(e.target.value));
+      }
+
+      /**
+       * Handle size selection change
+       * @param {string} size - Selected size ('small', 'medium', or 'large')
+       */
+      handleSizeChange(size) {
+        // Size change will take effect on next generation
+        console.log('Size changed to:', size);
+      }
+
+      /**
+       * Handle generation algorithm selection change
+       * @param {string} algorithm - Selected algorithm
+       */
+      handleGenAlgoChange(algorithm) {
+        this.updateGenAlgoInfo(algorithm);
+      }
+
+      /**
+       * Handle solving algorithm selection change
+       * @param {string} algorithm - Selected algorithm
+       */
+      handleSolveAlgoChange(algorithm) {
+        this.updateSolveAlgoInfo(algorithm);
+      }
+
+      /**
+       * Get selected size from dropdown
+       * @returns {number} Grid size (15, 25, or 35)
+       */
+      getSelectedSize() {
+        const sizeSelect = document.getElementById('size-select');
+        const sizeMap = {
+          'small': 15,
+          'medium': 25,
+          'large': 35
+        };
+        return sizeMap[sizeSelect.value] || 25;
+      }
+
+      /**
+       * Get selected generation algorithm from dropdown
+       * @returns {string} Algorithm name
+       */
+      getSelectedGenAlgorithm() {
+        const genAlgoSelect = document.getElementById('gen-algo-select');
+        return genAlgoSelect.value;
+      }
+
+      /**
+       * Get selected solving algorithm from dropdown
+       * @returns {string} Algorithm name
+       */
+      getSelectedSolveAlgorithm() {
+        const solveAlgoSelect = document.getElementById('solve-algo-select');
+        return solveAlgoSelect.value;
+      }
+
+      /**
+       * Generate a new maze with current settings
+       */
+      generateMaze() {
+        const size = this.getSelectedSize();
+        const algorithm = this.getSelectedGenAlgorithm();
+        
+        // Create new grid
+        this.currentGrid = new Grid(size, size);
+        
+        // Generate maze
+        this.mazeGenerator.generate(this.currentGrid, algorithm);
+        
+        // Update visualizer
+        this.visualizer.setGrid(this.currentGrid);
+        
+        // Update algorithm info
+        this.updateGenAlgoInfo(algorithm);
+        
+        console.log('Maze generated:', size, 'x', size, 'using', algorithm);
+      }
+
+      /**
+       * Start solving the maze with animation
+       */
+      async play() {
+        if (!this.currentGrid) {
+          alert('Please generate a maze first!');
+          return;
+        }
+        
+        const algorithm = this.getSelectedSolveAlgorithm();
+        this.mazeSolver.isPaused = false;
+        this.mazeSolver.isStopped = false;
+        
+        console.log('Starting to solve maze using', algorithm);
+        await this.mazeSolver.solve(this.currentGrid, algorithm);
+      }
+
+      /**
+       * Pause the solving animation
+       */
+      pause() {
+        this.mazeSolver.isPaused = true;
+        console.log('Animation paused');
+      }
+
+      /**
+       * Reset the maze to unsolved state
+       */
+      reset() {
+        if (!this.currentGrid) return;
+        
+        this.mazeSolver.isStopped = true;
+        this.currentGrid.reset();
+        this.visualizer.drawGrid();
+        
+        console.log('Maze reset');
+      }
+
+      /**
+       * Handle speed selection change
+       * @param {string} speed - Selected speed ('slow', 'medium', or 'fast')
+       */
+      handleSpeedChange(speed) {
+        const speedMap = {
+          'slow': 100,
+          'medium': 50,
+          'fast': 10
+        };
+        this.mazeSolver.animationSpeed = speedMap[speed] || 50;
+        console.log('Animation speed changed to:', speed, '(' + this.mazeSolver.animationSpeed + 'ms)');
+      }
+
+      /**
+       * Update generation algorithm information panel
+       * @param {string} algorithm - Algorithm name
+       */
+      updateGenAlgoInfo(algorithm) {
+        const info = {
+          'recursive-backtracking': 'Uses depth-first search with backtracking. Creates long, winding passages with few dead ends.',
+          'prims': 'Uses Prim\'s minimum spanning tree algorithm. Creates mazes with many short dead ends.',
+          'kruskals': 'Uses Kruskal\'s minimum spanning tree algorithm. Creates mazes with a more uniform distribution of passages.'
+        };
+        document.getElementById('gen-algo-info').textContent = info[algorithm] || '';
+      }
+
+      /**
+       * Update solving algorithm information panel
+       * @param {string} algorithm - Algorithm name
+       */
+      updateSolveAlgoInfo(algorithm) {
+        const info = {
+          'bfs': 'Explores all cells at distance k before exploring cells at distance k+1. Guarantees shortest path.',
+          'dfs': 'Explores as far as possible along each branch before backtracking. Does not guarantee shortest path.',
+          'astar': 'Uses Manhattan distance heuristic to guide search toward goal. Guarantees shortest path with optimal heuristic.'
+        };
+        document.getElementById('solve-algo-info').textContent = info[algorithm] || '';
+      }
+    }
+
+    // ============================================================================
+    // Application Initialization
+    // ============================================================================
+
+    // Get canvas element
+    const canvas = document.getElementById('mazeCanvas');
+
+    // Initialize visualizer
+    const visualizer = new Visualizer(canvas);
+
+    // Initialize maze generator
+    const mazeGenerator = new MazeGenerator();
+
+    // Initialize maze solver
+    const mazeSolver = new MazeSolver(visualizer);
+
+    // Initialize control panel
+    const controlPanel = new ControlPanel(mazeGenerator, mazeSolver, visualizer);
+
+    // Generate initial maze with default settings (Medium size, Recursive Backtracking)
+    controlPanel.generateMaze();
+
+    console.log('Maze Explorer initialized');
+  </script>
+</body>
+</html>
