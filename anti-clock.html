@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description"
+    content="A fun clock game for children learning to tell time. Drag the hands to match the target time!">
+  <title>What Time Is It? - Clock Game</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: linear-gradient(180deg, #2563eb 0%, #1e40af 40%, #1e3a8a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: white;
+    }
+
+    #game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      max-width: 500px;
+      padding: 10px 20px;
+      gap: 12px;
+    }
+
+    h1#title {
+      font-size: clamp(1.6rem, 5vw, 2.4rem);
+      font-weight: 900;
+      text-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+
+    #score-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+
+    .score-item {
+      background: rgba(255, 255, 255, 0.15);
+      padding: 4px 14px;
+      border-radius: 20px;
+      backdrop-filter: blur(6px);
+      font-size: 0.9rem;
+    }
+
+    #canvas-wrapper {
+      position: relative;
+      width: min(80vw, 380px);
+      height: min(80vw, 380px);
+    }
+
+    #clockCanvas {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    #clockCanvas:active {
+      cursor: grabbing;
+    }
+
+    #time-display {
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 16px;
+      padding: 10px 36px;
+      font-size: clamp(2.2rem, 8vw, 3.2rem);
+      font-weight: 800;
+      letter-spacing: 4px;
+      text-align: center;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      min-width: 180px;
+      transition: transform 0.3s ease, background 0.3s ease;
+    }
+
+    #time-display.correct {
+      background: rgba(34, 197, 94, 0.4);
+      transform: scale(1.05);
+    }
+
+    #time-display.incorrect {
+      background: rgba(239, 68, 68, 0.4);
+      transform: scale(1.05);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 380px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border: none;
+      border-radius: 50px;
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(1rem, 3vw, 1.25rem);
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      outline: none;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    #btn-speak {
+      background: linear-gradient(180deg, #65a30d 0%, #4d7c0f 100%);
+      color: white;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    #btn-check {
+      background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    #btn-next {
+      background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+      color: white;
+      flex: 1;
+      min-width: 140px;
+      display: none;
+    }
+
+    #instruction {
+      font-size: clamp(0.85rem, 2.5vw, 1rem);
+      font-weight: 600;
+      opacity: 0.85;
+      text-align: center;
+      min-height: 1.5em;
+    }
+
+    #difficulty-selector {
+      display: flex;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      padding: 4px;
+      border-radius: 30px;
+      backdrop-filter: blur(6px);
+    }
+
+    .diff-btn {
+      padding: 6px 16px;
+      border: none;
+      border-radius: 26px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.7);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .diff-btn.active {
+      background: rgba(255, 255, 255, 0.25);
+      color: white;
+    }
+
+    .diff-btn:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+
+    /* Feedback overlay */
+    #feedback-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+
+    #feedback-overlay.show {
+      display: flex;
+    }
+
+    #feedback-card {
+      background: white;
+      color: #1e293b;
+      border-radius: 24px;
+      padding: 30px 40px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width: 340px;
+      width: 90%;
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: scale(0.5);
+        opacity: 0;
+      }
+
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    #feedback-emoji {
+      font-size: 3.5rem;
+      margin-bottom: 8px;
+    }
+
+    #feedback-text {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    #feedback-detail {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #64748b;
+      margin-bottom: 16px;
+    }
+
+    #feedback-btn {
+      padding: 10px 30px;
+      border: none;
+      border-radius: 30px;
+      background: linear-gradient(180deg, #3b82f6, #2563eb);
+      color: white;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+      transition: transform 0.2s;
+    }
+
+    #feedback-btn:hover {
+      transform: scale(1.05);
+    }
+
+    /* Summary overlay */
+    #summary-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      backdrop-filter: blur(6px);
+    }
+
+    #summary-overlay.show {
+      display: flex;
+    }
+
+    #summary-card {
+      background: white;
+      color: #1e293b;
+      border-radius: 24px;
+      padding: 30px 36px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width: 360px;
+      width: 90%;
+    }
+
+    #summary-stars {
+      font-size: 2.5rem;
+      margin: 10px 0;
+    }
+
+    #summary-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    #summary-score {
+      font-size: 1.1rem;
+      color: #64748b;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    #summary-btn {
+      padding: 12px 34px;
+      border: none;
+      border-radius: 30px;
+      background: linear-gradient(180deg, #8b5cf6, #7c3aed);
+      color: white;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+      transition: transform 0.2s;
+    }
+
+    #summary-btn:hover {
+      transform: scale(1.05);
+    }
+
+    /* Confetti canvas */
+    #confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 300;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="game-container">
+    <h1 id="title">What Time Is It?</h1>
+
+    <div id="difficulty-selector">
+      <button class="diff-btn active" data-diff="easy" id="diff-easy">Easy</button>
+      <button class="diff-btn" data-diff="medium" id="diff-medium">Medium</button>
+      <button class="diff-btn" data-diff="hard" id="diff-hard">Hard</button>
+    </div>
+
+    <div id="score-bar">
+      <span class="score-item" id="score-display">⭐ 0 / 0</span>
+      <span class="score-item" id="round-display">Round 1 / 10</span>
+    </div>
+
+    <div id="canvas-wrapper">
+      <canvas id="clockCanvas"></canvas>
+    </div>
+
+    <div id="time-display">--:--</div>
+
+    <div class="btn-row">
+      <button class="btn" id="btn-speak">🔊 Say the Time!</button>
+      <button class="btn" id="btn-check">✅ Check</button>
+      <button class="btn" id="btn-next">➡️ Next</button>
+    </div>
+
+    <div id="instruction">Drag the hands to set the time!</div>
+  </div>
+
+  <!-- Feedback overlay -->
+  <div id="feedback-overlay">
+    <div id="feedback-card">
+      <div id="feedback-emoji">🎉</div>
+      <div id="feedback-text">Correct!</div>
+      <div id="feedback-detail"></div>
+      <button id="feedback-btn">Next →</button>
+    </div>
+  </div>
+
+  <!-- Summary overlay -->
+  <div id="summary-overlay">
+    <div id="summary-card">
+      <div id="summary-stars">⭐⭐⭐</div>
+      <div id="summary-title">Great Job!</div>
+      <div id="summary-score">You got 8 out of 10 correct!</div>
+      <button id="summary-btn">Play Again 🎮</button>
+    </div>
+  </div>
+
+  <canvas id="confetti-canvas"></canvas>
+
+  <script>
+    // =============================================
+    // AUDIO MANAGER - Web Audio API sound synthesis
+    // =============================================
+    const AudioManager = (() => {
+      let ctx = null;
+
+      function getCtx() {
+        if (!ctx) {
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (ctx.state === 'suspended') ctx.resume();
+        return ctx;
+      }
+
+      function playTone(freq, duration, type = 'sine', volume = 0.3) {
+        const c = getCtx();
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, c.currentTime);
+        gain.gain.setValueAtTime(volume, c.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(c.destination);
+        osc.start(c.currentTime);
+        osc.stop(c.currentTime + duration);
+      }
+
+      return {
+        clickSound() {
+          playTone(800, 0.08, 'sine', 0.15);
+        },
+        correctSound() {
+          const c = getCtx();
+          [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+            setTimeout(() => playTone(freq, 0.3, 'sine', 0.25), i * 120);
+          });
+        },
+        incorrectSound() {
+          playTone(200, 0.4, 'sawtooth', 0.2);
+          setTimeout(() => playTone(160, 0.5, 'sawtooth', 0.15), 150);
+        },
+        speakTime(hours, minutes) {
+          if (!('speechSynthesis' in window)) return;
+          window.speechSynthesis.cancel();
+          let text;
+          if (minutes === 0) {
+            text = `${hours} o'clock`;
+          } else if (minutes === 30) {
+            text = `${hours} thirty`;
+          } else if (minutes === 15) {
+            text = `${hours} fifteen`;
+          } else if (minutes === 45) {
+            text = `${hours} forty five`;
+          } else {
+            const minStr = minutes < 10 ? `oh ${minutes}` : `${minutes}`;
+            text = `${hours} ${minStr}`;
+          }
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.rate = 0.85;
+          utter.pitch = 1.1;
+          window.speechSynthesis.speak(utter);
+        }
+      };
+    })();
+
+    // =============================================
+    // CONFETTI
+    // =============================================
+    const Confetti = (() => {
+      const canvas = document.getElementById('confetti-canvas');
+      const cCtx = canvas.getContext('2d');
+      let particles = [];
+      let animId = null;
+
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      function launch(count = 80) {
+        particles = [];
+        for (let i = 0; i < count; i++) {
+          particles.push({
+            x: Math.random() * canvas.width,
+            y: canvas.height + Math.random() * 40,
+            vx: (Math.random() - 0.5) * 8,
+            vy: -(Math.random() * 14 + 6),
+            size: Math.random() * 8 + 4,
+            color: ['#f59e0b', '#ef4444', '#22c55e', '#3b82f6', '#a855f7', '#ec4899', '#06b6d4'][Math.floor(Math.random() * 7)],
+            rotation: Math.random() * 360,
+            rotSpeed: (Math.random() - 0.5) * 12,
+            life: 1
+          });
+        }
+        if (animId) cancelAnimationFrame(animId);
+        animate();
+      }
+
+      function animate() {
+        cCtx.clearRect(0, 0, canvas.width, canvas.height);
+        let alive = false;
+        particles.forEach(p => {
+          if (p.life <= 0) return;
+          alive = true;
+          p.x += p.vx;
+          p.vy += 0.25;
+          p.y += p.vy;
+          p.rotation += p.rotSpeed;
+          p.life -= 0.008;
+          cCtx.save();
+          cCtx.translate(p.x, p.y);
+          cCtx.rotate(p.rotation * Math.PI / 180);
+          cCtx.globalAlpha = Math.max(0, p.life);
+          cCtx.fillStyle = p.color;
+          cCtx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+          cCtx.restore();
+        });
+        if (alive) {
+          animId = requestAnimationFrame(animate);
+        }
+      }
+
+      return { launch };
+    })();
+
+    // =============================================
+    // CLOCK RENDERER & GAME
+    // =============================================
+    (() => {
+      const canvas = document.getElementById('clockCanvas');
+      const ctx = canvas.getContext('2d');
+      const wrapper = document.getElementById('canvas-wrapper');
+
+      // State
+      let userHour = 0;    // 0-11
+      let userMinute = 0;  // 0-59 (snapped)
+      let targetHour = 0;
+      let targetMinute = 0;
+      let difficulty = 'easy'; // easy, medium, hard
+      let score = 0;
+      let round = 0;
+      const totalRounds = 10;
+      let answered = false;
+      let dragging = null; // 'hour' or 'minute' or null
+
+      // Sizing
+      let size, cx, cy, radius;
+
+      function resize() {
+        const rect = wrapper.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const dim = Math.min(rect.width, rect.height);
+        canvas.width = dim * dpr;
+        canvas.height = dim * dpr;
+        canvas.style.width = dim + 'px';
+        canvas.style.height = dim + 'px';
+        size = dim * dpr;
+        cx = size / 2;
+        cy = size / 2;
+        radius = size / 2 * 0.92;
+        draw();
+      }
+
+      window.addEventListener('resize', resize);
+
+      // Number colors matching the reference image
+      const numColors = [
+        '#e53e3e', // 1 red
+        '#2563eb', // 2 blue
+        '#d97706', // 3 orange
+        '#7c3aed', // 4 purple
+        '#059669', // 5 green
+        '#2563eb', // 6 blue
+        '#e53e3e', // 7 red
+        '#d97706', // 8 orange
+        '#7c3aed', // 9 purple
+        '#059669', // 10 green
+        '#e53e3e', // 11 red
+        '#2563eb', // 12 blue
+      ];
+
+      function draw() {
+        ctx.clearRect(0, 0, size, size);
+
+        // Outer gold ring
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#f5c542';
+        ctx.fill();
+
+        // Blue ring
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.94, 0, Math.PI * 2);
+        ctx.fillStyle = '#2563eb';
+        ctx.fill();
+
+        // White face
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.88, 0, Math.PI * 2);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fill();
+
+        // Minute ticks
+        for (let i = 0; i < 60; i++) {
+          const angle = (i * 6 - 90) * Math.PI / 180;
+          const isHour = i % 5 === 0;
+          const outerR = radius * 0.86;
+          const innerR = isHour ? radius * 0.78 : radius * 0.82;
+          const x1 = cx + Math.cos(angle) * innerR;
+          const y1 = cy + Math.sin(angle) * innerR;
+          const x2 = cx + Math.cos(angle) * outerR;
+          const y2 = cy + Math.sin(angle) * outerR;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.strokeStyle = isHour ? '#334155' : '#94a3b8';
+          ctx.lineWidth = isHour ? size * 0.006 : size * 0.003;
+          ctx.stroke();
+        }
+
+        // Numbers
+        const numRadius = radius * 0.71;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const fontSize = size * 0.065;
+        ctx.font = `700 ${fontSize}px 'Outfit', sans-serif`;
+        for (let i = 1; i <= 12; i++) {
+          const angle = (i * 30 - 90) * Math.PI / 180;
+          const nx = cx + Math.cos(angle) * numRadius;
+          const ny = cy + Math.sin(angle) * numRadius;
+          ctx.fillStyle = numColors[i - 1];
+          ctx.fillText(i.toString(), nx, ny);
+        }
+
+        // Compute hand angles
+        // Hour: full rotation = 12 hours, plus fractional from minutes
+        const hourAngle = ((userHour % 12) + userMinute / 60) * 30 - 90;
+        const minuteAngle = userMinute * 6 - 90;
+
+        const hourAngleRad = hourAngle * Math.PI / 180;
+        const minuteAngleRad = minuteAngle * Math.PI / 180;
+
+        const hourHandLen = radius * 0.45;
+        const minuteHandLen = radius * 0.65;
+
+        // Minute hand (orange, drawn first so hour is on top) 
+        drawHandTapered(minuteAngleRad, minuteHandLen, size * 0.018, size * 0.008, '#ea580c');
+        // Hour hand (dark green, thick, on top)
+        drawHandTapered(hourAngleRad, hourHandLen, size * 0.026, size * 0.012, '#166534');
+
+        // Dashed circle handles
+        const hourTipX = cx + Math.cos(hourAngleRad) * hourHandLen;
+        const hourTipY = cy + Math.sin(hourAngleRad) * hourHandLen;
+        drawDashedCircle(hourTipX, hourTipY, size * 0.045, '#166534');
+
+        const minuteTipX = cx + Math.cos(minuteAngleRad) * minuteHandLen;
+        const minuteTipY = cy + Math.sin(minuteAngleRad) * minuteHandLen;
+        drawDashedCircle(minuteTipX, minuteTipY, size * 0.045, '#ea580c');
+
+        // Center dot
+        ctx.beginPath();
+        ctx.arc(cx, cy, size * 0.022, 0, Math.PI * 2);
+        ctx.fillStyle = '#f5c542';
+        ctx.fill();
+        ctx.strokeStyle = '#b8860b';
+        ctx.lineWidth = size * 0.004;
+        ctx.stroke();
+      }
+
+      function drawHandTapered(angleRad, length, baseWidth, tipWidth, color) {
+        const tipX = cx + Math.cos(angleRad) * length;
+        const tipY = cy + Math.sin(angleRad) * length;
+        const tailLen = length * 0.15;
+        const tailX = cx - Math.cos(angleRad) * tailLen;
+        const tailY = cy - Math.sin(angleRad) * tailLen;
+
+        // Draw tapered hand using a polygon
+        const perpX = -Math.sin(angleRad);
+        const perpY = Math.cos(angleRad);
+
+        ctx.beginPath();
+        ctx.moveTo(tailX + perpX * baseWidth / 2, tailY + perpY * baseWidth / 2);
+        ctx.lineTo(tipX + perpX * tipWidth / 2, tipY + perpY * tipWidth / 2);
+        ctx.lineTo(tipX - perpX * tipWidth / 2, tipY - perpY * tipWidth / 2);
+        ctx.lineTo(tailX - perpX * baseWidth / 2, tailY - perpY * baseWidth / 2);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        // Rounded tip
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, tipWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+        // Rounded base
+        ctx.beginPath();
+        ctx.arc(tailX, tailY, baseWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawDashedCircle(x, y, r, color) {
+        ctx.beginPath();
+        ctx.setLineDash([size * 0.01, size * 0.008]);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size * 0.007;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // =============================================
+      // INTERACTION
+      // =============================================
+      function getCanvasPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        let clientX, clientY;
+        if (e.touches && e.touches.length > 0) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+        } else if (e.changedTouches && e.changedTouches.length > 0) {
+          clientX = e.changedTouches[0].clientX;
+          clientY = e.changedTouches[0].clientY;
+        } else {
+          clientX = e.clientX;
+          clientY = e.clientY;
+        }
+        return {
+          x: (clientX - rect.left) * dpr * (canvas.width / (rect.width * dpr)),
+          y: (clientY - rect.top) * dpr * (canvas.height / (rect.height * dpr))
+        };
+      }
+
+      function hitTestHandle(px, py, angleRad, handLen) {
+        const tipX = cx + Math.cos(angleRad) * handLen;
+        const tipY = cy + Math.sin(angleRad) * handLen;
+        const dist = Math.sqrt((px - tipX) ** 2 + (py - tipY) ** 2);
+        return dist < size * 0.08; // generous hit area
+      }
+
+      function onPointerDown(e) {
+        if (answered) return;
+        e.preventDefault();
+        const pos = getCanvasPos(e);
+
+        const hourAngleRad = (((userHour % 12) + userMinute / 60) * 30 - 90) * Math.PI / 180;
+        const minuteAngleRad = (userMinute * 6 - 90) * Math.PI / 180;
+        const hourHandLen = radius * 0.45;
+        const minuteHandLen = radius * 0.65;
+
+        // Check minute hand first (longer, on top)
+        if (hitTestHandle(pos.x, pos.y, minuteAngleRad, minuteHandLen)) {
+          dragging = 'minute';
+        } else if (hitTestHandle(pos.x, pos.y, hourAngleRad, hourHandLen)) {
+          dragging = 'hour';
+        } else {
+          // Check if clicking anywhere on the hand line (more forgiving)
+          const distToCenter = Math.sqrt((pos.x - cx) ** 2 + (pos.y - cy) ** 2);
+          if (distToCenter < radius * 0.85 && distToCenter > size * 0.05) {
+            const clickAngle = Math.atan2(pos.y - cy, pos.x - cx);
+            const mDiff = angleDiff(clickAngle, minuteAngleRad);
+            const hDiff = angleDiff(clickAngle, hourAngleRad);
+            if (mDiff < 0.3) {
+              dragging = 'minute';
+            } else if (hDiff < 0.3) {
+              dragging = 'hour';
+            }
+          }
+        }
+      }
+
+      function angleDiff(a, b) {
+        let d = Math.abs(a - b) % (Math.PI * 2);
+        if (d > Math.PI) d = Math.PI * 2 - d;
+        return d;
+      }
+
+      function onPointerMove(e) {
+        if (!dragging || answered) return;
+        e.preventDefault();
+        const pos = getCanvasPos(e);
+        const angle = Math.atan2(pos.y - cy, pos.x - cx);
+        let degrees = angle * 180 / Math.PI + 90;
+        if (degrees < 0) degrees += 360;
+
+        if (dragging === 'minute') {
+          // All difficulties snap to 5-minute increments (30-degree steps)
+          const snapDeg = Math.round(degrees / 30) * 30;
+          userMinute = ((snapDeg / 6) % 60 + 60) % 60;
+          userMinute = Math.round(userMinute);
+          if (userMinute === 60) userMinute = 0;
+        } else if (dragging === 'hour') {
+          let hourVal = degrees / 30;
+          userHour = Math.round(hourVal) % 12;
+          if (userHour < 0) userHour += 12;
+        }
+
+        draw();
+        updateTimeDisplay();
+      }
+
+      function onPointerUp(e) {
+        if (dragging) {
+          AudioManager.clickSound();
+        }
+        dragging = null;
+      }
+
+      canvas.addEventListener('mousedown', onPointerDown);
+      canvas.addEventListener('mousemove', onPointerMove);
+      canvas.addEventListener('mouseup', onPointerUp);
+      canvas.addEventListener('mouseleave', onPointerUp);
+      canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+      canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+      canvas.addEventListener('touchend', onPointerUp);
+      canvas.addEventListener('touchcancel', onPointerUp);
+
+      // =============================================
+      // GAME LOGIC
+      // =============================================
+      const timeDisplay = document.getElementById('time-display');
+      const instruction = document.getElementById('instruction');
+      const scoreDisplay = document.getElementById('score-display');
+      const roundDisplay = document.getElementById('round-display');
+      const btnSpeak = document.getElementById('btn-speak');
+      const btnCheck = document.getElementById('btn-check');
+      const btnNext = document.getElementById('btn-next');
+
+      // Difficulty buttons
+      document.querySelectorAll('.diff-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          difficulty = btn.dataset.diff;
+          resetGame();
+        });
+      });
+
+      function generateTargetTime() {
+        targetHour = Math.floor(Math.random() * 12) + 1; // 1-12
+        if (difficulty === 'easy') {
+          targetMinute = 0;
+        } else if (difficulty === 'medium') {
+          targetMinute = [0, 15, 30, 45][Math.floor(Math.random() * 4)];
+        } else {
+          targetMinute = Math.floor(Math.random() * 12) * 5;
+        }
+      }
+
+      function formatTime(h, m) {
+        const hour = h === 0 ? 12 : h;
+        return `${hour}:${m.toString().padStart(2, '0')}`;
+      }
+
+      function updateTimeDisplay() {
+        // Show the user's current setting
+        // (The target is announced via speech or shown in instruction)
+      }
+
+      function startRound() {
+        answered = false;
+        generateTargetTime();
+        // Reset hands to 12:00
+        userHour = 0;
+        userMinute = 0;
+
+        // Show target time in display
+        timeDisplay.textContent = formatTime(targetHour, targetMinute);
+        timeDisplay.className = '';
+        instruction.textContent = 'Drag the hands to set the time!';
+        btnCheck.style.display = '';
+        btnNext.style.display = 'none';
+
+        roundDisplay.textContent = `Round ${round + 1} / ${totalRounds}`;
+
+        draw();
+      }
+
+      function checkAnswer() {
+        if (answered) return;
+        answered = true;
+        AudioManager.clickSound();
+
+        // Normalize: userHour 0 means 12
+        const uH = userHour === 0 ? 12 : userHour;
+        const tH = targetHour === 0 ? 12 : targetHour;
+
+        const correct = (uH === tH && userMinute === targetMinute);
+
+        if (correct) {
+          score++;
+          AudioManager.correctSound();
+          Confetti.launch(60);
+          showFeedback(true);
+        } else {
+          AudioManager.incorrectSound();
+          showFeedback(false);
+        }
+
+        scoreDisplay.textContent = `⭐ ${score} / ${round + 1}`;
+        btnCheck.style.display = 'none';
+        btnNext.style.display = '';
+      }
+
+      function showFeedback(correct) {
+        const overlay = document.getElementById('feedback-overlay');
+        const emoji = document.getElementById('feedback-emoji');
+        const text = document.getElementById('feedback-text');
+        const detail = document.getElementById('feedback-detail');
+
+        if (correct) {
+          emoji.textContent = ['🎉', '🌟', '🏆', '👏', '💯'][Math.floor(Math.random() * 5)];
+          text.textContent = ['Correct!', 'Amazing!', 'Great Job!', 'Well Done!', 'Perfect!'][Math.floor(Math.random() * 5)];
+          detail.textContent = `The time is ${formatTime(targetHour, targetMinute)}`;
+          timeDisplay.classList.add('correct');
+        } else {
+          emoji.textContent = ['🤔', '😅', '💪', '🔄'][Math.floor(Math.random() * 4)];
+          text.textContent = ['Not quite!', 'Try again next time!', 'Almost!', 'Keep practicing!'][Math.floor(Math.random() * 4)];
+          const uH = userHour === 0 ? 12 : userHour;
+          detail.textContent = `You set ${formatTime(uH, userMinute)}, but the answer is ${formatTime(targetHour, targetMinute)}`;
+          timeDisplay.classList.add('incorrect');
+        }
+
+        overlay.classList.add('show');
+      }
+
+      document.getElementById('feedback-btn').addEventListener('click', () => {
+        document.getElementById('feedback-overlay').classList.remove('show');
+        nextRound();
+      });
+
+      function nextRound() {
+        round++;
+        if (round >= totalRounds) {
+          showSummary();
+        } else {
+          startRound();
+        }
+      }
+
+      function showSummary() {
+        const overlay = document.getElementById('summary-overlay');
+        const stars = document.getElementById('summary-stars');
+        const title = document.getElementById('summary-title');
+        const scoreTxt = document.getElementById('summary-score');
+
+        const pct = score / totalRounds;
+        let starCount, titleText;
+        if (pct >= 0.9) { starCount = 3; titleText = 'Superstar! 🏆'; }
+        else if (pct >= 0.7) { starCount = 2; titleText = 'Great Job!'; }
+        else if (pct >= 0.5) { starCount = 1; titleText = 'Good Try!'; }
+        else { starCount = 0; titleText = 'Keep Practicing!'; }
+
+        stars.textContent = '⭐'.repeat(starCount) + '☆'.repeat(3 - starCount);
+        title.textContent = titleText;
+        scoreTxt.textContent = `You got ${score} out of ${totalRounds} correct!`;
+
+        overlay.classList.add('show');
+
+        if (pct >= 0.7) {
+          Confetti.launch(120);
+        }
+      }
+
+      document.getElementById('summary-btn').addEventListener('click', () => {
+        document.getElementById('summary-overlay').classList.remove('show');
+        resetGame();
+      });
+
+      function resetGame() {
+        score = 0;
+        round = 0;
+        scoreDisplay.textContent = `⭐ 0 / 0`;
+        startRound();
+      }
+
+      // Speak button
+      btnSpeak.addEventListener('click', () => {
+        AudioManager.clickSound();
+        AudioManager.speakTime(targetHour, targetMinute);
+      });
+
+      // Check button
+      btnCheck.addEventListener('click', checkAnswer);
+
+      // Next button
+      btnNext.addEventListener('click', () => {
+        AudioManager.clickSound();
+        document.getElementById('feedback-overlay').classList.remove('show');
+        nextRound();
+      });
+
+      // Init
+      resize();
+      startRound();
+    })();
+  </script>
+</body>
+
+</html>
