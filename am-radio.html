@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AM Radio Simulator</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .controls {
+            background-color: #222;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+            flex: 1;
+            min-width: 250px;
+        }
+        .displays {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex: 3;
+            min-width: 600px;
+        }
+        canvas {
+            background-color: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.2);
+            width: 100%;
+            height: 250px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #ccc;
+        }
+        input[type=range] {
+            width: 100%;
+            accent-color: #0ff;
+        }
+        .value-display {
+            float: right;
+            color: #0ff;
+            font-family: monospace;
+        }
+        .title {
+            text-align: center;
+            font-size: 1.2em;
+            color: #f0f;
+            text-shadow: 0 0 8px #f0f;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Amplitude Modulation (AM) Simulator</h1>
+
+    <div class="container">
+        <div class="controls">
+            <h3 style="color: #0ff; text-shadow: 0 0 5px #0ff; text-align: center; margin-top: 0;">Controls</h3>
+
+            <div class="control-group">
+                <label>Carrier Frequency (Fc) <span id="valFc" class="value-display">50 Hz</span></label>
+                <input type="range" id="fc" min="10" max="100" step="1" value="50">
+            </div>
+
+            <hr style="border-color: #444; margin: 20px 0;">
+            <p style="color: #aaa; font-size: 0.9em; margin-top: 0;">Modulating Waves (Amplitudes)</p>
+
+            <div class="control-group">
+                <label>Wave 1 (1 Hz) <span id="valA1" class="value-display">0.50</span></label>
+                <input type="range" id="a1" min="0" max="1" step="0.01" value="0.5">
+            </div>
+
+            <div class="control-group">
+                <label>Wave 2 (2 Hz) <span id="valA2" class="value-display">0.00</span></label>
+                <input type="range" id="a2" min="0" max="1" step="0.01" value="0">
+            </div>
+
+            <div class="control-group">
+                <label>Wave 3 (3 Hz) <span id="valA3" class="value-display">0.00</span></label>
+                <input type="range" id="a3" min="0" max="1" step="0.01" value="0">
+            </div>
+
+            <div class="control-group">
+                <label>Wave 4 (4 Hz) <span id="valA4" class="value-display">0.00</span></label>
+                <input type="range" id="a4" min="0" max="1" step="0.01" value="0">
+            </div>
+        </div>
+
+        <div class="displays">
+            <div>
+                <div class="title">Time Domain</div>
+                <canvas id="timeCanvas" width="800" height="250"></canvas>
+            </div>
+            <div>
+                <div class="title">Frequency Domain</div>
+                <canvas id="freqCanvas" width="800" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fcInput = document.getElementById('fc');
+        const a1Input = document.getElementById('a1');
+        const a2Input = document.getElementById('a2');
+        const a3Input = document.getElementById('a3');
+        const a4Input = document.getElementById('a4');
+
+        const valFc = document.getElementById('valFc');
+        const valA1 = document.getElementById('valA1');
+        const valA2 = document.getElementById('valA2');
+        const valA3 = document.getElementById('valA3');
+        const valA4 = document.getElementById('valA4');
+
+        const timeCanvas = document.getElementById('timeCanvas');
+        const freqCanvas = document.getElementById('freqCanvas');
+        const timeCtx = timeCanvas.getContext('2d');
+        const freqCtx = freqCanvas.getContext('2d');
+
+        const f1 = 1, f2 = 2, f3 = 3, f4 = 4;
+
+        function updateDisplays() {
+            const fc = parseFloat(fcInput.value);
+            const a1 = parseFloat(a1Input.value);
+            const a2 = parseFloat(a2Input.value);
+            const a3 = parseFloat(a3Input.value);
+            const a4 = parseFloat(a4Input.value);
+
+            valFc.textContent = fc + ' Hz';
+            valA1.textContent = a1.toFixed(2);
+            valA2.textContent = a2.toFixed(2);
+            valA3.textContent = a3.toFixed(2);
+            valA4.textContent = a4.toFixed(2);
+
+            drawTimeDomain(fc, a1, a2, a3, a4);
+            drawFreqDomain(fc, a1, a2, a3, a4);
+        }
+
+        function drawTimeDomain(fc, a1, a2, a3, a4) {
+            const width = timeCanvas.width;
+            const height = timeCanvas.height;
+
+            timeCtx.clearRect(0, 0, width, height);
+
+            // Draw grid
+            timeCtx.strokeStyle = '#222';
+            timeCtx.lineWidth = 1;
+            timeCtx.beginPath();
+            timeCtx.moveTo(0, height / 2);
+            timeCtx.lineTo(width, height / 2);
+            timeCtx.stroke();
+
+            // Draw wave
+            timeCtx.beginPath();
+            timeCtx.strokeStyle = '#0ff'; // Neon cyan
+            timeCtx.lineWidth = 2;
+            timeCtx.shadowBlur = 10;
+            timeCtx.shadowColor = '#0ff';
+
+            const points = width;
+            // Draw 1 second of data
+            for (let i = 0; i < points; i++) {
+                const t = i / points;
+
+                // Modulating signal
+                const m = a1 * Math.sin(2 * Math.PI * f1 * t) +
+                          a2 * Math.sin(2 * Math.PI * f2 * t) +
+                          a3 * Math.sin(2 * Math.PI * f3 * t) +
+                          a4 * Math.sin(2 * Math.PI * f4 * t);
+
+                // AM Signal
+                const y = (1 + m) * Math.sin(2 * Math.PI * fc * t);
+
+                // Max amplitude is 1 + a1+a2+a3+a4. Let's scale assuming max could be 5
+                const scale = height / 10;
+
+                const canvasY = height / 2 - y * scale;
+
+                if (i === 0) {
+                    timeCtx.moveTo(i, canvasY);
+                } else {
+                    timeCtx.lineTo(i, canvasY);
+                }
+            }
+            timeCtx.stroke();
+
+            // Reset shadow for performance/cleanliness
+            timeCtx.shadowBlur = 0;
+        }
+
+        function drawFreqDomain(fc, a1, a2, a3, a4) {
+            const width = freqCanvas.width;
+            const height = freqCanvas.height;
+
+            freqCtx.clearRect(0, 0, width, height);
+
+            // Draw grid
+            freqCtx.strokeStyle = '#222';
+            freqCtx.lineWidth = 1;
+            freqCtx.beginPath();
+            freqCtx.moveTo(0, height - 20);
+            freqCtx.lineTo(width, height - 20);
+            freqCtx.stroke();
+
+            freqCtx.fillStyle = '#aaa';
+            freqCtx.font = '12px Arial';
+            freqCtx.fillText('0 Hz', 5, height - 5);
+            freqCtx.fillText('120 Hz', width - 45, height - 5);
+
+            // Max frequency to display: 120 Hz
+            const maxFreq = 120;
+
+            function drawPeak(freq, amplitude, color) {
+                if (freq < 0 || freq > maxFreq || amplitude <= 0) return;
+
+                const x = (freq / maxFreq) * width;
+                const peakHeight = amplitude * (height - 40); // Leave some margin
+
+                freqCtx.beginPath();
+                freqCtx.strokeStyle = color;
+                freqCtx.lineWidth = 3;
+                freqCtx.shadowBlur = 10;
+                freqCtx.shadowColor = color;
+
+                freqCtx.moveTo(x, height - 20);
+                freqCtx.lineTo(x, height - 20 - peakHeight);
+                freqCtx.stroke();
+
+                freqCtx.shadowBlur = 0;
+            }
+
+            // Carrier peak
+            drawPeak(fc, 1.0, '#f0f'); // Neon magenta
+
+            // Sidebands
+            drawPeak(fc - f1, a1 / 2, '#0f0'); // Neon green
+            drawPeak(fc + f1, a1 / 2, '#0f0');
+
+            drawPeak(fc - f2, a2 / 2, '#ff0'); // Neon yellow
+            drawPeak(fc + f2, a2 / 2, '#ff0');
+
+            drawPeak(fc - f3, a3 / 2, '#f80'); // Neon orange
+            drawPeak(fc + f3, a3 / 2, '#f80');
+
+            drawPeak(fc - f4, a4 / 2, '#08f'); // Neon blue
+            drawPeak(fc + f4, a4 / 2, '#08f');
+        }
+
+        [fcInput, a1Input, a2Input, a3Input, a4Input].forEach(input => {
+            input.addEventListener('input', updateDisplays);
+        });
+
+        // Initial draw
+        updateDisplays();
+    </script>
+</body>
+</html>
