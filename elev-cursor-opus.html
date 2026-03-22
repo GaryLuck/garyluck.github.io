@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elevator Algorithm Simulator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  #app {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+  }
+
+  /* --- Building --- */
+  .building {
+    position: relative;
+    width: 520px;
+    height: 560px;
+    background: #16213e;
+    border-radius: 12px;
+    border: 2px solid #0f3460;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+
+  .floor {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 130px;
+    border-bottom: 2px solid #0f3460;
+    display: flex;
+    align-items: flex-end;
+  }
+  .floor:first-child { border-top: none; }
+
+  .floor-label {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 22px;
+    font-weight: 700;
+    color: #e94560;
+    width: 30px;
+    text-align: center;
+  }
+
+  .waiting-area {
+    position: absolute;
+    left: 48px;
+    bottom: 10px;
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+    height: 100px;
+  }
+
+  /* --- Elevator Shaft --- */
+  .shaft {
+    position: absolute;
+    right: 60px;
+    top: 0;
+    bottom: 0;
+    width: 110px;
+    background: rgba(15, 52, 96, .4);
+    border-left: 2px solid #0f3460;
+    border-right: 2px solid #0f3460;
+  }
+
+  .elevator {
+    position: absolute;
+    bottom: 8px;
+    left: 5px;
+    width: 100px;
+    height: 118px;
+    background: linear-gradient(180deg, #2c3e6d, #1a2744);
+    border: 2px solid #4a6fa5;
+    border-radius: 6px;
+    transition: bottom 1.2s cubic-bezier(.42, 0, .58, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 10;
+  }
+
+  .elevator-door {
+    width: 80px;
+    height: 80px;
+    margin-top: 6px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 3px;
+  }
+
+  .door-left, .door-right {
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    background: #5a7eb5;
+    transition: transform .5s ease;
+  }
+  .door-left { left: 0; border-right: 1px solid #4a6fa5; }
+  .door-right { right: 0; border-left: 1px solid #4a6fa5; }
+
+  .elevator.doors-open .door-left  { transform: translateX(-90%); }
+  .elevator.doors-open .door-right { transform: translateX(90%); }
+
+  .elevator-passengers {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    bottom: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    justify-content: center;
+    align-items: flex-end;
+    pointer-events: none;
+  }
+
+  .direction-indicator {
+    margin-top: auto;
+    margin-bottom: 2px;
+    font-size: 20px;
+    line-height: 1;
+    color: #00ff88;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0,255,136,.6);
+  }
+
+  /* --- Call Buttons --- */
+  .call-buttons {
+    position: absolute;
+    right: 10px;
+    top: 0;
+    bottom: 0;
+    width: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .call-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid #4a6fa5;
+    background: #1a2744;
+    color: #aaa;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+  }
+  .call-btn:hover { background: #2c3e6d; color: #fff; }
+  .call-btn.active { background: #e94560; border-color: #e94560; color: #fff; }
+
+  /* --- Person SVG sprite --- */
+  .person {
+    width: 24px;
+    height: 44px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: opacity .4s, transform .4s;
+  }
+  .person.entering {
+    animation: personEnter .5s ease forwards;
+  }
+  .person.exiting {
+    animation: personExit .5s ease forwards;
+  }
+
+  @keyframes personEnter {
+    from { opacity: 0; transform: translateX(30px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes personExit {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(-30px); }
+  }
+
+  .person-body { font-size: 36px; line-height: 1; }
+  .person-dest {
+    font-size: 10px;
+    font-weight: 700;
+    background: #e94560;
+    color: #fff;
+    border-radius: 8px;
+    padding: 1px 5px;
+    margin-top: -6px;
+  }
+
+  .person-small {
+    width: 18px;
+    height: 34px;
+  }
+  .person-small .person-body { font-size: 26px; }
+  .person-small .person-dest { font-size: 8px; padding: 0 3px; }
+
+  /* --- Side Panel --- */
+  .panel {
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .panel h1 {
+    font-size: 24px;
+    color: #e94560;
+    margin-bottom: 4px;
+  }
+
+  .stats {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 10px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-box {
+    text-align: center;
+  }
+  .stat-box .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+  .stat-box .value { font-size: 28px; font-weight: 700; color: #00ff88; }
+
+  .log-area {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 10px;
+    padding: 12px;
+    height: 320px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.6;
+    font-family: 'Consolas', 'Courier New', monospace;
+  }
+  .log-area::-webkit-scrollbar { width: 6px; }
+  .log-area::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+
+  .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(15,52,96,.4); }
+  .log-entry .time { color: #666; margin-right: 6px; }
+  .log-up   { color: #00ff88; }
+  .log-down { color: #e94560; }
+  .log-info { color: #5dade2; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 2px solid #0f3460;
+    background: #16213e;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn:hover { background: #0f3460; }
+  .btn.primary { background: #e94560; border-color: #e94560; color: #fff; }
+  .btn.primary:hover { background: #c0392b; }
+
+  .speed-control {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .speed-control label { font-size: 13px; white-space: nowrap; }
+  .speed-control input[type=range] { flex: 1; accent-color: #e94560; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="building" id="building"></div>
+  <div class="panel">
+    <h1>Elevator Algorithm</h1>
+    <p style="font-size:13px;color:#888;margin-bottom:4px;">
+      The elevator (SCAN) algorithm services requests in its current direction before reversing.
+    </p>
+    <div class="stats">
+      <div class="stat-box">
+        <div class="label">Floor</div>
+        <div class="value" id="stat-floor">1</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Direction</div>
+        <div class="value" id="stat-dir">&#9650;</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Passengers</div>
+        <div class="value" id="stat-pass">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Delivered</div>
+        <div class="value" id="stat-delivered">0</div>
+      </div>
+    </div>
+    <div class="speed-control">
+      <label>Speed</label>
+      <input type="range" id="speed" min="1" max="5" value="3">
+      <span id="speed-label">3x</span>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="btn-toggle">Pause</button>
+      <button class="btn" id="btn-reset">Reset</button>
+    </div>
+    <div class="log-area" id="log"></div>
+  </div>
+</div>
+
+<script>
+const FLOORS = 4;
+const MAX_CAPACITY = 6;
+const PERSON_COLORS = ['🧑','👩','👨','🧔','👩‍🦰','👨‍🦱','👩‍🦳','🧑‍🦰'];
+
+const buildingEl = document.getElementById('building');
+const logEl      = document.getElementById('log');
+const statFloor  = document.getElementById('stat-floor');
+const statDir    = document.getElementById('stat-dir');
+const statPass   = document.getElementById('stat-pass');
+const statDel    = document.getElementById('stat-delivered');
+const speedInput = document.getElementById('speed');
+const speedLabel = document.getElementById('speed-label');
+const btnToggle  = document.getElementById('btn-toggle');
+const btnReset   = document.getElementById('btn-reset');
+
+let sim = createSimState();
+let paused = false;
+let tickTimer = null;
+
+function createSimState() {
+  return {
+    currentFloor: 1,
+    direction: 1,       // 1 = up, -1 = down
+    doorsOpen: false,
+    passengers: [],      // { id, dest, color }
+    waitingByFloor: { 1: [], 2: [], 3: [], 4: [] },
+    delivered: 0,
+    nextId: 1,
+    busy: false,
+    tickCount: 0,
+  };
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function pickColor() {
+  return PERSON_COLORS[randomInt(0, PERSON_COLORS.length - 1)];
+}
+
+function log(msg, cls = 'log-info') {
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  const mins = Math.floor(sim.tickCount / 2);
+  el.innerHTML = `<span class="time">${String(mins).padStart(3,'0')}s</span><span class="${cls}">${msg}</span>`;
+  logEl.prepend(el);
+  while (logEl.children.length > 80) logEl.removeChild(logEl.lastChild);
+}
+
+/* ---- Rendering ---- */
+
+function buildBuilding() {
+  buildingEl.innerHTML = '';
+  for (let f = FLOORS; f >= 1; f--) {
+    const floorEl = document.createElement('div');
+    floorEl.className = 'floor';
+    floorEl.style.bottom = ((f - 1) * 130 + 2) + 'px';
+    floorEl.dataset.floor = f;
+
+    floorEl.innerHTML = `
+      <div class="floor-label">${f}</div>
+      <div class="waiting-area" id="waiting-${f}"></div>
+      <div class="call-buttons">
+        ${f < FLOORS ? `<button class="call-btn" data-floor="${f}" data-dir="up" title="Call Up">&#9650;</button>` : ''}
+        ${f > 1 ? `<button class="call-btn" data-floor="${f}" data-dir="down" title="Call Down">&#9660;</button>` : ''}
+      </div>
+    `;
+    buildingEl.appendChild(floorEl);
+  }
+
+  const shaft = document.createElement('div');
+  shaft.className = 'shaft';
+  shaft.innerHTML = `
+    <div class="elevator" id="elevator">
+      <div class="elevator-door">
+        <div class="door-left"></div>
+        <div class="door-right"></div>
+      </div>
+      <div class="elevator-passengers" id="elev-passengers"></div>
+      <div class="direction-indicator" id="dir-arrow">&#9650;</div>
+    </div>
+  `;
+  buildingEl.appendChild(shaft);
+
+  buildingEl.querySelectorAll('.call-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const f = parseInt(btn.dataset.floor);
+      const d = btn.dataset.dir === 'up' ? 1 : -1;
+      spawnPerson(f, d);
+    });
+  });
+}
+
+function renderWaiting() {
+  for (let f = 1; f <= FLOORS; f++) {
+    const area = document.getElementById(`waiting-${f}`);
+    if (!area) continue;
+    area.innerHTML = '';
+    sim.waitingByFloor[f].forEach(p => {
+      const el = document.createElement('div');
+      el.className = 'person';
+      el.innerHTML = `<span class="person-body">${p.color}</span><span class="person-dest">${p.dest}</span>`;
+      area.appendChild(el);
+    });
+  }
+}
+
+function renderElevator() {
+  const elev = document.getElementById('elevator');
+  const bottom = (sim.currentFloor - 1) * 130 + 8;
+  elev.style.bottom = bottom + 'px';
+
+  if (sim.doorsOpen) elev.classList.add('doors-open');
+  else elev.classList.remove('doors-open');
+
+  const arrow = document.getElementById('dir-arrow');
+  arrow.innerHTML = sim.direction === 1 ? '&#9650;' : '&#9660;';
+  arrow.style.color = sim.direction === 1 ? '#00ff88' : '#e94560';
+
+  const passArea = document.getElementById('elev-passengers');
+  passArea.innerHTML = '';
+  sim.passengers.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'person person-small';
+    el.innerHTML = `<span class="person-body">${p.color}</span><span class="person-dest">${p.dest}</span>`;
+    passArea.appendChild(el);
+  });
+
+  statFloor.textContent = sim.currentFloor;
+  statDir.innerHTML = sim.direction === 1 ? '&#9650;' : '&#9660;';
+  statDir.style.color = sim.direction === 1 ? '#00ff88' : '#e94560';
+  statPass.textContent = sim.passengers.length;
+  statDel.textContent = sim.delivered;
+}
+
+function highlightCallButtons() {
+  buildingEl.querySelectorAll('.call-btn').forEach(btn => {
+    const f = parseInt(btn.dataset.floor);
+    const d = btn.dataset.dir === 'up' ? 1 : -1;
+    const hasWaiting = sim.waitingByFloor[f].some(p => {
+      return (p.dest > f && d === 1) || (p.dest < f && d === -1);
+    });
+    btn.classList.toggle('active', hasWaiting);
+  });
+}
+
+/* ---- Simulation Logic ---- */
+
+function spawnPerson(floor, preferredDir) {
+  let dest;
+  if (preferredDir === 1) {
+    dest = randomInt(floor + 1, FLOORS);
+  } else {
+    dest = randomInt(1, floor - 1);
+  }
+  const person = { id: sim.nextId++, dest, color: pickColor(), origin: floor };
+  sim.waitingByFloor[floor].push(person);
+  log(`Person appeared at floor ${floor}, wants floor ${dest}`);
+  renderWaiting();
+  highlightCallButtons();
+}
+
+function maybeSpawnRandom() {
+  if (Math.random() < 0.3) {
+    const floor = randomInt(1, FLOORS);
+    let dest;
+    do { dest = randomInt(1, FLOORS); } while (dest === floor);
+    const dir = dest > floor ? 1 : -1;
+    spawnPerson(floor, dir);
+  }
+}
+
+function hasRequestsInDirection(dir) {
+  const cf = sim.currentFloor;
+  if (sim.passengers.some(p => dir === 1 ? p.dest > cf : p.dest < cf)) return true;
+  for (let f = 1; f <= FLOORS; f++) {
+    if (dir === 1 && f > cf && sim.waitingByFloor[f].length > 0) return true;
+    if (dir === -1 && f < cf && sim.waitingByFloor[f].length > 0) return true;
+    if (f === cf && sim.waitingByFloor[f].some(p => dir === 1 ? p.dest > cf : p.dest < cf)) return true;
+  }
+  return false;
+}
+
+function hasAnyRequests() {
+  if (sim.passengers.length > 0) return true;
+  for (let f = 1; f <= FLOORS; f++) {
+    if (sim.waitingByFloor[f].length > 0) return true;
+  }
+  return false;
+}
+
+function shouldStopAtCurrentFloor() {
+  const cf = sim.currentFloor;
+  if (sim.passengers.some(p => p.dest === cf)) return true;
+  const waiting = sim.waitingByFloor[cf];
+  if (waiting.length === 0) return false;
+  if (waiting.some(p => (sim.direction === 1 && p.dest > cf) || (sim.direction === -1 && p.dest < cf))) return true;
+  if ((sim.direction === 1 && cf === FLOORS) || (sim.direction === -1 && cf === 1)) return true;
+  if (!hasRequestsInDirection(sim.direction)) return true;
+  return false;
+}
+
+async function sleep(ms) {
+  const speed = parseInt(speedInput.value);
+  return new Promise(r => setTimeout(r, ms / speed));
+}
+
+async function openDoorsAndExchange() {
+  const cf = sim.currentFloor;
+  sim.doorsOpen = true;
+  renderElevator();
+  await sleep(600);
+
+  const departing = sim.passengers.filter(p => p.dest === cf);
+  if (departing.length > 0) {
+    sim.passengers = sim.passengers.filter(p => p.dest !== cf);
+    sim.delivered += departing.length;
+    log(`${departing.length} passenger(s) exited at floor ${cf}`, 'log-down');
+    renderElevator();
+    await sleep(500);
+  }
+
+  const boarding = [];
+  const remaining = [];
+  for (const p of sim.waitingByFloor[cf]) {
+    const goingWithElevator = (sim.direction === 1 && p.dest > cf) || (sim.direction === -1 && p.dest < cf);
+    const atTerminal = (cf === FLOORS && sim.direction === -1) || (cf === 1 && sim.direction === 1);
+    if ((goingWithElevator || atTerminal || !hasRequestsInDirection(sim.direction)) && sim.passengers.length + boarding.length < MAX_CAPACITY) {
+      boarding.push(p);
+    } else {
+      remaining.push(p);
+    }
+  }
+  sim.waitingByFloor[cf] = remaining;
+
+  if (boarding.length > 0) {
+    sim.passengers.push(...boarding);
+    log(`${boarding.length} passenger(s) boarded at floor ${cf}`, 'log-up');
+    renderWaiting();
+    renderElevator();
+    highlightCallButtons();
+    await sleep(500);
+  }
+
+  sim.doorsOpen = false;
+  renderElevator();
+  await sleep(400);
+}
+
+async function tick() {
+  if (sim.busy) return;
+  sim.busy = true;
+  sim.tickCount++;
+
+  maybeSpawnRandom();
+
+  if (!hasAnyRequests()) {
+    sim.busy = false;
+    return;
+  }
+
+  if (shouldStopAtCurrentFloor()) {
+    await openDoorsAndExchange();
+  }
+
+  if (!hasRequestsInDirection(sim.direction)) {
+    sim.direction *= -1;
+    log(`Elevator reversed, now going ${sim.direction === 1 ? 'UP' : 'DOWN'}`, sim.direction === 1 ? 'log-up' : 'log-down');
+    renderElevator();
+    if (shouldStopAtCurrentFloor()) {
+      await openDoorsAndExchange();
+    }
+  }
+
+  const nextFloor = sim.currentFloor + sim.direction;
+  if (nextFloor >= 1 && nextFloor <= FLOORS) {
+    sim.currentFloor = nextFloor;
+    renderElevator();
+    await sleep(1200);
+  } else {
+    sim.direction *= -1;
+    log(`Elevator reversed at boundary, now going ${sim.direction === 1 ? 'UP' : 'DOWN'}`, sim.direction === 1 ? 'log-up' : 'log-down');
+    renderElevator();
+  }
+
+  sim.busy = false;
+}
+
+function startLoop() {
+  if (tickTimer) clearInterval(tickTimer);
+  const speed = parseInt(speedInput.value);
+  tickTimer = setInterval(() => {
+    if (!paused) tick();
+  }, 2200 / speed);
+}
+
+speedInput.addEventListener('input', () => {
+  speedLabel.textContent = speedInput.value + 'x';
+  startLoop();
+});
+
+btnToggle.addEventListener('click', () => {
+  paused = !paused;
+  btnToggle.textContent = paused ? 'Resume' : 'Pause';
+});
+
+btnReset.addEventListener('click', () => {
+  sim = createSimState();
+  logEl.innerHTML = '';
+  buildBuilding();
+  renderElevator();
+  renderWaiting();
+  highlightCallButtons();
+  log('Simulation reset');
+});
+
+buildBuilding();
+renderElevator();
+renderWaiting();
+log('Simulation started — people arrive randomly');
+startLoop();
+
+for (let i = 0; i < 3; i++) {
+  const floor = randomInt(1, FLOORS);
+  let dest;
+  do { dest = randomInt(1, FLOORS); } while (dest === floor);
+  spawnPerson(floor, dest > floor ? 1 : -1);
+}
+</script>
+</body>
+</html>
