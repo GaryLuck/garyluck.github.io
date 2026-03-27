@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Standing Wave Traffic Simulator</title>
+  <style>
+    :root {
+      --bg: #eff3e6;
+      --panel: rgba(246, 241, 226, 0.92);
+      --ink: #183321;
+      --muted: #58705f;
+      --road: #2f3438;
+      --lane: #e9dbc3;
+      --shoulder: #70807b;
+      --grass: #d7e5c0;
+      --accent: #d96c2c;
+      --accent-2: #2d7a52;
+      --warn: #b6422f;
+      --shadow: 0 18px 40px rgba(28, 44, 34, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.75), transparent 34%),
+        linear-gradient(180deg, #f4f1df 0%, var(--bg) 44%, #d5e2c5 100%);
+      min-height: 100vh;
+    }
+
+    .page {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 24px auto 32px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(290px, 0.95fr);
+      gap: 20px;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(24, 51, 33, 0.1);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: 20px;
+    }
+
+    .panel {
+      padding: 18px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+      margin-bottom: 10px;
+    }
+
+    .subhead {
+      color: var(--muted);
+      font-size: 1.02rem;
+      line-height: 1.5;
+      max-width: 60ch;
+    }
+
+    .legend {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(24, 51, 33, 0.12);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .scene {
+      margin-top: 18px;
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid rgba(24, 51, 33, 0.14);
+      background: linear-gradient(180deg, #c8d8b6 0%, #cfdcbc 100%);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+    }
+
+    h2 {
+      font-size: 1.15rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    button {
+      border: none;
+      border-radius: 16px;
+      padding: 12px 14px;
+      font: inherit;
+      font-weight: 700;
+      color: #fff9ef;
+      background: linear-gradient(180deg, #29593f 0%, #1d4530 100%);
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.06);
+    }
+
+    button.secondary {
+      background: linear-gradient(180deg, #8b6031 0%, #6d4b25 100%);
+    }
+
+    button.alert {
+      background: linear-gradient(180deg, #bf563f 0%, #943625 100%);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      transform: none;
+      filter: none;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      border-radius: 18px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.52);
+      border: 1px solid rgba(24, 51, 33, 0.08);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .stat-value {
+      margin-top: 4px;
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+    }
+
+    .ramp-table {
+      display: grid;
+      gap: 10px;
+    }
+
+    .ramp-row {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid rgba(24, 51, 33, 0.08);
+      font-size: 0.95rem;
+    }
+
+    .signal-chip {
+      justify-self: start;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: #fff;
+      min-width: 62px;
+      text-align: center;
+    }
+
+    .signal-green {
+      background: #2d8a4c;
+    }
+
+    .signal-red {
+      background: #bc4130;
+    }
+
+    .explain {
+      line-height: 1.6;
+      color: #31483b;
+      font-size: 0.96rem;
+    }
+
+    .status {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(217, 108, 44, 0.12), rgba(45, 122, 82, 0.12));
+      border: 1px solid rgba(24, 51, 33, 0.08);
+    }
+
+    .status strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 1.02rem;
+    }
+
+    @media (max-width: 980px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        font-size: 15px;
+      }
+
+      .page {
+        width: min(100vw - 18px, 1180px);
+        margin: 10px auto 18px;
+        gap: 14px;
+      }
+
+      .hero,
+      .panel {
+        border-radius: 20px;
+        padding: 14px;
+      }
+
+      .controls,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .ramp-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Standing-Wave Traffic on an Interstate</h1>
+      <p class="subhead">
+        This single-file simulator starts with a self-sustaining backup. Cars keep arriving at nearly the same rate they leave, so the jam survives even though no crash or lane closure remains. Turn on ramp metering and the computer throttles three on-ramps until the wave fades.
+      </p>
+      <div class="legend">
+        <span class="pill"><span class="swatch" style="background:#d96c2c;"></span>Mainline traffic</span>
+        <span class="pill"><span class="swatch" style="background:#e7b36c;"></span>Ramp traffic</span>
+        <span class="pill"><span class="swatch" style="background:#bc4130;"></span>Metering red</span>
+        <span class="pill"><span class="swatch" style="background:#2d8a4c;"></span>Metering green</span>
+      </div>
+      <div class="scene">
+        <canvas id="scene" width="1280" height="720" aria-label="Highway traffic simulation"></canvas>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <section>
+        <h2>Controls</h2>
+        <div class="controls" style="margin-top:12px;">
+          <button id="startBtn">Start</button>
+          <button id="pauseBtn" class="secondary">Pause</button>
+          <button id="resetBtn" class="alert">Reset</button>
+          <button id="meterBtn">Start Ramp Metering</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Live Metrics</h2>
+        <div class="stats" style="margin-top:12px;">
+          <div class="stat">
+            <div class="stat-label">Mode</div>
+            <div class="stat-value" id="modeValue">Uncontrolled</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Mainline Density</div>
+            <div class="stat-value" id="densityValue">0%</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Average Speed</div>
+            <div class="stat-value" id="speedValue">0 mph</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Exit Flow</div>
+            <div class="stat-value" id="flowValue">0 veh/hr</div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Ramp Queues</h2>
+        <div class="ramp-table" id="rampTable" style="margin-top:12px;"></div>
+      </section>
+
+      <section class="status">
+        <strong id="statusTitle">Standing wave is active</strong>
+        <div id="statusBody">
+          Arrival and departure rates are balanced, so the queue lingers in place. Each merge zone keeps the mainline near capacity and the slowdown wave travels backward through traffic.
+        </div>
+      </section>
+
+      <section>
+        <h2>What You’re Seeing</h2>
+        <p class="explain">
+          A standing-wave traffic jam can remain long after the original trigger disappears. In this model, heavy mainline demand plus three uncontrolled on-ramps keep the freeway operating right at the edge of capacity. When ramp metering begins, the signals briefly hold some entering traffic on the ramps, preventing fresh surges at the merge points and allowing the mainline to recover.
+        </p>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById("scene");
+      const ctx = canvas.getContext("2d");
+
+      const ui = {
+        startBtn: document.getElementById("startBtn"),
+        pauseBtn: document.getElementById("pauseBtn"),
+        resetBtn: document.getElementById("resetBtn"),
+        meterBtn: document.getElementById("meterBtn"),
+        modeValue: document.getElementById("modeValue"),
+        densityValue: document.getElementById("densityValue"),
+        speedValue: document.getElementById("speedValue"),
+        flowValue: document.getElementById("flowValue"),
+        statusTitle: document.getElementById("statusTitle"),
+        statusBody: document.getElementById("statusBody"),
+        rampTable: document.getElementById("rampTable"),
+      };
+
+      const config = {
+        mainCells: 150,
+        rampCells: 26,
+        maxSpeed: 5,
+        jamSlowZone: { start: 52, end: 116 },
+        freeFlowTarget: 0.18,
+        tickMs: 220,
+        road: { left: 72, right: 1210, top: 244, laneGap: 82, lanes: 3, shoulder: 24 },
+        laneY: [244, 326, 408],
+        rampCount: 3,
+      };
+
+      const rampBlueprints = [
+        { id: 1, name: "Ramp A", mergeCell: 56, spawnBias: 0.49, cycleOffset: 0, meterBias: 0.3 },
+        { id: 2, name: "Ramp B", mergeCell: 88, spawnBias: 0.45, cycleOffset: 9, meterBias: 0.5 },
+        { id: 3, name: "Ramp C", mergeCell: 114, spawnBias: 0.42, cycleOffset: 17, meterBias: 0.7 },
+      ];
+
+      const state = {
+        tick: 0,
+        running: true,
+        meteringActive: false,
+        mainline: [],
+        ramps: [],
+        nextVehicleId: 1,
+        exitsWindow: [],
+        exitedThisTick: 0,
+        info: {},
+      };
+
+      const palette = {
+        backgroundTop: "#dce7c8",
+        backgroundBottom: "#c3d3ae",
+        road: "#2f3438",
+        shoulder: "#72817d",
+        laneMark: "#eadbc0",
+        carMain: "#d96c2c",
+        carRamp: "#e8b46e",
+        jamCar: "#c3482b",
+        signalPole: "#d8cfbf",
+        signalRed: "#bc4130",
+        signalGreen: "#2d8a4c",
+        text: "#183321",
+        muted: "#58705f",
+      };
+
+      function rand() {
+        return Math.random();
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function createVehicle(source) {
+        return {
+          id: state.nextVehicleId++,
+          speed: source === "main" ? 1 + Math.floor(rand() * 2) : 1,
+          color: source === "main" ? palette.carMain : palette.carRamp,
+          source,
+        };
+      }
+
+      function buildInitialState() {
+        state.tick = 0;
+        state.meteringActive = false;
+        state.exitsWindow = [];
+        state.exitedThisTick = 0;
+        state.mainline = Array.from({ length: config.mainCells }, () => null);
+        state.ramps = rampBlueprints.map((blueprint) => ({
+          ...blueprint,
+          queue: Array.from({ length: config.rampCells }, () => null),
+          signal: "green",
+          signalHold: 0,
+          released: 0,
+        }));
+
+        for (let i = 10; i < 44; i += 3) {
+          state.mainline[i] = createVehicle("main");
+          state.mainline[i].speed = 3 + (i % 2 === 0 ? 1 : 0);
+        }
+
+        for (let i = 46; i < 118; i++) {
+          if (i % 2 === 0 && i % 9 !== 0) {
+            state.mainline[i] = createVehicle("main");
+            state.mainline[i].speed = i < 84 ? 1 : (i % 4 === 0 ? 1 : 0);
+          }
+        }
+
+        for (let i = 118; i < 140; i += 3) {
+          state.mainline[i] = createVehicle("main");
+          state.mainline[i].speed = 2;
+        }
+
+        state.ramps.forEach((ramp, index) => {
+          for (let i = Math.max(3, config.rampCells - 10 - index * 2); i < config.rampCells; i++) {
+            if (i % 2 === 0 || i > config.rampCells - 4) {
+              ramp.queue[i] = createVehicle("ramp");
+            }
+          }
+        });
+
+        updateDerivedState();
+      }
+
+      function addMainlineDemand() {
+        const entryChance = state.meteringActive ? 0.28 : 0.38;
+        if (!state.mainline[0] && rand() < entryChance) {
+          state.mainline[0] = createVehicle("main");
+        }
+      }
+
+      function updateRampDemand() {
+        state.ramps.forEach((ramp) => {
+          if (!ramp.queue[0] && rand() < ramp.spawnBias) {
+            ramp.queue[0] = createVehicle("ramp");
+          }
+        });
+      }
+
+      function findGapAhead(index) {
+        let gap = 0;
+        for (let i = index + 1; i < config.mainCells; i++) {
+          if (state.mainline[i]) {
+            return gap;
+          }
+          gap += 1;
+        }
+        return config.mainCells - index - 1;
+      }
+
+      function localDensity(center, span) {
+        const start = Math.max(0, center - span);
+        const end = Math.min(config.mainCells - 1, center + span);
+        let occupied = 0;
+        for (let i = start; i <= end; i++) {
+          if (state.mainline[i]) {
+            occupied += 1;
+          }
+        }
+        return occupied / (end - start + 1);
+      }
+
+      function localSpeed(center, span) {
+        const start = Math.max(0, center - span);
+        const end = Math.min(config.mainCells - 1, center + span);
+        let total = 0;
+        let count = 0;
+        for (let i = start; i <= end; i++) {
+          const vehicle = state.mainline[i];
+          if (vehicle) {
+            total += vehicle.speed;
+            count += 1;
+          }
+        }
+        return count ? total / count : config.maxSpeed;
+      }
+
+      function updateSignals() {
+        state.ramps.forEach((ramp) => {
+          if (!state.meteringActive) {
+            ramp.signal = "green";
+            ramp.signalHold = 0;
+            return;
+          }
+
+          const density = localDensity(ramp.mergeCell, 10);
+          const speed = localSpeed(ramp.mergeCell, 12);
+          const queueLoad = ramp.queue.filter(Boolean).length / config.rampCells;
+          const congestion = clamp(
+            density * 0.65 + (1 - speed / config.maxSpeed) * 0.45 + queueLoad * 0.2 + ramp.meterBias * 0.08,
+            0,
+            1.15
+          );
+
+          const cycle = 26 + ramp.cycleOffset;
+          const greenWindow = Math.round(clamp(10 - congestion * 7, 2, 9));
+          const phase = (state.tick + ramp.cycleOffset * 2) % cycle;
+          ramp.signal = phase < greenWindow ? "green" : "red";
+          ramp.signalHold = cycle - phase;
+        });
+      }
+
+      function advanceMainline() {
+        const next = Array.from({ length: config.mainCells }, () => null);
+        state.exitedThisTick = 0;
+
+        for (let i = config.mainCells - 1; i >= 0; i--) {
+          const vehicle = state.mainline[i];
+          if (!vehicle) {
+            continue;
+          }
+
+          const gap = findGapAhead(i);
+          const inWaveBand = i >= config.jamSlowZone.start && i <= config.jamSlowZone.end;
+          const localCongestion = localDensity(i, 6);
+          let targetSpeed = Math.min(config.maxSpeed, vehicle.speed + 1, gap);
+
+          if (inWaveBand && localCongestion > 0.52) {
+            targetSpeed = Math.min(targetSpeed, 1);
+          } else if (localCongestion > 0.72) {
+            targetSpeed = Math.min(targetSpeed, 0);
+          } else if (localCongestion > 0.58) {
+            targetSpeed = Math.min(targetSpeed, 1);
+          }
+
+          if (i > 0 && i < config.mainCells - 1 && rand() < (state.meteringActive ? 0.02 : 0.05)) {
+            targetSpeed = Math.max(0, targetSpeed - 1);
+          }
+
+          vehicle.speed = clamp(targetSpeed, 0, config.maxSpeed);
+          const destination = Math.min(config.mainCells - 1, i + vehicle.speed);
+
+          if (destination === config.mainCells - 1 && vehicle.speed > 0) {
+            state.exitedThisTick += 1;
+            continue;
+          }
+
+          if (!next[destination]) {
+            next[destination] = vehicle;
+          } else {
+            next[Math.max(i, destination - 1)] = vehicle;
+          }
+        }
+
+        state.mainline = next;
+      }
+
+      function shiftRampQueues() {
+        state.ramps.forEach((ramp) => {
+          for (let i = config.rampCells - 1; i > 0; i--) {
+            if (!ramp.queue[i] && ramp.queue[i - 1]) {
+              ramp.queue[i] = ramp.queue[i - 1];
+              ramp.queue[i - 1] = null;
+            }
+          }
+        });
+      }
+
+      function attemptMerges() {
+        state.ramps.forEach((ramp) => {
+          const tail = config.rampCells - 1;
+          const readyVehicle = ramp.queue[tail];
+          if (!readyVehicle) {
+            return;
+          }
+
+          const densityNearMerge = localDensity(ramp.mergeCell, 7);
+          const frontCell = ramp.mergeCell;
+          const downstream = Math.min(config.mainCells - 1, ramp.mergeCell + 1);
+          const canMerge = !state.mainline[frontCell] && !state.mainline[downstream];
+          const uncontrolledBonus = state.meteringActive ? 0 : 0.26;
+          const forceHold = state.meteringActive && ramp.signal !== "green";
+          const acceptance = clamp(0.85 - densityNearMerge * 0.55 + uncontrolledBonus, 0.08, 0.96);
+
+          if (!forceHold && canMerge && rand() < acceptance) {
+            readyVehicle.speed = densityNearMerge > 0.55 ? 0 : 1;
+            readyVehicle.color = palette.carMain;
+            readyVehicle.source = "main";
+            state.mainline[frontCell] = readyVehicle;
+            ramp.queue[tail] = null;
+            ramp.released += 1;
+          }
+        });
+      }
+
+      function tick() {
+        if (!state.running) {
+          return;
+        }
+
+        state.tick += 1;
+        updateRampDemand();
+        updateSignals();
+        shiftRampQueues();
+        advanceMainline();
+        attemptMerges();
+        addMainlineDemand();
+        state.exitsWindow.push(state.exitedThisTick);
+        if (state.exitsWindow.length > 40) {
+          state.exitsWindow.shift();
+        }
+        updateDerivedState();
+      }
+
+      function updateDerivedState() {
+        const occupied = state.mainline.filter(Boolean);
+        const density = occupied.length / config.mainCells;
+        const avgSpeedCells = occupied.length
+          ? occupied.reduce((sum, vehicle) => sum + vehicle.speed, 0) / occupied.length
+          : 0;
+        const mph = avgSpeedCells * 11;
+        const exitPerHour = state.exitsWindow.reduce((sum, count) => sum + count, 0) * (3600000 / (config.tickMs * Math.max(1, state.exitsWindow.length)));
+
+        state.info = {
+          density,
+          avgSpeedMph: mph,
+          exitPerHour,
+          jamLength: estimateJamLength(),
+        };
+
+        renderStats();
+      }
+
+      function estimateJamLength() {
+        let longest = 0;
+        let current = 0;
+        for (let i = 0; i < config.mainCells; i++) {
+          const vehicle = state.mainline[i];
+          if (vehicle && vehicle.speed <= 1) {
+            current += 1;
+            longest = Math.max(longest, current);
+          } else {
+            current = 0;
+          }
+        }
+        return longest;
+      }
+
+      function renderStats() {
+        ui.modeValue.textContent = state.meteringActive ? "Metering active" : "Uncontrolled";
+        ui.densityValue.textContent = `${Math.round(state.info.density * 100)}%`;
+        ui.speedValue.textContent = `${Math.round(state.info.avgSpeedMph)} mph`;
+        ui.flowValue.textContent = `${Math.round(state.info.exitPerHour)} veh/hr`;
+
+        ui.rampTable.innerHTML = "";
+        state.ramps.forEach((ramp) => {
+          const row = document.createElement("div");
+          row.className = "ramp-row";
+          const queueCount = ramp.queue.filter(Boolean).length;
+          const signalClass = ramp.signal === "green" ? "signal-chip signal-green" : "signal-chip signal-red";
+          row.innerHTML = `
+            <strong>${ramp.name}</strong>
+            <span>Queue: ${queueCount} cars</span>
+            <span class="${signalClass}">${ramp.signal.toUpperCase()}</span>
+          `;
+          ui.rampTable.appendChild(row);
+        });
+
+        if (!state.meteringActive) {
+          ui.statusTitle.textContent = "Standing wave is active";
+          ui.statusBody.textContent =
+            "Arrival and departure rates are balanced, so the queue lingers in place. Each merge zone keeps the mainline near capacity and the slowdown wave travels backward through traffic.";
+          ui.meterBtn.disabled = false;
+          ui.meterBtn.textContent = "Start Ramp Metering";
+        } else if (state.info.jamLength > 12 || state.info.density > 0.42) {
+          ui.statusTitle.textContent = "Ramp metering is draining the jam";
+          ui.statusBody.textContent =
+            "The controller is holding some vehicles on the ramps, lowering the arrival rate into the merge zones. Speeds recover first downstream, then the standing wave collapses upstream.";
+          ui.meterBtn.disabled = true;
+          ui.meterBtn.textContent = "Metering Running";
+        } else {
+          ui.statusTitle.textContent = "The standing wave has dissipated";
+          ui.statusBody.textContent =
+            "Controlled ramp inflow has pushed the freeway below its unstable threshold. Cars still enter from the ramps, but the mainline now has enough space to absorb them smoothly.";
+          ui.meterBtn.disabled = true;
+          ui.meterBtn.textContent = "Metering Running";
+        }
+      }
+
+      function cellToX(cell) {
+        const width = config.road.right - config.road.left;
+        return config.road.left + (cell / (config.mainCells - 1)) * width;
+      }
+
+      function rampPoint(rampIndex, position) {
+        const ramp = state.ramps[rampIndex];
+        const mergeX = cellToX(ramp.mergeCell);
+        const startX = mergeX - 208;
+        const startY = 622 - rampIndex * 34;
+        const endY = config.laneY[2] + 18;
+        return {
+          x: startX + (mergeX - startX) * position,
+          y: startY + (endY - startY) * position,
+        };
+      }
+
+      function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, palette.backgroundTop);
+        gradient.addColorStop(1, palette.backgroundBottom);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
+        ctx.beginPath();
+        ctx.arc(184, 114, 124, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(110, 137, 96, 0.15)";
+        ctx.fillRect(0, 516, canvas.width, 204);
+      }
+
+      function drawRoad() {
+        const roadTop = config.road.top - config.road.shoulder;
+        const roadHeight = config.road.lanes * config.road.laneGap + config.road.shoulder * 2;
+
+        ctx.fillStyle = palette.shoulder;
+        ctx.fillRect(config.road.left - 18, roadTop, config.road.right - config.road.left + 36, roadHeight);
+
+        ctx.fillStyle = palette.road;
+        ctx.fillRect(config.road.left, config.road.top, config.road.right - config.road.left, config.road.lanes * config.road.laneGap);
+
+        ctx.strokeStyle = palette.laneMark;
+        ctx.lineWidth = 4;
+        ctx.setLineDash([24, 20]);
+        for (let lane = 1; lane < config.road.lanes; lane++) {
+          const y = config.road.top + lane * config.road.laneGap;
+          ctx.beginPath();
+          ctx.moveTo(config.road.left + 8, y);
+          ctx.lineTo(config.road.right - 8, y);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.32)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(config.road.left, config.road.top + 8);
+        ctx.lineTo(config.road.right, config.road.top + 8);
+        ctx.moveTo(config.road.left, config.road.top + config.road.lanes * config.road.laneGap - 8);
+        ctx.lineTo(config.road.right, config.road.top + config.road.lanes * config.road.laneGap - 8);
+        ctx.stroke();
+
+        drawJamBand();
+        drawDirectionArrows();
+      }
+
+      function drawJamBand() {
+        const x1 = cellToX(config.jamSlowZone.start);
+        const x2 = cellToX(config.jamSlowZone.end);
+        const gradient = ctx.createLinearGradient(x1, 0, x2, 0);
+        gradient.addColorStop(0, "rgba(188, 65, 48, 0.05)");
+        gradient.addColorStop(0.5, "rgba(188, 65, 48, 0.16)");
+        gradient.addColorStop(1, "rgba(188, 65, 48, 0.05)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x1, config.road.top, x2 - x1, config.road.lanes * config.road.laneGap);
+
+        ctx.fillStyle = "rgba(255, 247, 235, 0.85)";
+        ctx.font = "600 18px Georgia, serif";
+        ctx.fillText("Standing-wave congestion zone", x1 + 18, config.road.top - 20);
+      }
+
+      function drawDirectionArrows() {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
+        ctx.lineWidth = 3;
+
+        [232, 530, 828].forEach((x) => {
+          const y = config.laneY[1];
+          ctx.beginPath();
+          ctx.moveTo(x - 38, y);
+          ctx.lineTo(x + 30, y);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(x + 30, y);
+          ctx.lineTo(x + 10, y - 12);
+          ctx.lineTo(x + 10, y + 12);
+          ctx.closePath();
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+
+      function drawRamps() {
+        state.ramps.forEach((ramp, index) => {
+          const start = rampPoint(index, 0);
+          const mid = rampPoint(index, 0.52);
+          const merge = rampPoint(index, 1);
+
+          ctx.strokeStyle = palette.shoulder;
+          ctx.lineWidth = 34;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.quadraticCurveTo(mid.x, mid.y, merge.x, merge.y);
+          ctx.stroke();
+
+          ctx.strokeStyle = palette.road;
+          ctx.lineWidth = 24;
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.quadraticCurveTo(mid.x, mid.y, merge.x, merge.y);
+          ctx.stroke();
+
+          ctx.strokeStyle = palette.laneMark;
+          ctx.lineWidth = 3;
+          ctx.setLineDash([16, 12]);
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.quadraticCurveTo(mid.x, mid.y, merge.x, merge.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          drawSignal(ramp, index, start, mid);
+
+          ctx.fillStyle = "rgba(24, 51, 33, 0.82)";
+          ctx.font = "600 16px Georgia, serif";
+          ctx.fillText(ramp.name, start.x - 16, start.y - 22);
+        });
+      }
+
+      function drawSignal(ramp, index, start, mid) {
+        const signalPos = {
+          x: start.x + (mid.x - start.x) * 0.76,
+          y: start.y + (mid.y - start.y) * 0.76 - 26,
+        };
+
+        ctx.strokeStyle = palette.signalPole;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(signalPos.x, signalPos.y);
+        ctx.lineTo(signalPos.x, signalPos.y - 34);
+        ctx.stroke();
+
+        ctx.fillStyle = "#1f2626";
+        ctx.fillRect(signalPos.x - 12, signalPos.y - 48, 24, 30);
+
+        ctx.fillStyle = ramp.signal === "red" ? palette.signalRed : "rgba(188, 65, 48, 0.25)";
+        ctx.beginPath();
+        ctx.arc(signalPos.x, signalPos.y - 40, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = ramp.signal === "green" ? palette.signalGreen : "rgba(45, 138, 76, 0.25)";
+        ctx.beginPath();
+        ctx.arc(signalPos.x, signalPos.y - 26, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (state.meteringActive) {
+          ctx.fillStyle = "rgba(255,255,255,0.85)";
+          ctx.font = "600 13px Georgia, serif";
+          ctx.fillText("Meter", signalPos.x - 18, signalPos.y - 58);
+        }
+      }
+
+      function drawCars() {
+        state.mainline.forEach((vehicle, cell) => {
+          if (!vehicle) {
+            return;
+          }
+
+          const x = cellToX(cell);
+          const y = config.laneY[1] + (vehicle.speed <= 1 ? 2 : -2);
+          drawCar(x, y, 20, 10, vehicle.speed <= 1 ? palette.jamCar : vehicle.color);
+        });
+
+        state.ramps.forEach((ramp, rampIndex) => {
+          ramp.queue.forEach((vehicle, cell) => {
+            if (!vehicle) {
+              return;
+            }
+
+            const pos = rampPoint(rampIndex, cell / (config.rampCells - 1));
+            drawCar(pos.x, pos.y, 18, 10, palette.carRamp, -0.54);
+          });
+        });
+      }
+
+      function drawCar(x, y, width, height, color, angle = 0) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = color;
+        ctx.fillRect(-width / 2, -height / 2, width, height);
+        ctx.fillStyle = "rgba(255, 244, 220, 0.7)";
+        ctx.fillRect(-width / 4, -height / 2 + 1.5, width / 2, height - 3);
+        ctx.restore();
+      }
+
+      function drawAnnotations() {
+        ctx.fillStyle = palette.text;
+        ctx.font = "700 20px Georgia, serif";
+        ctx.fillText(state.meteringActive ? "Ramp metering active" : "Uncontrolled standing wave", 76, 72);
+
+        ctx.font = "500 16px Georgia, serif";
+        ctx.fillStyle = palette.muted;
+        ctx.fillText(
+          state.meteringActive
+            ? "Ramp lights meter inflow to break the self-sustaining jam."
+            : "Traffic flows left to right, while the slowdown wave drifts backward through the queue.",
+          76,
+          98
+        );
+
+        const jamMiles = ((state.info.jamLength / config.mainCells) * 2.1).toFixed(1);
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.fillRect(1016, 54, 180, 62);
+        ctx.strokeStyle = "rgba(24, 51, 33, 0.12)";
+        ctx.strokeRect(1016, 54, 180, 62);
+        ctx.fillStyle = palette.text;
+        ctx.font = "700 17px Georgia, serif";
+        ctx.fillText(`Jam length: ${jamMiles} mi`, 1032, 79);
+        ctx.font = "500 14px Georgia, serif";
+        ctx.fillStyle = palette.muted;
+        ctx.fillText("Road segment shown: ~2.1 miles", 1032, 101);
+      }
+
+      function render() {
+        drawBackground();
+        drawRoad();
+        drawRamps();
+        drawCars();
+        drawAnnotations();
+      }
+
+      function animationLoop() {
+        render();
+        requestAnimationFrame(animationLoop);
+      }
+
+      ui.startBtn.addEventListener("click", () => {
+        state.running = true;
+      });
+
+      ui.pauseBtn.addEventListener("click", () => {
+        state.running = false;
+      });
+
+      ui.resetBtn.addEventListener("click", () => {
+        state.running = true;
+        buildInitialState();
+      });
+
+      ui.meterBtn.addEventListener("click", () => {
+        state.meteringActive = true;
+        updateSignals();
+        renderStats();
+      });
+
+      buildInitialState();
+      setInterval(tick, config.tickMs);
+      requestAnimationFrame(animationLoop);
+    })();
+  </script>
+</body>
+</html>
