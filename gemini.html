@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Highway Traffic Simulator - Ramp Metering</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 { margin-bottom: 10px; }
+        p { max-width: 800px; text-align: center; line-height: 1.5; color: #bdc3c7; }
+
+        #container {
+            background-color: #34495e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            width: 95%;
+            max-width: 1200px;
+        }
+
+        canvas {
+            background-color: #2c3e50;
+            border: 2px solid #7f8c8d;
+            border-radius: 4px;
+            width: 100%;
+            height: 400px;
+            display: block;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #3498db;
+            color: white;
+            transition: background-color 0.2s;
+        }
+
+        button:hover { background-color: #2980b9; }
+        button.active { background-color: #e67e22; }
+        button.active:hover { background-color: #d35400; }
+        button#reset { background-color: #95a5a6; }
+        button#reset:hover { background-color: #7f8c8d; }
+
+        .legend {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .box { width: 12px; height: 12px; border-radius: 2px; }
+
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #f1c40f;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Highway Traffic Simulator</h1>
+    <p>
+        This simulator demonstrates <strong>"standing wave" backups</strong> (phantom traffic jams). 
+        The jam persists even after the initial cause is gone. Use <strong>Ramp Metering</strong> to regulate the 
+        flow of new cars from on-ramps and observe how it helps dissipate the blockage.
+    </p>
+
+    <div id="container">
+        <canvas id="simCanvas"></canvas>
+        <div class="controls">
+            <button id="startBtn">Start Simulation</button>
+            <button id="meterBtn">Enable Ramp Metering</button>
+            <button id="resetBtn">Reset</button>
+        </div>
+        <div class="status" id="statusLine">Ramp Metering: OFF</div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="box" style="background: #e74c3c;"></div> Stopped Car</div>
+        <div class="legend-item"><div class="box" style="background: #f1c40f;"></div> Slowing Car</div>
+        <div class="legend-item"><div class="box" style="background: #2ecc71;"></div> Moving Car</div>
+        <div class="legend-item"><div class="box" style="background: #3498db;"></div> Ramp Car</div>
+    </div>
+
+    <script>
+        /**
+         * Highway Traffic Simulator
+         * Uses Intelligent Driver Model (IDM) for realistic traffic dynamics.
+         */
+
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const meterBtn = document.getElementById('meterBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const statusLine = document.getElementById('statusLine');
+
+        // Configuration
+        const WIDTH = 1200;
+        const HEIGHT = 400;
+        const ROAD_Y = 150;
+        const LANE_WIDTH = 30;
+        const NUM_LANES = 3;
+        const CAR_WIDTH = 12;
+        const CAR_HEIGHT = 6;
+        const PIXELS_PER_METER = 5; // Scaling factor
+
+        // IDM Parameters
+        const V0 = 33;    // Desired speed (m/s) (~120 km/h)
+        const T = 1.5;    // Safe time headway (s)
+        const S0 = 2;     // Min jam distance (m)
+        const A_MAX = 1.5;// Max acceleration (m/s^2)
+        const B_COMF = 2; // Comfortable deceleration (m/s^2)
+        const DELTA = 4;  // Acceleration exponent
+
+        // Simulation State
+        let cars = [];
+        let rampCars = [[], [], []]; // One for each of 3 ramps
+        let isRunning = false;
+        let isMetering = false;
+        let lastTime = 0;
+        let frameCount = 0;
+
+        // Ramp positions (X-coordinates)
+        const RAMP_X = [200, 500, 800];
+        const RAMP_INTERVAL = 3000; // Release interval in ms when metering
+        let lastRampRelease = [0, 0, 0];
+
+        class Car {
+            constructor(x, lane, color = null, isRampCar = false) {
+                this.x = x; // position along the road
+                this.lane = lane;
+                this.v = V0 * (0.8 + Math.random() * 0.4); // slightly varied speeds
+                this.a = 0;
+                this.color = color;
+                this.isRampCar = isRampCar;
+                this.id = Math.random();
+            }
+
+            update(dt, carAhead) {
+                // IDM Logic
+                let s = carAhead ? (carAhead.x - this.x - CAR_WIDTH) : Infinity;
+                if (s < 0 && carAhead) s = 0.1; // Prevent negative distance
+
+                let dv = carAhead ? (this.v - carAhead.v) : 0;
+                
+                // Desired gap s*
+                let sStar = S0 + Math.max(0, this.v * T + (this.v * dv) / (2 * Math.sqrt(A_MAX * B_COMF)));
+                
+                // Acceleration
+                this.a = A_MAX * (1 - Math.pow(this.v / V0, DELTA) - Math.pow(sStar / s, 2));
+                
+                // Apply update
+                this.v += this.a * dt;
+                if (this.v < 0) this.v = 0;
+                this.x += this.v * dt;
+
+                // Loop around the road
+                if (this.x > WIDTH + 50) {
+                    this.x = -50;
+                }
+            }
+
+            draw() {
+                let y = ROAD_Y + this.lane * LANE_WIDTH + (LANE_WIDTH - CAR_HEIGHT) / 2;
+                
+                // Color based on speed
+                let c = '#2ecc71';
+                if (this.v < 5) c = '#e74c3c';
+                else if (this.v < 15) c = '#f1c40f';
+                
+                if (this.isRampCar && this.v > 5) c = '#3498db';
+
+                ctx.fillStyle = c;
+                ctx.fillRect(this.x, y, CAR_WIDTH, CAR_HEIGHT);
+            }
+        }
+
+        function init() {
+            canvas.width = WIDTH;
+            canvas.height = HEIGHT;
+            cars = [];
+            rampCars = [[], [], []];
+            
+            // Create a "standing wave" blockage at X=1000
+            for (let l = 0; l < NUM_LANES; l++) {
+                // Normal flowing traffic
+                for (let x = 0; x < 900; x += 40 + Math.random() * 20) {
+                    cars.push(new Car(x, l));
+                }
+                // High density at the end to start a jam
+                for (let x = 900; x < 1050; x += 15) {
+                    let c = new Car(x, l);
+                    c.v = 2; // Start slow
+                    cars.push(c);
+                }
+            }
+            
+            draw();
+        }
+
+        function drawRoad() {
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            // Main Road
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(0, ROAD_Y, WIDTH, LANE_WIDTH * NUM_LANES);
+
+            // Lane markers
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.setLineDash([20, 20]);
+            for (let i = 1; i < NUM_LANES; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, ROAD_Y + i * LANE_WIDTH);
+                ctx.lineTo(WIDTH, ROAD_Y + i * LANE_WIDTH);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
+            // Ramps
+            RAMP_X.forEach((rx, idx) => {
+                ctx.fillStyle = '#34495e';
+                ctx.beginPath();
+                ctx.moveTo(rx - 100, ROAD_Y + NUM_LANES * LANE_WIDTH + 60);
+                ctx.lineTo(rx, ROAD_Y + (NUM_LANES - 0.5) * LANE_WIDTH);
+                ctx.lineTo(rx + 50, ROAD_Y + (NUM_LANES - 0.5) * LANE_WIDTH);
+                ctx.lineTo(rx - 50, ROAD_Y + NUM_LANES * LANE_WIDTH + 60);
+                ctx.fill();
+
+                // Ramp Light
+                ctx.beginPath();
+                ctx.arc(rx - 20, ROAD_Y + NUM_LANES * LANE_WIDTH + 20, 8, 0, Math.PI * 2);
+                if (isMetering) {
+                    let cycle = (Date.now() - lastRampRelease[idx]) % RAMP_INTERVAL;
+                    ctx.fillStyle = cycle < 500 ? '#2ecc71' : '#e74c3c';
+                } else {
+                    ctx.fillStyle = '#2ecc71';
+                }
+                ctx.fill();
+            });
+        }
+
+        function update(timestamp) {
+            if (!isRunning) return;
+            
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            if (dt > 0.1) { // Avoid huge jumps if tab was inactive
+                requestAnimationFrame(update);
+                return;
+            }
+
+            // Update main line cars
+            // Sort by X to find car ahead (simplified, per lane)
+            for (let l = 0; l < NUM_LANES; l++) {
+                let laneCars = cars.filter(c => c.lane === l).sort((a, b) => a.x - b.x);
+                for (let i = 0; i < laneCars.length; i++) {
+                    let car = laneCars[i];
+                    let carAhead = laneCars[i + 1];
+                    
+                    // Periodic boundary: if last car, its car ahead is the first car
+                    if (!carAhead && laneCars.length > 1) {
+                        carAhead = laneCars[0];
+                        // Virtual position for carAhead to calculate distance correctly
+                        let virtualCarAhead = {
+                            x: carAhead.x + WIDTH + 100, // Account for the loop distance
+                            v: carAhead.v
+                        };
+                        car.update(dt, virtualCarAhead);
+                    } else {
+                        car.update(dt, carAhead);
+                    }
+                }
+            }
+
+            // Handle Ramps
+            RAMP_X.forEach((rx, idx) => {
+                // Add cars to ramp queue periodically
+                if (Math.random() < 0.02) {
+                    rampCars[idx].push({ x: rx - 60, v: 5 });
+                }
+
+                // Release from ramp
+                let canRelease = !isMetering;
+                if (isMetering && (timestamp - lastRampRelease[idx] > RAMP_INTERVAL)) {
+                    canRelease = true;
+                }
+
+                if (canRelease && rampCars[idx].length > 0) {
+                    // Try to merge into bottom lane
+                    let lane = NUM_LANES - 1;
+                    let targetLaneCars = cars.filter(c => c.lane === lane);
+                    let gapOk = true;
+                    
+                    // Simple check: is there a car near the merge point rx?
+                    for (let c of targetLaneCars) {
+                        if (Math.abs(c.x - rx) < 30) {
+                            gapOk = false;
+                            break;
+                        }
+                    }
+
+                    if (gapOk) {
+                        let newCar = new Car(rx, lane, null, true);
+                        newCar.v = 10;
+                        cars.push(newCar);
+                        rampCars[idx].shift();
+                        lastRampRelease[idx] = timestamp;
+                    }
+                }
+            });
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            drawRoad();
+            cars.forEach(c => c.draw());
+            
+            // Draw ramp queues
+            RAMP_X.forEach((rx, idx) => {
+                rampCars[idx].forEach((rc, i) => {
+                    ctx.fillStyle = '#3498db';
+                    let rx_pos = rx - 40 - i * 15;
+                    let ry_pos = ROAD_Y + NUM_LANES * LANE_WIDTH + 20 + i * 10;
+                    ctx.fillRect(rx_pos, ry_pos, CAR_WIDTH, CAR_HEIGHT);
+                });
+            });
+        }
+
+        startBtn.addEventListener('click', () => {
+            isRunning = !isRunning;
+            startBtn.textContent = isRunning ? 'Pause Simulation' : 'Start Simulation';
+            if (isRunning) {
+                lastTime = performance.now();
+                requestAnimationFrame(update);
+            }
+        });
+
+        meterBtn.addEventListener('click', () => {
+            isMetering = !isMetering;
+            meterBtn.classList.toggle('active');
+            statusLine.textContent = `Ramp Metering: ${isMetering ? 'ON' : 'OFF'}`;
+            if (isMetering) {
+                lastRampRelease = RAMP_X.map(() => performance.now());
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            isRunning = false;
+            startBtn.textContent = 'Start Simulation';
+            init();
+        });
+
+        init();
+    </script>
+</body>
+</html>
