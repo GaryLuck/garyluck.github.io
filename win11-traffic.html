@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Highway Traffic Jam & Ramp Metering Simulator</title>
+<style>
+  body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: #111;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  header {
+    padding: 10px 16px;
+    background: #222;
+    border-bottom: 1px solid #333;
+  }
+
+  h1 {
+    font-size: 18px;
+    margin: 0 0 4px 0;
+  }
+
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  button {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    background: #2e7d32;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  button.off {
+    background: #b71c1c;
+  }
+
+  #status {
+    font-size: 12px;
+    opacity: 0.9;
+  }
+
+  #legend {
+    font-size: 12px;
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .legend-color {
+    width: 14px;
+    height: 8px;
+    border-radius: 2px;
+  }
+
+  #sim-container {
+    flex: 1;
+    display: flex;
+    background: #111;
+  }
+
+  #canvas {
+    flex: 1;
+    display: block;
+    background: #202020;
+  }
+
+  #info-panel {
+    width: 260px;
+    max-width: 260px;
+    border-left: 1px solid #333;
+    padding: 10px;
+    font-size: 12px;
+    background: #181818;
+    box-sizing: border-box;
+  }
+
+  #info-panel h2 {
+    font-size: 14px;
+    margin-top: 0;
+  }
+
+  .info-row {
+    margin-bottom: 6px;
+  }
+
+  .info-label {
+    opacity: 0.8;
+  }
+
+  .info-value {
+    font-weight: 600;
+  }
+
+  #chart {
+    width: 100%;
+    height: 120px;
+    background: #101010;
+    border: 1px solid #333;
+    margin-top: 8px;
+  }
+
+  a {
+    color: #90caf9;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Highway Standing-Wave Jam & Ramp Metering (3 On-Ramps)</h1>
+  <div id="controls">
+    <button id="meteringBtn" class="off">Turn ON Ramp Metering</button>
+    <span id="status">Ramp metering: OFF (uncontrolled access, jam persists)</span>
+  </div>
+  <div id="legend">
+    <div class="legend-item">
+      <div class="legend-color" style="background:#4caf50;"></div><span>Free-flow cars (higher speed)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background:#ffeb3b;"></div><span>Slowing cars</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background:#f44336;"></div><span>Jam region (very low speed)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background:#00bcd4;"></div><span>On-ramp lanes</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background:#ff5722;"></div><span>Ramp signal (red/green)</span>
+    </div>
+  </div>
+</header>
+
+<div id="sim-container">
+  <canvas id="canvas"></canvas>
+  <div id="info-panel">
+    <h2>Simulation Info</h2>
+    <div class="info-row">
+      <span class="info-label">Road length:</span>
+      <span class="info-value" id="info-length"></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Cars on mainline:</span>
+      <span class="info-value" id="info-cars"></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Average speed (mainline):</span>
+      <span class="info-value" id="info-speed"></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Jam density (cars in jam zone):</span>
+      <span class="info-value" id="info-jam-density"></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Ramp metering mode:</span>
+      <span class="info-value" id="info-metering"></span>
+    </div>
+
+    <canvas id="chart"></canvas>
+    <div style="margin-top:8px; opacity:0.8;">
+      This is a simplified 1D model: cars move along a single lane, with a pre-existing
+      dense region (standing-wave jam). Three on-ramps feed traffic. When metering is OFF,
+      ramp inflow keeps the jam alive. When metering is ON, ramp signals throttle inflow
+      based on jam density, allowing the jam to dissipate over time.
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  High-level model:
+  - 1D road of length L (in arbitrary units).
+  - Cars have position x, speed v.
+  - There is a "jam zone" in the middle where desired speed is much lower.
+  - Three on-ramps inject cars at different positions.
+  - Without metering: ramps inject at a high rate, sustaining jam density.
+  - With metering: each ramp has a red/green light; green time is reduced when jam density is high.
+  - Visualization: top is mainline, three short side lanes feed into it.
+*/
+
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const chartCanvas = document.getElementById('chart');
+  const chartCtx = chartCanvas.getContext('2d');
+
+  const meteringBtn = document.getElementById('meteringBtn');
+  const statusSpan = document.getElementById('status');
+
+  const infoLength = document.getElementById('info-length');
+  const infoCars = document.getElementById('info-cars');
+  const infoSpeed = document.getElementById('info-speed');
+  const infoJamDensity = document.getElementById('info-jam-density');
+  const infoMetering = document.getElementById('info-metering');
+
+  // Resize canvas to fill container
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const chartRect = chartCanvas.getBoundingClientRect();
+    chartCanvas.width = chartRect.width;
+    chartCanvas.height = chartRect.height;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Simulation parameters
+  const ROAD_LENGTH = 2000; // arbitrary units
+  const DT = 0.1;           // time step
+  const MAX_SPEED = 33;     // ~120 km/h in m/s (scaled)
+  const JAM_SPEED = 3;      // speed in jam region
+  const ACCEL = 2.0;
+  const DECEL = 4.0;
+  const SAFE_HEADWAY = 15;  // desired minimum gap
+  const CAR_LENGTH = 5;
+
+  // Jam zone (standing wave region)
+  const JAM_START = 800;
+  const JAM_END = 1100;
+
+  // On-ramp definitions (positions along road)
+  const ramps = [
+    { x: 400,  queue: [], lastSpawn: 0, baseSpawnInterval: 2.0, meterPhase: 0, meterGreenFrac: 0.8, light: 'green' },
+    { x: 900,  queue: [], lastSpawn: 0, baseSpawnInterval: 2.0, meterPhase: 0, meterGreenFrac: 0.8, light: 'green' },
+    { x: 1400, queue: [], lastSpawn: 0, baseSpawnInterval: 2.0, meterPhase: 0, meterGreenFrac: 0.8, light: 'green' }
+  ];
+
+  // Ramp metering control
+  let meteringOn = false;
+
+  // Cars on mainline
+  const cars = [];
+
+  // Initialize a standing-wave jam: dense cluster in jam zone, sparser elsewhere
+  function initCars() {
+    cars.length = 0;
+
+    // Upstream free-flow region
+    let x = 0;
+    while (x < JAM_START - 200) {
+      const gap = SAFE_HEADWAY + 10 + Math.random() * 20;
+      x += gap;
+      cars.push({
+        x,
+        v: MAX_SPEED * (0.7 + 0.3 * Math.random())
+      });
+    }
+
+    // Jam region: dense, low speed
+    x = JAM_START - 50;
+    while (x < JAM_END + 50) {
+      const gap = CAR_LENGTH + 3 + Math.random() * 3;
+      x += gap;
+      cars.push({
+        x,
+        v: JAM_SPEED * (0.5 + 0.5 * Math.random())
+      });
+    }
+
+    // Downstream recovery region
+    x = JAM_END + 100;
+    while (x < ROAD_LENGTH) {
+      const gap = SAFE_HEADWAY + 15 + Math.random() * 25;
+      x += gap;
+      cars.push({
+        x,
+        v: MAX_SPEED * (0.6 + 0.4 * Math.random())
+      });
+    }
+
+    // Sort by position
+    cars.sort((a, b) => a.x - b.x);
+  }
+
+  initCars();
+
+  // Simple helper: find car ahead of index i (wrap not needed; open road)
+  function carAhead(i) {
+    if (i === cars.length - 1) return null;
+    return cars[i + 1];
+  }
+
+  // Compute desired speed based on location (jam zone vs free-flow)
+  function desiredSpeed(x) {
+    if (x > JAM_START && x < JAM_END) {
+      return JAM_SPEED;
+    }
+    return MAX_SPEED;
+  }
+
+  // Update ramp metering based on jam density
+  function computeJamDensity() {
+    let count = 0;
+    for (const c of cars) {
+      if (c.x >= JAM_START && c.x <= JAM_END) count++;
+    }
+    return count;
+  }
+
+  function updateRampMetering(dt) {
+    const jamCount = computeJamDensity();
+    // Rough "density" measure: number of cars in jam zone
+    // Use it to adjust green fraction: more jam -> smaller green fraction
+    const targetGreenFrac = meteringOn
+      ? Math.max(0.1, 1.0 - jamCount / 60) // clamp
+      : 0.9; // effectively almost always green when metering off
+
+    for (const r of ramps) {
+      // Smoothly move meterGreenFrac toward target
+      const alpha = 0.05;
+      r.meterGreenFrac = r.meterGreenFrac * (1 - alpha) + targetGreenFrac * alpha;
+
+      // Simple periodic signal: 4-second cycle
+      const cycle = 4.0;
+      r.meterPhase = (r.meterPhase + dt) % cycle;
+      const phaseFrac = r.meterPhase / cycle;
+      r.light = (phaseFrac < r.meterGreenFrac) ? 'green' : 'red';
+    }
+  }
+
+  // Spawn cars into ramp queues (representing incoming demand)
+  function updateRampQueues(dt, time) {
+    for (const r of ramps) {
+      r.lastSpawn += dt;
+      const interval = r.baseSpawnInterval * (meteringOn ? 0.8 : 0.6); // slightly higher demand when metering off
+      if (r.lastSpawn >= interval) {
+        r.lastSpawn = 0;
+        r.queue.push({
+          // ramp cars only need a "ready" flag; position handled when merging
+          ready: true
+        });
+      }
+    }
+  }
+
+  // Merge ramp cars into mainline when light is green and gap is available
+  function mergeRampCars() {
+    for (const r of ramps) {
+      if (r.queue.length === 0) continue;
+      if (r.light !== 'green') continue;
+
+      // Find nearest car upstream and downstream around merge point
+      const mergeX = r.x;
+      let upstream = null;
+      let downstream = null;
+
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        if (c.x < mergeX) upstream = c;
+        if (c.x >= mergeX) {
+          downstream = c;
+          break;
+        }
+      }
+
+      const minGap = SAFE_HEADWAY;
+      let canMerge = true;
+
+      if (upstream && (mergeX - upstream.x) < minGap) canMerge = false;
+      if (downstream && (downstream.x - mergeX) < minGap) canMerge = false;
+
+      if (canMerge) {
+        // Insert new car at mergeX with moderate speed
+        const v0 = desiredSpeed(mergeX) * 0.7;
+        cars.push({ x: mergeX, v: v0 });
+        cars.sort((a, b) => a.x - b.x);
+        r.queue.shift();
+      }
+    }
+  }
+
+  // Mainline car dynamics
+  function updateCars(dt) {
+    // Update speeds based on car ahead and desired speed
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
+      const ahead = carAhead(i);
+      const vDes = desiredSpeed(c.x);
+
+      // Basic car-following: adjust speed to maintain gap
+      let dv = 0;
+
+      if (ahead) {
+        const gap = ahead.x - c.x - CAR_LENGTH;
+        if (gap < SAFE_HEADWAY) {
+          // Need to slow down
+          dv -= DECEL * (SAFE_HEADWAY - gap) / SAFE_HEADWAY;
+        } else if (c.v < vDes) {
+          dv += ACCEL * (gap - SAFE_HEADWAY) / (SAFE_HEADWAY + 20);
+        }
+      } else {
+        // No car ahead: accelerate toward desired speed
+        if (c.v < vDes) dv += ACCEL;
+        else if (c.v > vDes) dv -= DECEL * 0.5;
+      }
+
+      c.v += dv * dt;
+      if (c.v < 0) c.v = 0;
+      if (c.v > MAX_SPEED) c.v = MAX_SPEED;
+    }
+
+    // Update positions
+    for (const c of cars) {
+      c.x += c.v * dt;
+    }
+
+    // Remove cars that leave the road
+    for (let i = cars.length - 1; i >= 0; i--) {
+      if (cars[i].x > ROAD_LENGTH + 50) {
+        cars.splice(i, 1);
+      }
+    }
+  }
+
+  // Visualization
+  function draw() {
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Road geometry
+    const roadTop = h * 0.3;
+    const roadHeight = h * 0.25;
+    const laneY = roadTop + roadHeight * 0.5;
+
+    // Draw main road
+    ctx.fillStyle = '#303030';
+    ctx.fillRect(0, roadTop, w, roadHeight);
+
+    // Lane markings
+    ctx.strokeStyle = '#707070';
+    ctx.setLineDash([10, 10]);
+    ctx.beginPath();
+    ctx.moveTo(0, laneY);
+    ctx.lineTo(w, laneY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw jam zone overlay
+    const jamStartX = (JAM_START / ROAD_LENGTH) * w;
+    const jamEndX = (JAM_END / ROAD_LENGTH) * w;
+    ctx.fillStyle = 'rgba(244,67,54,0.15)';
+    ctx.fillRect(jamStartX, roadTop, jamEndX - jamStartX, roadHeight);
+
+    // Draw ramps
+    const rampLengthPx = h * 0.18;
+    const rampOffsetY = roadTop - 10;
+    ctx.lineWidth = 4;
+    for (const r of ramps) {
+      const rx = (r.x / ROAD_LENGTH) * w;
+      ctx.strokeStyle = '#00bcd4';
+      ctx.beginPath();
+      ctx.moveTo(rx - 40, rampOffsetY - rampLengthPx);
+      ctx.lineTo(rx, rampOffsetY);
+      ctx.stroke();
+
+      // Draw ramp signal at merge point
+      ctx.fillStyle = (r.light === 'green') ? '#4caf50' : '#f44336';
+      ctx.beginPath();
+      ctx.arc(rx - 10, rampOffsetY - 10, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw queued cars on ramp
+      const q = r.queue.length;
+      for (let i = 0; i < q; i++) {
+        const t = i / (q + 1);
+        const cx = rx - 40 + t * 40;
+        const cy = rampOffsetY - rampLengthPx + t * rampLengthPx;
+        ctx.fillStyle = '#ff9800';
+        ctx.fillRect(cx - 4, cy - 4, 8, 8);
+      }
+    }
+
+    // Draw cars on mainline
+    for (const c of cars) {
+      const x = (c.x / ROAD_LENGTH) * w;
+      const vNorm = c.v / MAX_SPEED;
+      let color;
+      if (c.x > JAM_START && c.x < JAM_END) {
+        color = '#f44336'; // jam
+      } else if (vNorm > 0.7) {
+        color = '#4caf50'; // fast
+      } else if (vNorm > 0.3) {
+        color = '#ffeb3b'; // medium
+      } else {
+        color = '#f44336'; // slow
+      }
+      ctx.fillStyle = color;
+      const carW = 10;
+      const carH = 6;
+      ctx.fillRect(x - carW / 2, laneY - carH / 2, carW, carH);
+    }
+  }
+
+  // Simple time series of jam density for chart
+  const jamHistory = [];
+  const maxHistory = 200;
+
+  function drawChart() {
+    const w = chartCanvas.width;
+    const h = chartCanvas.height;
+    chartCtx.clearRect(0, 0, w, h);
+
+    chartCtx.fillStyle = '#101010';
+    chartCtx.fillRect(0, 0, w, h);
+
+    if (jamHistory.length < 2) return;
+
+    const maxVal = Math.max(...jamHistory, 1);
+    chartCtx.strokeStyle = '#4caf50';
+    chartCtx.lineWidth = 1.5;
+    chartCtx.beginPath();
+    for (let i = 0; i < jamHistory.length; i++) {
+      const x = (i / (jamHistory.length - 1)) * (w - 4) + 2;
+      const y = h - 2 - (jamHistory[i] / maxVal) * (h - 4);
+      if (i === 0) chartCtx.moveTo(x, y);
+      else chartCtx.lineTo(x, y);
+    }
+    chartCtx.stroke();
+
+    chartCtx.fillStyle = '#ccc';
+    chartCtx.font = '10px system-ui';
+    chartCtx.fillText('Jam density over time', 6, 12);
+  }
+
+  // Info panel updates
+  function updateInfo() {
+    infoLength.textContent = ROAD_LENGTH.toFixed(0) + ' units';
+    infoCars.textContent = cars.length.toString();
+
+    let sumV = 0;
+    for (const c of cars) sumV += c.v;
+    const avgV = cars.length ? sumV / cars.length : 0;
+    infoSpeed.textContent = avgV.toFixed(1) + ' (speed units)';
+
+    const jamCount = computeJamDensity();
+    infoJamDensity.textContent = jamCount.toString() + ' cars';
+
+    infoMetering.textContent = meteringOn ? 'ON (controlled access)' : 'OFF (uncontrolled access)';
+  }
+
+  // Main loop
+  let lastTime = null;
+  function step(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const dtMs = timestamp - lastTime;
+    lastTime = timestamp;
+
+    const dt = DT; // fixed step for stability; ignore real dtMs
+
+    updateRampMetering(dt);
+    updateRampQueues(dt, timestamp / 1000);
+    mergeRampCars();
+    updateCars(dt);
+
+    const jamCount = computeJamDensity();
+    jamHistory.push(jamCount);
+    if (jamHistory.length > maxHistory) jamHistory.shift();
+
+    draw();
+    drawChart();
+    updateInfo();
+
+    requestAnimationFrame(step);
+  }
+
+  requestAnimationFrame(step);
+
+  // Button behavior
+  meteringBtn.addEventListener('click', () => {
+    meteringOn = !meteringOn;
+    if (meteringOn) {
+      meteringBtn.textContent = 'Turn OFF Ramp Metering';
+      meteringBtn.classList.remove('off');
+      statusSpan.textContent = 'Ramp metering: ON (signals throttle ramp inflow; jam can dissipate)';
+    } else {
+      meteringBtn.textContent = 'Turn ON Ramp Metering';
+      meteringBtn.classList.add('off');
+      statusSpan.textContent = 'Ramp metering: OFF (uncontrolled access, jam persists)';
+    }
+  });
+})();
+</script>
+</body>
+</html>
