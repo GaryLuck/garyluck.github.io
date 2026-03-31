@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Simulator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #f1c40f;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .container {
+            background-color: #34495e;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+            background-color: #2c3e50;
+            padding: 15px;
+            border-radius: 8px;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        input[type="range"] {
+            width: 150px;
+        }
+
+        .value-display {
+            font-size: 12px;
+            background: #1abc9c;
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+        }
+
+        button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+            margin-top: auto;
+        }
+
+        button:hover {
+            background-color: #c0392b;
+        }
+
+        .canvas-container {
+            width: 100%;
+            overflow-x: auto;
+            background-color: #1a252f;
+            border-radius: 8px;
+            padding: 20px 0;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+
+        canvas {
+            background-color: #95a5a6;
+            border-top: 4px solid #7f8c8d;
+            border-bottom: 4px solid #7f8c8d;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        .info {
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #bdc3c7;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Traffic Simulator</h1>
+
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <label for="entryRate">Entry Rate (Cars/tick)</label>
+                <input type="range" id="entryRate" min="0" max="1" step="0.05" value="0.3">
+                <span id="entryRateVal" class="value-display">0.3</span>
+            </div>
+
+            <div class="control-group">
+                <label for="initialSpeed">Initial Speed of Arriving Cars</label>
+                <input type="range" id="initialSpeed" min="0" max="5" step="1" value="3">
+                <span id="initialSpeedVal" class="value-display">3</span>
+            </div>
+
+            <div class="control-group">
+                <label for="pBrake">Random Braking Prob (p)</label>
+                <input type="range" id="pBrake" min="0" max="1" step="0.05" value="0.10">
+                <span id="pBrakeVal" class="value-display">0.10</span>
+            </div>
+
+            <div class="control-group">
+                <label for="simSpeed">Simulation Speed</label>
+                <input type="range" id="simSpeed" min="50" max="1000" step="50" value="200">
+                <span id="simSpeedVal" class="value-display">200 ms</span>
+            </div>
+
+            <button id="resetBtn">Restart & Create Jam</button>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="roadCanvas" width="900" height="100"></canvas>
+        </div>
+
+        <div class="info">
+            <p><strong>Cellular Automata Traffic Model (Nagel-Schreckenberg)</strong></p>
+            <p>Cells are empty or occupied by a car. Cars move left to right.</p>
+            <p>Rules per tick: 1. Accelerate to max speed (5). 2. Slow down to avoid crashing. 3. Randomly brake. 4. Move forward.</p>
+        </div>
+    </div>
+
+    <script>
+        // Constants & Configuration
+        const NUM_CELLS = 50; // A reasonable number to display on a laptop screen (each cell will be a bit wide)
+        const V_MAX = 5; // Maximum speed (cells per tick)
+        const CELL_WIDTH = 18;
+        const CELL_HEIGHT = 30;
+        const ROAD_PADDING = 10;
+
+        // Canvas setup
+        const canvas = document.getElementById('roadCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Adjust canvas width based on cells
+        canvas.width = NUM_CELLS * CELL_WIDTH;
+        canvas.height = CELL_HEIGHT + ROAD_PADDING * 2;
+
+        // UI Elements
+        const entryRateInput = document.getElementById('entryRate');
+        const entryRateVal = document.getElementById('entryRateVal');
+        const initialSpeedInput = document.getElementById('initialSpeed');
+        const initialSpeedVal = document.getElementById('initialSpeedVal');
+        const pBrakeInput = document.getElementById('pBrake');
+        const pBrakeVal = document.getElementById('pBrakeVal');
+        const simSpeedInput = document.getElementById('simSpeed');
+        const simSpeedVal = document.getElementById('simSpeedVal');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // State
+        let road = new Array(NUM_CELLS).fill(null);
+        let simulationInterval;
+        let p = parseFloat(pBrakeInput.value);
+        let entryRate = parseFloat(entryRateInput.value);
+        let initSpeed = parseInt(initialSpeedInput.value);
+        let tickDelay = parseInt(simSpeedInput.value);
+
+        // Update display values
+        entryRateInput.addEventListener('input', (e) => {
+            entryRate = parseFloat(e.target.value);
+            entryRateVal.textContent = entryRate.toFixed(2);
+        });
+
+        initialSpeedInput.addEventListener('input', (e) => {
+            initSpeed = parseInt(e.target.value);
+            initialSpeedVal.textContent = initSpeed;
+        });
+
+        pBrakeInput.addEventListener('input', (e) => {
+            p = parseFloat(e.target.value);
+            pBrakeVal.textContent = p.toFixed(2);
+        });
+
+        simSpeedInput.addEventListener('input', (e) => {
+            tickDelay = parseInt(e.target.value);
+            simSpeedVal.textContent = tickDelay + ' ms';
+            startSimulation(); // Restart interval with new speed
+        });
+
+        resetBtn.addEventListener('click', initSimulation);
+
+        class Car {
+            constructor(v) {
+                this.v = v;
+                // Generate a random color for the car, avoiding very dark/light colors for visibility
+                const hue = Math.floor(Math.random() * 360);
+                this.color = `hsl(${hue}, 80%, 50%)`;
+            }
+        }
+
+        function initSimulation() {
+            road = new Array(NUM_CELLS).fill(null);
+
+            // Randomly initialize the road with some cars (velocity <= V_MAX)
+            for (let i = 0; i < NUM_CELLS; i++) {
+                if (Math.random() < 0.2) {
+                    road[i] = new Car(Math.floor(Math.random() * (V_MAX + 1)));
+                }
+            }
+
+            // Create a traffic jam in the middle of the screen
+            const midPoint = Math.floor(NUM_CELLS / 2);
+            const jamSize = 8;
+            for (let i = midPoint - jamSize / 2; i < midPoint + jamSize / 2; i++) {
+                if (i >= 0 && i < NUM_CELLS) {
+                    road[i] = new Car(0); // Cars back-to-back with 0 initial speed
+                }
+            }
+
+            draw();
+            startSimulation();
+        }
+
+        function getDistanceToNextCar(index) {
+            let distance = 0;
+            for (let i = 1; i <= V_MAX + 1; i++) { // Only need to look ahead up to V_MAX + 1
+                const checkIndex = index + i;
+                if (checkIndex >= NUM_CELLS) {
+                    // We assume open road ahead beyond the screen (or they disappear)
+                    return Infinity;
+                }
+                if (road[checkIndex] !== null) {
+                    return i; // distance in sites to the next vehicle (if next cell has car, j=1)
+                }
+            }
+            return Infinity;
+        }
+
+        function tick() {
+            // 1. Accelerate, 2. Slowing down, 3. Randomization
+            for (let i = 0; i < NUM_CELLS; i++) {
+                const car = road[i];
+                if (car !== null) {
+                    const j = getDistanceToNextCar(i);
+
+                    // Rule 1: Accelerate
+                    // "if the velocity v of a vehicle is lower than vmax and if the distance to the
+                    // next car ahead is larger than v + 1, the speed is advanced by one, let v = v + 1"
+                    if (car.v < V_MAX && j > car.v + 1) {
+                        car.v += 1;
+                    }
+
+                    // Rule 2: Slowing down
+                    // "if a vehicle at site I sees the next vehicle at site I + j (with j <= v),
+                    // it reduces its speed to, let v = j - 1"
+                    // Note: adjusting to j <= v to prevent collisions, consistent with NaSch model.
+                    if (j <= car.v) {
+                        car.v = Math.max(0, j - 1);
+                    }
+
+                    // Rule 3: Randomization
+                    // "with probability p (0.10 out of 1.0), the velocity of each vehicle (if greater than zero)
+                    // is decreased by one, let v = v - 1"
+                    if (car.v > 0 && Math.random() < p) {
+                        car.v -= 1;
+                    }
+                }
+            }
+
+            // 4. Car motion
+            // We need a new road array to avoid moving a car and then processing it again
+            let newRoad = new Array(NUM_CELLS).fill(null);
+            for (let i = 0; i < NUM_CELLS; i++) {
+                const car = road[i];
+                if (car !== null) {
+                    const newPos = i + car.v;
+                    if (newPos < NUM_CELLS) {
+                        newRoad[newPos] = car;
+                    }
+                    // Cars that go beyond NUM_CELLS are removed from the simulation
+                }
+            }
+            road = newRoad;
+
+            // Handle entry of new cars from the left
+            if (road[0] === null) { // Only if the first cell is empty
+                if (Math.random() < entryRate) {
+                    // Check if there is space for the car to enter at initSpeed safely
+                    // We don't want a car entering at speed 5 to immediately crash into a car at cell 2
+                    let safeToEnter = true;
+                    for (let i = 0; i <= initSpeed; i++) {
+                        if (road[i] !== null) {
+                            safeToEnter = false;
+                            break;
+                        }
+                    }
+                    if (safeToEnter) {
+                        road[0] = new Car(initSpeed);
+                    } else if (road[0] === null) {
+                        // Enter with speed 0 if not safe to enter at initSpeed
+                         road[0] = new Car(0);
+                    }
+                }
+            }
+
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw road markings (lane divider)
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset line dash
+
+            for (let i = 0; i < NUM_CELLS; i++) {
+                const x = i * CELL_WIDTH;
+                const y = ROAD_PADDING;
+
+                // Draw cell background (empty rectangle)
+                ctx.fillStyle = '#7f8c8d'; // Slightly darker grey for empty cells
+                // Leave a small gap (2px) between cells so they don't touch visually
+                ctx.fillRect(x + 1, y, CELL_WIDTH - 2, CELL_HEIGHT);
+
+                const car = road[i];
+                if (car !== null) {
+                    // Draw car
+                    ctx.fillStyle = car.color;
+                    // Leave space between cars as required: "Leave enough space between rectangles so two cars are not touching each other."
+                    // The car rectangle is smaller than the cell width.
+                    ctx.fillRect(x + 2, y + 4, CELL_WIDTH - 4, CELL_HEIGHT - 8);
+
+                    // Draw velocity text on car (optional, for visibility)
+                    ctx.fillStyle = 'white';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(car.v, x + CELL_WIDTH / 2, y + CELL_HEIGHT / 2);
+                }
+            }
+        }
+
+        function startSimulation() {
+            if (simulationInterval) {
+                clearInterval(simulationInterval);
+            }
+            simulationInterval = setInterval(tick, tickDelay);
+        }
+
+        // Initialize on load
+        initSimulation();
+
+    </script>
+</body>
+</html>
