@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Traffic Simulator - Cellular Automata</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    gap: 16px;
+  }
+  h1 { font-size: 1.4rem; color: #ccc; letter-spacing: 1px; }
+
+  #road-container {
+    width: 100%;
+    max-width: 900px;
+    background: #555;
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+  #road-canvas {
+    display: block;
+    width: 100%;
+    border-radius: 4px;
+    background: #666;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+  }
+  button {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: opacity 0.2s;
+  }
+  button:hover { opacity: 0.85; }
+  #btn-start  { background: #7ec8a0; color: #1a1a1a; }
+  #btn-pause  { background: #f0c97a; color: #1a1a1a; }
+  #btn-reset  { background: #e08080; color: #1a1a1a; }
+
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #bbb;
+  }
+  input[type=range] { width: 130px; accent-color: #7ec8a0; }
+
+  #stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 100%;
+    max-width: 900px;
+  }
+  .stat-card {
+    background: #4a4a4a;
+    border-radius: 6px;
+    padding: 10px 14px;
+    text-align: center;
+  }
+  .stat-label { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 1.3rem; font-weight: 700; color: #e8e8e8; margin-top: 2px; }
+
+  #hint {
+    font-size: 0.75rem;
+    color: #888;
+    text-align: center;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<h1>Traffic Simulator — Cellular Automata</h1>
+
+<div id="road-container">
+  <canvas id="road-canvas" height="80"></canvas>
+</div>
+
+<div class="controls">
+  <button id="btn-start">Start</button>
+  <button id="btn-pause">Pause</button>
+  <button id="btn-reset">Reset</button>
+  <div class="slider-group">
+    <span>Speed</span>
+    <input type="range" id="speed-slider" min="50" max="1000" step="50" value="200">
+    <span id="speed-label">200ms</span>
+  </div>
+  <div class="slider-group">
+    <span>vmax: <strong id="vmax-label">5</strong></span>
+  </div>
+</div>
+
+<div id="stats">
+  <div class="stat-card"><div class="stat-label">Total Cars</div><div class="stat-value" id="s-cars">0</div></div>
+  <div class="stat-card"><div class="stat-label">Avg Velocity</div><div class="stat-value" id="s-avg">0.00</div></div>
+  <div class="stat-card"><div class="stat-label">Max Velocity</div><div class="stat-value" id="s-max">0</div></div>
+  <div class="stat-card"><div class="stat-label">Jammed Cars</div><div class="stat-value" id="s-jammed">0</div></div>
+  <div class="stat-card"><div class="stat-label">Ticks</div><div class="stat-value" id="s-ticks">0</div></div>
+  <div class="stat-card"><div class="stat-label">Flow Rate</div><div class="stat-value" id="s-flow">0.00</div></div>
+</div>
+
+<div id="hint">
+  Left-click road to add car &nbsp;|&nbsp; Right-click to decrease vmax &nbsp;|&nbsp; Shift+Right-click to increase vmax
+</div>
+
+<script>
+(() => {
+  // ── Config ──────────────────────────────────────────────────────────────
+  const CELLS = 100;
+  const RAND_PROB = 0.1;
+  let VMAX = 5;
+
+  // Pastel car colors
+  const CAR_COLORS = [
+    '#a8d8ea','#aa96da','#fcbad3','#ffffd2','#b5ead7',
+    '#ffdac1','#c7ceea','#e2f0cb','#f9c6c9','#d4a5a5'
+  ];
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let road = new Array(CELLS).fill(null); // null or { v, color }
+  let running = false;
+  let timer = null;
+  let interval = 200;
+  let ticks = 0;
+  let flowCount = 0; // cars that crossed finish line
+
+  // ── Canvas ───────────────────────────────────────────────────────────────
+  const canvas = document.getElementById('road-canvas');
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    const container = document.getElementById('road-container');
+    canvas.width = container.clientWidth - 20;
+    draw();
+  }
+
+  function cellWidth() { return canvas.width / CELLS; }
+
+  function draw() {
+    const cw = cellWidth();
+    const ch = canvas.height;
+    ctx.clearRect(0, 0, canvas.width, ch);
+
+    // Road surface
+    ctx.fillStyle = '#707070';
+    ctx.fillRect(0, 0, canvas.width, ch);
+
+    // Dashed center line
+    ctx.setLineDash([cw * 2, cw * 2]);
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, ch / 2);
+    ctx.lineTo(canvas.width, ch / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Cars
+    const carH = ch * 0.55;
+    const carY = (ch - carH) / 2;
+    const pad = 2;
+
+    for (let i = 0; i < CELLS; i++) {
+      if (!road[i]) continue;
+      const car = road[i];
+      ctx.fillStyle = car.color;
+      ctx.beginPath();
+      ctx.roundRect(i * cw + pad, carY, cw - pad * 2, carH, 3);
+      ctx.fill();
+
+      // velocity indicator (small dot brightness)
+      const alpha = car.v / VMAX;
+      ctx.fillStyle = `rgba(0,0,0,${0.4 - alpha * 0.35})`;
+      ctx.beginPath();
+      ctx.roundRect(i * cw + pad, carY, cw - pad * 2, carH, 3);
+      ctx.fill();
+    }
+  }
+
+  // ── Initialization ───────────────────────────────────────────────────────
+  function randomColor() {
+    return CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)];
+  }
+
+  function init() {
+    road = new Array(CELLS).fill(null);
+    ticks = 0;
+    flowCount = 0;
+
+    // Sparse cars on left half
+    for (let i = 0; i < 30; i++) {
+      const pos = Math.floor(Math.random() * 40);
+      if (!road[pos]) road[pos] = { v: Math.floor(Math.random() * (VMAX + 1)), color: randomColor() };
+    }
+
+    // Traffic jam in the middle (cells 45-60, v=0)
+    for (let i = 45; i <= 60; i++) {
+      road[i] = { v: 0, color: randomColor() };
+    }
+
+    updateStats();
+    draw();
+  }
+
+  // ── Cellular Automata Step ───────────────────────────────────────────────
+  function step() {
+    const next = new Array(CELLS).fill(null);
+
+    for (let i = 0; i < CELLS; i++) {
+      if (!road[i]) continue;
+      let { v, color } = road[i];
+
+      // 1. Acceleration
+      if (v < VMAX) v++;
+
+      // 2. Slowing down — find distance to next car
+      let dist = 0;
+      for (let d = 1; d <= CELLS; d++) {
+        if (road[(i + d) % CELLS]) { dist = d; break; }
+      }
+      if (dist > 0 && dist <= v) v = dist - 1;
+
+      // 3. Randomization
+      if (v > 0 && Math.random() < RAND_PROB) v--;
+
+      // 4. Move
+      const newPos = (i + v) % CELLS;
+      if (v > 0 && newPos < i) flowCount++; // wrapped around = crossed finish
+      next[newPos] = { v, color };
+    }
+
+    road = next;
+    ticks++;
+    updateStats();
+    draw();
+  }
+
+  // ── Stats ────────────────────────────────────────────────────────────────
+  function updateStats() {
+    const cars = road.filter(Boolean);
+    const count = cars.length;
+    const velocities = cars.map(c => c.v);
+    const avg = count ? velocities.reduce((a, b) => a + b, 0) / count : 0;
+    const maxV = count ? Math.max(...velocities) : 0;
+    const jammed = velocities.filter(v => v === 0).length;
+    const flow = ticks > 0 ? (flowCount / ticks).toFixed(2) : '0.00';
+
+    document.getElementById('s-cars').textContent = count;
+    document.getElementById('s-avg').textContent = avg.toFixed(2);
+    document.getElementById('s-max').textContent = maxV;
+    document.getElementById('s-jammed').textContent = jammed;
+    document.getElementById('s-ticks').textContent = ticks;
+    document.getElementById('s-flow').textContent = flow;
+  }
+
+  // ── Timer control ────────────────────────────────────────────────────────
+  function startTimer() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(step, interval);
+  }
+
+  function stopTimer() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+
+  // ── Buttons ──────────────────────────────────────────────────────────────
+  document.getElementById('btn-start').addEventListener('click', () => {
+    if (!running) { running = true; startTimer(); }
+  });
+
+  document.getElementById('btn-pause').addEventListener('click', () => {
+    running = false;
+    stopTimer();
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    running = false;
+    stopTimer();
+    init();
+  });
+
+  // ── Speed slider ─────────────────────────────────────────────────────────
+  const speedSlider = document.getElementById('speed-slider');
+  speedSlider.addEventListener('input', () => {
+    interval = parseInt(speedSlider.value);
+    document.getElementById('speed-label').textContent = interval + 'ms';
+    if (running) startTimer();
+  });
+
+  // ── Road click interactions ───────────────────────────────────────────────
+  const roadContainer = document.getElementById('road-container');
+
+  roadContainer.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const cell = Math.floor(x / (canvas.width / CELLS));
+    if (cell >= 0 && cell < CELLS && !road[cell]) {
+      road[cell] = { v: 0, color: randomColor() };
+      updateStats();
+      draw();
+    }
+  });
+
+  roadContainer.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (e.shiftKey) {
+      VMAX = Math.min(VMAX + 1, 10);
+    } else {
+      VMAX = Math.max(VMAX - 1, 1);
+    }
+    document.getElementById('vmax-label').textContent = VMAX;
+  });
+
+  // ── Resize ───────────────────────────────────────────────────────────────
+  window.addEventListener('resize', resizeCanvas);
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  resizeCanvas();
+  init();
+})();
+</script>
+</body>
+</html>
