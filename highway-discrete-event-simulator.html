@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Highway Discrete Event Simulator</title>
+  <style>
+    :root, [data-theme="light"] {
+      --color-bg: #f7f6f2;
+      --color-surface: #f9f8f5;
+      --color-surface-2: #fbfbf9;
+      --color-surface-offset: #f3f0ec;
+      --color-surface-dynamic: #e6e4df;
+      --color-divider: #dcd9d5;
+      --color-border: rgba(40, 37, 29, 0.14);
+      --color-text: #28251d;
+      --color-text-muted: #66625b;
+      --color-text-faint: #95928b;
+      --color-text-inverse: #f9f8f4;
+      --color-primary: #01696f;
+      --color-primary-hover: #0c4e54;
+      --color-primary-soft: rgba(1, 105, 111, 0.10);
+      --color-warning: #964219;
+      --color-danger: #a12c7b;
+      --shadow-sm: 0 1px 2px rgba(33, 25, 14, 0.06);
+      --shadow-md: 0 8px 28px rgba(33, 25, 14, 0.10);
+      --radius-sm: 0.375rem;
+      --radius-md: 0.75rem;
+      --radius-lg: 1rem;
+      --radius-xl: 1.25rem;
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.25rem;
+      --space-6: 1.5rem;
+      --space-8: 2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+      --text-xs: clamp(0.75rem, 0.72rem + 0.18vw, 0.875rem);
+      --text-sm: clamp(0.875rem, 0.84rem + 0.18vw, 1rem);
+      --text-base: clamp(1rem, 0.97rem + 0.18vw, 1.125rem);
+      --text-lg: clamp(1.125rem, 1.02rem + 0.55vw, 1.4rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1vw, 2.1rem);
+      --text-2xl: clamp(2rem, 1.6rem + 2vw, 3rem);
+      --font-display: 'Satoshi', 'Inter', sans-serif;
+      --font-body: 'Inter', 'Segoe UI', sans-serif;
+      --lane-fill: #dedbd4;
+      --road-fill: #d8d4cd;
+      --grass-fill: #ebe7df;
+      --car-a: #01696f;
+      --car-b: #2f7b38;
+      --car-c: #c06a00;
+      --truck: #8b4a17;
+      --jam: #a12c7b;
+    }
+
+    [data-theme="dark"] {
+      --color-bg: #171614;
+      --color-surface: #1c1b19;
+      --color-surface-2: #201f1d;
+      --color-surface-offset: #23211f;
+      --color-surface-dynamic: #2d2b29;
+      --color-divider: #2b2926;
+      --color-border: rgba(235, 231, 223, 0.12);
+      --color-text: #ece9e1;
+      --color-text-muted: #b7b1a5;
+      --color-text-faint: #8c877d;
+      --color-text-inverse: #171614;
+      --color-primary: #5aa6b1;
+      --color-primary-hover: #7db8c0;
+      --color-primary-soft: rgba(90, 166, 177, 0.12);
+      --color-warning: #d08d5f;
+      --color-danger: #d36daf;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+      --shadow-md: 0 16px 40px rgba(0,0,0,0.35);
+      --lane-fill: #2f2d2a;
+      --road-fill: #2a2825;
+      --grass-fill: #1a1917;
+      --car-a: #6db8c3;
+      --car-b: #7cb879;
+      --car-c: #e0a24e;
+      --truck: #d28b57;
+      --jam: #dc79b4;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://api.fontshare.com/v2/css?f[]=satoshi@500,700,900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: 1.55;
+      color: var(--color-text);
+      background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--color-primary) 11%, transparent), transparent 28%),
+        linear-gradient(180deg, var(--color-bg), var(--color-surface-offset));
+    }
+    img, canvas, svg { display: block; max-width: 100%; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+    :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+    .skip-link {
+      position: absolute;
+      left: var(--space-4);
+      top: -40px;
+      background: var(--color-primary);
+      color: var(--color-text-inverse);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      z-index: 1000;
+    }
+    .skip-link:focus { top: var(--space-3); }
+    .page {
+      width: min(1400px, calc(100vw - 2rem));
+      margin: 0 auto;
+      padding: var(--space-6) 0 var(--space-10);
+    }
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+    .brand { display: flex; gap: var(--space-4); align-items: center; }
+    .logo {
+      width: 3rem;
+      height: 3rem;
+      padding: 0.55rem;
+      border-radius: 999px;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      border: 1px solid var(--color-border);
+      flex: 0 0 auto;
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-size: var(--text-2xl);
+      line-height: 1;
+      margin: 0 0 0.35rem;
+      letter-spacing: -0.04em;
+    }
+    .lede {
+      max-width: 70ch;
+      color: var(--color-text-muted);
+      margin: 0;
+    }
+    .header-actions { display: flex; align-items: center; gap: var(--space-3); }
+    .theme-toggle, .button, .preset button {
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-radius: var(--radius-md);
+      padding: 0.72rem 1rem;
+      transition: background 160ms ease, transform 160ms ease, border-color 160ms ease;
+      box-shadow: var(--shadow-sm);
+    }
+    .theme-toggle:hover, .button:hover, .preset button:hover { background: var(--color-surface-2); }
+    .button.primary {
+      background: var(--color-primary);
+      color: var(--color-text-inverse);
+      border-color: transparent;
+    }
+    .button.primary:hover { background: var(--color-primary-hover); }
+    .button:active, .theme-toggle:active, .preset button:active { transform: translateY(1px); }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.45fr 0.95fr;
+      gap: var(--space-5);
+      align-items: start;
+    }
+    .card {
+      background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-md);
+      backdrop-filter: blur(10px);
+    }
+    .sim-card { padding: var(--space-5); }
+    .canvas-wrap {
+      border-radius: calc(var(--radius-xl) - 0.25rem);
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      background: var(--grass-fill);
+      margin-bottom: var(--space-4);
+    }
+    canvas { width: 100%; }
+    #roadCanvas { aspect-ratio: 16 / 7; }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--space-3);
+      margin-top: var(--space-4);
+    }
+    .metric {
+      background: var(--color-surface-offset);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 0.9rem 1rem;
+    }
+    .metric .label {
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-faint);
+      margin-bottom: 0.25rem;
+    }
+    .metric .value {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .control-card { padding: var(--space-5); }
+    .stack { display: grid; gap: var(--space-4); }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-4);
+    }
+    .field {
+      display: grid;
+      gap: 0.45rem;
+      padding: var(--space-3);
+      background: var(--color-surface-offset);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+    }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: var(--text-sm);
+      font-weight: 600;
+    }
+    .field span { color: var(--color-text-faint); font-weight: 500; }
+    input[type="range"] { width: 100%; accent-color: var(--color-primary); }
+    select {
+      width: 100%;
+      padding: 0.72rem 0.8rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text);
+    }
+    .button-row, .preset {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+    .preset button { padding: 0.55rem 0.85rem; font-size: var(--text-sm); }
+    .hint {
+      margin: 0;
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem 1rem;
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+    }
+    .legend .swatch {
+      width: 0.8rem;
+      height: 0.8rem;
+      border-radius: 999px;
+      display: inline-block;
+      margin-right: 0.35rem;
+      vertical-align: middle;
+    }
+
+    .lower-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: var(--space-5);
+      margin-top: var(--space-5);
+    }
+    .charts-card, .events-card, .about-card { padding: var(--space-5); }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-4);
+    }
+    .mini-chart {
+      background: var(--color-surface-offset);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3);
+    }
+    .mini-chart h3, .events-card h2, .about-card h2, .control-card h2, .charts-card h2 {
+      margin: 0 0 0.45rem;
+      font-size: var(--text-lg);
+      line-height: 1.15;
+    }
+    .mini-chart p, .about-card p, .charts-card p, .events-card p, .control-card p {
+      margin: 0 0 0.8rem;
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      max-width: 70ch;
+    }
+    .mini-chart canvas { aspect-ratio: 16 / 9; border-radius: 0.75rem; background: var(--color-surface); }
+    .event-log {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.6rem;
+      max-height: 29rem;
+      overflow: auto;
+    }
+    .event-log li {
+      display: grid;
+      gap: 0.18rem;
+      padding: 0.9rem 1rem;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      background: var(--color-surface-offset);
+    }
+    .event-log time {
+      font-variant-numeric: tabular-nums;
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-faint);
+    }
+    .status-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: var(--space-4);
+    }
+    .pill {
+      border-radius: 999px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface-offset);
+      padding: 0.45rem 0.8rem;
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+    }
+    .footer-note {
+      margin-top: var(--space-5);
+      padding: var(--space-4);
+      background: var(--color-surface-offset);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+
+    @media (max-width: 1100px) {
+      .hero-grid, .lower-grid { grid-template-columns: 1fr; }
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      .page { width: min(100vw - 1rem, 1400px); padding-top: var(--space-4); }
+      header { flex-direction: column; }
+      .controls, .chart-grid { grid-template-columns: 1fr; }
+      .hud { grid-template-columns: 1fr 1fr; }
+      .sim-card, .control-card, .charts-card, .events-card, .about-card { padding: var(--space-4); }
+      .button-row { display: grid; grid-template-columns: 1fr 1fr; }
+      .button-row .button { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to simulator</a>
+  <div class="page">
+    <header>
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 64 64" aria-label="Highway simulator logo" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 50C21 44 28 39 32 14C36 39 43 44 52 50" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M25 51L29 37" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          <path d="M39 51L35 37" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          <path d="M31.8 24L32.2 24" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1>Highway discrete event simulator</h1>
+          <p class="lede">Vehicles move continuously between discrete events: arrivals, catch-ups, exits, and measurement samples. Change inflow, lane count, speed limits, truck share, and braking noise to watch free flow turn into congestion.</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle" data-theme-toggle aria-label="Switch theme" title="Switch theme">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero-grid" aria-label="Simulator and controls">
+        <article class="card sim-card">
+          <div class="canvas-wrap">
+            <canvas id="roadCanvas" width="1200" height="520" aria-label="Animated highway traffic simulation"></canvas>
+          </div>
+          <div class="legend" aria-label="Vehicle legend">
+            <div><span class="swatch" style="background: var(--car-a)"></span>Free-flow cars</div>
+            <div><span class="swatch" style="background: var(--car-c)"></span>Moderate speed</div>
+            <div><span class="swatch" style="background: var(--jam)"></span>Queued traffic</div>
+            <div><span class="swatch" style="background: var(--truck)"></span>Trucks</div>
+          </div>
+          <div class="hud" aria-label="Key metrics">
+            <div class="metric"><div class="label">Time</div><div class="value" id="metricTime">0 s</div></div>
+            <div class="metric"><div class="label">Vehicles on road</div><div class="value" id="metricOnRoad">0</div></div>
+            <div class="metric"><div class="label">Avg speed</div><div class="value" id="metricSpeed">0 km/h</div></div>
+            <div class="metric"><div class="label">Density</div><div class="value" id="metricDensity">0 veh/km/lane</div></div>
+            <div class="metric"><div class="label">Flow</div><div class="value" id="metricFlow">0 veh/h</div></div>
+          </div>
+          <div class="status-strip" aria-label="Operational counters">
+            <div class="pill" id="pillEntered">Entered: 0</div>
+            <div class="pill" id="pillExited">Exited: 0</div>
+            <div class="pill" id="pillBlocked">Blocked at entry: 0</div>
+            <div class="pill" id="pillEvents">Events processed: 0</div>
+          </div>
+        </article>
+
+        <aside class="card control-card">
+          <h2>Controls</h2>
+          <p>Every vehicle arrives through an event queue. Faster followers trigger catch-up events when they run down a safe gap, which is where shockwaves begin.</p>
+          <div class="stack">
+            <div class="button-row">
+              <button class="button primary" id="playPauseBtn">Pause</button>
+              <button class="button" id="stepBtn">Step +10 s</button>
+              <button class="button" id="resetBtn">Reset</button>
+            </div>
+            <div class="controls">
+              <div class="field">
+                <label for="inflowRange">Inflow rate <span id="inflowValue">2800 veh/h</span></label>
+                <input id="inflowRange" type="range" min="600" max="7200" step="100" value="2800" />
+              </div>
+              <div class="field">
+                <label for="speedRange">Speed limit <span id="speedValue">110 km/h</span></label>
+                <input id="speedRange" type="range" min="70" max="140" step="5" value="110" />
+              </div>
+              <div class="field">
+                <label for="truckRange">Truck share <span id="truckValue">12%</span></label>
+                <input id="truckRange" type="range" min="0" max="40" step="1" value="12" />
+              </div>
+              <div class="field">
+                <label for="noiseRange">Braking noise <span id="noiseValue">20%</span></label>
+                <input id="noiseRange" type="range" min="0" max="70" step="1" value="20" />
+              </div>
+              <div class="field">
+                <label for="laneSelect">Lane count <span>Parallel lanes</span></label>
+                <select id="laneSelect">
+                  <option value="1">1 lane</option>
+                  <option value="2">2 lanes</option>
+                  <option value="3" selected>3 lanes</option>
+                  <option value="4">4 lanes</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="rateRange">Simulation rate <span id="rateValue">20×</span></label>
+                <input id="rateRange" type="range" min="1" max="80" step="1" value="20" />
+              </div>
+              <div class="field full">
+                <label for="scenarioSelect">Preset scenario <span>Quick experiments</span></label>
+                <select id="scenarioSelect">
+                  <option value="custom" selected>Custom</option>
+                  <option value="free">Free flow</option>
+                  <option value="near">Near capacity</option>
+                  <option value="jam">Rush hour jam</option>
+                  <option value="freight">Truck-heavy corridor</option>
+                </select>
+              </div>
+            </div>
+            <div class="preset" aria-label="Scenario shortcuts">
+              <button data-preset="free">Free flow</button>
+              <button data-preset="near">Near capacity</button>
+              <button data-preset="jam">Rush hour jam</button>
+              <button data-preset="freight">Truck heavy</button>
+            </div>
+            <p class="hint">Tip: push inflow upward until density rises faster than speed can recover. The flow-density scatter on the lower left will bend over when the roadway nears capacity.</p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="lower-grid">
+        <article class="card charts-card">
+          <h2>Measurements</h2>
+          <p>The charts sample the simulated roadway every two seconds of simulation time. Throughput uses a rolling one-minute exit count, while density is vehicles per kilometer per lane.</p>
+          <div class="chart-grid">
+            <div class="mini-chart">
+              <h3>Speed over time</h3>
+              <p>Average vehicle speed on the highway segment.</p>
+              <canvas id="speedChart" width="600" height="320"></canvas>
+            </div>
+            <div class="mini-chart">
+              <h3>Density over time</h3>
+              <p>Vehicles per kilometer per lane.</p>
+              <canvas id="densityChart" width="600" height="320"></canvas>
+            </div>
+            <div class="mini-chart">
+              <h3>Flow over time</h3>
+              <p>Exited vehicles converted to vehicles per hour.</p>
+              <canvas id="flowChart" width="600" height="320"></canvas>
+            </div>
+            <div class="mini-chart">
+              <h3>Flow versus density</h3>
+              <p>A live fundamental diagram built from the simulator samples.</p>
+              <canvas id="scatterChart" width="600" height="320"></canvas>
+            </div>
+          </div>
+        </article>
+
+        <aside class="stack">
+          <article class="card events-card">
+            <h2>Event log</h2>
+            <p>Latest discrete events affecting the system state.</p>
+            <ul class="event-log" id="eventLog"></ul>
+          </article>
+          <article class="card about-card">
+            <h2>Model notes</h2>
+            <p>This is intentionally lightweight: vehicles have piecewise-constant speed between events, arrivals follow a Poisson process, and lane changes are omitted so you can see event timing clearly. Congestion forms when faster followers repeatedly hit safe-gap thresholds behind slower leaders.</p>
+            <div class="footer-note">
+              Road length: <strong>1.5 km</strong> per lane. Passenger cars are 4.5 m long, trucks 17 m. Safe following distance grows with speed and braking noise, so uncertainty makes waves travel upstream sooner.
+            </div>
+          </article>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const themeBtn = document.querySelector('[data-theme-toggle]');
+      const root = document.documentElement;
+      let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.setAttribute('data-theme', theme);
+      const applyThemeIcon = () => {
+        themeBtn.innerHTML = theme === 'dark'
+          ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+          : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+      };
+      applyThemeIcon();
+      themeBtn.addEventListener('click', () => {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', theme);
+        applyThemeIcon();
+      });
+
+      const els = {
+        roadCanvas: document.getElementById('roadCanvas'),
+        speedChart: document.getElementById('speedChart'),
+        densityChart: document.getElementById('densityChart'),
+        flowChart: document.getElementById('flowChart'),
+        scatterChart: document.getElementById('scatterChart'),
+        metricTime: document.getElementById('metricTime'),
+        metricOnRoad: document.getElementById('metricOnRoad'),
+        metricSpeed: document.getElementById('metricSpeed'),
+        metricDensity: document.getElementById('metricDensity'),
+        metricFlow: document.getElementById('metricFlow'),
+        pillEntered: document.getElementById('pillEntered'),
+        pillExited: document.getElementById('pillExited'),
+        pillBlocked: document.getElementById('pillBlocked'),
+        pillEvents: document.getElementById('pillEvents'),
+        eventLog: document.getElementById('eventLog'),
+        playPauseBtn: document.getElementById('playPauseBtn'),
+        stepBtn: document.getElementById('stepBtn'),
+        resetBtn: document.getElementById('resetBtn'),
+        inflowRange: document.getElementById('inflowRange'),
+        speedRange: document.getElementById('speedRange'),
+        truckRange: document.getElementById('truckRange'),
+        noiseRange: document.getElementById('noiseRange'),
+        laneSelect: document.getElementById('laneSelect'),
+        rateRange: document.getElementById('rateRange'),
+        inflowValue: document.getElementById('inflowValue'),
+        speedValue: document.getElementById('speedValue'),
+        truckValue: document.getElementById('truckValue'),
+        noiseValue: document.getElementById('noiseValue'),
+        rateValue: document.getElementById('rateValue'),
+        scenarioSelect: document.getElementById('scenarioSelect')
+      };
+
+      const presets = {
+        free: { inflow: 1400, speedLimit: 120, truckShare: 6, noise: 8, lanes: 3 },
+        near: { inflow: 3400, speedLimit: 110, truckShare: 10, noise: 18, lanes: 3 },
+        jam: { inflow: 6200, speedLimit: 95, truckShare: 16, noise: 38, lanes: 3 },
+        freight: { inflow: 3000, speedLimit: 100, truckShare: 28, noise: 24, lanes: 2 }
+      };
+
+      const state = {
+        time: 0,
+        roadLength: 1500,
+        running: true,
+        simRate: 20,
+        inflowPerHour: 2800,
+        speedLimitKph: 110,
+        truckShare: 0.12,
+        noise: 0.20,
+        laneCount: 3,
+        vehicles: [],
+        nextId: 1,
+        nextSpawnTime: 0,
+        nextSampleTime: 2,
+        sampleInterval: 2,
+        exits: [],
+        samples: [],
+        logs: [],
+        entered: 0,
+        exited: 0,
+        blocked: 0,
+        eventsProcessed: 0,
+        lastFrame: performance.now(),
+        eventBudget: 600,
+      };
+
+      const rand = {
+        uniform: () => Math.random(),
+        exp: (rate) => rate <= 0 ? Infinity : -Math.log(1 - Math.random()) / rate,
+        normal: () => {
+          let u = 0, v = 0;
+          while (u === 0) u = Math.random();
+          while (v === 0) v = Math.random();
+          return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+      };
+
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+      function mpsFromKph(kph) { return kph / 3.6; }
+      function kphFromMps(mps) { return mps * 3.6; }
+      function formatTime(sec) {
+        if (sec < 60) return `${sec.toFixed(0)} s`;
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+      }
+      function getCss(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+      function syncControlLabels() {
+        els.inflowValue.textContent = `${state.inflowPerHour} veh/h`;
+        els.speedValue.textContent = `${state.speedLimitKph} km/h`;
+        els.truckValue.textContent = `${Math.round(state.truckShare * 100)}%`;
+        els.noiseValue.textContent = `${Math.round(state.noise * 100)}%`;
+        els.rateValue.textContent = `${state.simRate}×`;
+      }
+
+      function scheduleSpawnFromNow() {
+        const ratePerSec = state.inflowPerHour / 3600;
+        state.nextSpawnTime = state.time + rand.exp(ratePerSec);
+      }
+
+      function resetSimulation() {
+        state.time = 0;
+        state.vehicles = [];
+        state.nextId = 1;
+        state.exits = [];
+        state.samples = [];
+        state.logs = [];
+        state.entered = 0;
+        state.exited = 0;
+        state.blocked = 0;
+        state.eventsProcessed = 0;
+        state.nextSampleTime = state.sampleInterval;
+        scheduleSpawnFromNow();
+        pushLog('Simulation reset', 'Parameters applied and event queue restarted.');
+        updateMetrics();
+        renderAll();
+      }
+
+      function pushLog(title, detail) {
+        state.logs.unshift({ t: state.time, title, detail });
+        state.logs = state.logs.slice(0, 36);
+        renderLogs();
+      }
+
+      function renderLogs() {
+        els.eventLog.innerHTML = '';
+        for (const entry of state.logs) {
+          const li = document.createElement('li');
+          li.innerHTML = `<time>${formatTime(entry.t)}</time><strong>${entry.title}</strong><span>${entry.detail}</span>`;
+          els.eventLog.appendChild(li);
+        }
+      }
+
+      function chooseSpawnLane() {
+        const lanes = [];
+        for (let lane = 0; lane < state.laneCount; lane++) {
+          const inLane = state.vehicles.filter(v => v.lane === lane).sort((a, b) => a.x - b.x);
+          const lead = inLane[0];
+          const entranceGap = lead ? lead.x - lead.length : Infinity;
+          const densityPenalty = inLane.length * 7;
+          lanes.push({ lane, entranceGap, score: entranceGap - densityPenalty + Math.random() * 6 });
+        }
+        lanes.sort((a, b) => b.score - a.score);
+        return lanes;
+      }
+
+      function createVehicle(lane) {
+        const isTruck = Math.random() < state.truckShare;
+        const speedLimit = mpsFromKph(state.speedLimitKph);
+        const desired = clamp(
+          speedLimit * (isTruck ? 0.76 : 1.0) * (1 + rand.normal() * (0.06 + state.noise * 0.08)),
+          mpsFromKph(55),
+          speedLimit * (isTruck ? 0.88 : 1.14)
+        );
+        const courtesy = clamp(1 + rand.normal() * 0.12, 0.72, 1.3);
+        return {
+          id: state.nextId++,
+          lane,
+          x: 0,
+          speed: desired,
+          desiredSpeed: desired,
+          length: isTruck ? 17 : 4.5,
+          headway: (isTruck ? 1.55 : 1.05) * courtesy + state.noise * (isTruck ? 0.7 : 0.9),
+          minGap: isTruck ? 6 : 3.5,
+          type: isTruck ? 'truck' : 'car',
+          colorBand: isTruck ? 'truck' : ['a','b','c'][Math.floor(Math.random() * 3)]
+        };
+      }
+
+      function spawnVehicle() {
+        const laneOptions = chooseSpawnLane();
+        for (const option of laneOptions) {
+          const candidate = createVehicle(option.lane);
+          const requiredGap = candidate.length + candidate.minGap + candidate.headway * candidate.speed;
+          if (option.entranceGap > requiredGap) {
+            state.vehicles.push(candidate);
+            state.entered += 1;
+            normalizeTraffic();
+            pushLog(`Vehicle entered lane ${candidate.lane + 1}`, `${candidate.type === 'truck' ? 'Truck' : 'Car'} desired ${kphFromMps(candidate.desiredSpeed).toFixed(0)} km/h.`);
+            return;
+          }
+        }
+        state.blocked += 1;
+        pushLog('Entry blocked', 'No lane had enough safe gap at the merge point.');
+      }
+
+      function laneVehicles(lane) {
+        return state.vehicles.filter(v => v.lane === lane).sort((a, b) => b.x - a.x);
+      }
+
+      function safeGap(v) {
+        return v.minGap + v.headway * v.speed;
+      }
+
+      function normalizeTraffic() {
+        for (let lane = 0; lane < state.laneCount; lane++) {
+          const laneCars = laneVehicles(lane);
+          for (let i = 0; i < laneCars.length; i++) {
+            const veh = laneCars[i];
+            if (i === 0) {
+              veh.speed = veh.desiredSpeed;
+              continue;
+            }
+            const lead = laneCars[i - 1];
+            const gap = lead.x - veh.x - lead.length;
+            const threshold = safeGap(veh);
+            if (gap <= threshold) {
+              const severity = clamp((threshold - gap) / Math.max(6, threshold), 0, 1);
+              const damp = 1 - (0.24 + severity * (0.44 + state.noise * 0.3));
+              veh.speed = Math.min(veh.desiredSpeed, Math.max(0, lead.speed * clamp(damp, 0.18, 1)));
+            } else {
+              veh.speed = veh.desiredSpeed;
+            }
+          }
+        }
+      }
+
+      function advanceTo(targetTime) {
+        const dt = Math.max(0, targetTime - state.time);
+        if (dt <= 0) return;
+        for (const v of state.vehicles) v.x += v.speed * dt;
+        state.time = targetTime;
+      }
+
+      function getNextDynamicEvent() {
+        let best = { time: Infinity, type: 'none' };
+        for (const v of state.vehicles) {
+          if (v.speed > 0) {
+            const tExit = state.time + (state.roadLength - v.x) / v.speed;
+            if (tExit >= state.time && tExit < best.time) best = { time: tExit, type: 'exit', id: v.id };
+          }
+        }
+        for (let lane = 0; lane < state.laneCount; lane++) {
+          const laneCars = laneVehicles(lane);
+          for (let i = 1; i < laneCars.length; i++) {
+            const lead = laneCars[i - 1];
+            const follow = laneCars[i];
+            if (follow.speed <= lead.speed) continue;
+            const closing = follow.speed - lead.speed;
+            const gapNow = lead.x - follow.x - lead.length;
+            const threshold = safeGap(follow);
+            if (gapNow <= threshold) {
+              if (state.time < best.time) best = { time: state.time, type: 'catch', followId: follow.id, leadId: lead.id, lane };
+              continue;
+            }
+            const dt = (gapNow - threshold) / closing;
+            if (dt >= 0) {
+              const tCatch = state.time + dt;
+              if (tCatch < best.time) best = { time: tCatch, type: 'catch', followId: follow.id, leadId: lead.id, lane };
+            }
+          }
+        }
+        return best;
+      }
+
+      function processEvent(ev) {
+        advanceTo(ev.time);
+        if (ev.type === 'spawn') {
+          spawnVehicle();
+          scheduleSpawnFromNow();
+        } else if (ev.type === 'sample') {
+          recordSample();
+          state.nextSampleTime += state.sampleInterval;
+        } else if (ev.type === 'exit') {
+          const before = state.vehicles.length;
+          const exitedNow = state.vehicles.filter(v => v.x >= state.roadLength - 0.001).map(v => v.id);
+          state.vehicles = state.vehicles.filter(v => v.x < state.roadLength - 0.001);
+          const count = before - state.vehicles.length;
+          if (count > 0) {
+            state.exited += count;
+            for (let i = 0; i < count; i++) state.exits.push(state.time);
+            pushLog(count > 1 ? 'Vehicles exited' : 'Vehicle exited', `${count} vehicle${count > 1 ? 's' : ''} left the downstream boundary.`);
+          }
+          state.exits = state.exits.filter(t => state.time - t <= 120);
+          normalizeTraffic();
+        } else if (ev.type === 'catch') {
+          const lead = state.vehicles.find(v => v.id === ev.leadId);
+          const follow = state.vehicles.find(v => v.id === ev.followId);
+          if (lead && follow && lead.lane === follow.lane) {
+            const gap = lead.x - follow.x - lead.length;
+            const thresh = safeGap(follow);
+            if (gap <= thresh + 1.5) {
+              follow.speed = Math.min(follow.speed, lead.speed * clamp(0.92 - state.noise * 0.2, 0.55, 1));
+              normalizeTraffic();
+              pushLog(`Catch-up in lane ${follow.lane + 1}`, `Follower hit safe-gap threshold behind a ${lead.type}.`);
+            }
+          }
+        }
+        state.eventsProcessed += 1;
+      }
+
+      function nextEventBefore(limit) {
+        const dynamic = getNextDynamicEvent();
+        const spawn = { time: state.nextSpawnTime, type: 'spawn' };
+        const sample = { time: state.nextSampleTime, type: 'sample' };
+        const chosen = [dynamic, spawn, sample].reduce((best, ev) => ev.time < best.time ? ev : best, { time: Infinity, type: 'none' });
+        return chosen.time <= limit ? chosen : null;
+      }
+
+      function runUntil(targetTime) {
+        let count = 0;
+        while (count < state.eventBudget) {
+          const ev = nextEventBefore(targetTime);
+          if (!ev) break;
+          processEvent(ev);
+          count += 1;
+        }
+        advanceTo(targetTime);
+        normalizeTraffic();
+        if (count >= state.eventBudget) pushLog('Event budget reached', 'Rendering paused event processing for this frame to stay responsive.');
+      }
+
+      function rollingFlowPerHour() {
+        state.exits = state.exits.filter(t => state.time - t <= 60);
+        return state.exits.length * 60;
+      }
+
+      function currentDensity() {
+        return state.vehicles.length / (state.roadLength / 1000) / state.laneCount;
+      }
+
+      function currentAverageSpeed() {
+        if (!state.vehicles.length) return 0;
+        return state.vehicles.reduce((sum, v) => sum + v.speed, 0) / state.vehicles.length;
+      }
+
+      function recordSample() {
+        const sample = {
+          t: state.time,
+          speed: kphFromMps(currentAverageSpeed()),
+          density: currentDensity(),
+          flow: rollingFlowPerHour()
+        };
+        state.samples.push(sample);
+        state.samples = state.samples.slice(-160);
+      }
+
+      function updateMetrics() {
+        const avgSpeed = kphFromMps(currentAverageSpeed());
+        const density = currentDensity();
+        const flow = rollingFlowPerHour();
+        els.metricTime.textContent = formatTime(state.time);
+        els.metricOnRoad.textContent = String(state.vehicles.length);
+        els.metricSpeed.textContent = `${avgSpeed.toFixed(0)} km/h`;
+        els.metricDensity.textContent = `${density.toFixed(1)} veh/km/lane`;
+        els.metricFlow.textContent = `${flow.toFixed(0)} veh/h`;
+        els.pillEntered.textContent = `Entered: ${state.entered}`;
+        els.pillExited.textContent = `Exited: ${state.exited}`;
+        els.pillBlocked.textContent = `Blocked at entry: ${state.blocked}`;
+        els.pillEvents.textContent = `Events processed: ${state.eventsProcessed}`;
+      }
+
+      function fitCanvasToDisplay(canvas) {
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.round(rect.width * dpr);
+        const height = Math.round(rect.height * dpr);
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        return canvas.getContext('2d');
+      }
+
+      function drawRoad() {
+        const canvas = els.roadCanvas;
+        const ctx = fitCanvasToDisplay(canvas);
+        const w = canvas.width;
+        const h = canvas.height;
+        const pad = 26 * (window.devicePixelRatio || 1);
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = getCss('--grass-fill');
+        ctx.fillRect(0, 0, w, h);
+
+        const roadTop = pad * 1.4;
+        const roadBottom = h - pad * 1.5;
+        const roadH = roadBottom - roadTop;
+        const laneH = roadH / state.laneCount;
+
+        ctx.fillStyle = getCss('--road-fill');
+        roundRect(ctx, pad, roadTop, w - pad * 2, roadH, 24 * (window.devicePixelRatio || 1), true, false);
+
+        for (let i = 1; i < state.laneCount; i++) {
+          const y = roadTop + i * laneH;
+          ctx.strokeStyle = getCss('--lane-fill');
+          ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
+          ctx.setLineDash([14 * (window.devicePixelRatio || 1), 12 * (window.devicePixelRatio || 1)]);
+          ctx.beginPath();
+          ctx.moveTo(pad + 20, y);
+          ctx.lineTo(w - pad - 20, y);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = getCss('--color-text-faint');
+        ctx.font = `${14 * (window.devicePixelRatio || 1)}px Inter, sans-serif`;
+        ctx.fillText('0 km', pad + 8, roadTop - 10);
+        ctx.fillText('1.5 km', w - pad - 72 * (window.devicePixelRatio || 1), roadTop - 10);
+
+        for (const v of state.vehicles) {
+          const laneY = roadTop + v.lane * laneH + laneH * 0.18;
+          const vehW = Math.max(v.length / state.roadLength * (w - pad * 2), 12 * (window.devicePixelRatio || 1));
+          const vehH = laneH * 0.64;
+          const x = pad + (v.x / state.roadLength) * (w - pad * 2) - vehW / 2;
+          const speedRatio = clamp(v.speed / mpsFromKph(state.speedLimitKph), 0, 1.1);
+          let color = getCss('--car-a');
+          if (v.type === 'truck') color = getCss('--truck');
+          else if (speedRatio < 0.45) color = getCss('--jam');
+          else if (speedRatio < 0.72) color = getCss('--car-c');
+          else if (speedRatio < 0.92) color = getCss('--car-b');
+          ctx.fillStyle = color;
+          roundRect(ctx, x, laneY, vehW, vehH, Math.min(vehH / 3, 12 * (window.devicePixelRatio || 1)), true, false);
+          ctx.fillStyle = 'rgba(255,255,255,0.18)';
+          roundRect(ctx, x + vehW * 0.12, laneY + vehH * 0.18, vehW * 0.35, vehH * 0.2, 4, true, false);
+        }
+
+        const density = currentDensity();
+        if (density > 20) {
+          ctx.fillStyle = getCss('--color-text');
+          ctx.font = `700 ${16 * (window.devicePixelRatio || 1)}px Inter, sans-serif`;
+          ctx.fillText(density > 35 ? 'Congested regime' : 'Near capacity', pad + 16, h - 18 * (window.devicePixelRatio || 1));
+        }
+      }
+
+      function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+        const radius = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.arcTo(x + w, y, x + w, y + h, radius);
+        ctx.arcTo(x + w, y + h, x, y + h, radius);
+        ctx.arcTo(x, y + h, x, y, radius);
+        ctx.arcTo(x, y, x + w, y, radius);
+        ctx.closePath();
+        if (fill) ctx.fill();
+        if (stroke) ctx.stroke();
+      }
+
+      function drawLineChart(canvas, values, color, label, maxHint = null) {
+        const ctx = fitCanvasToDisplay(canvas);
+        const w = canvas.width;
+        const h = canvas.height;
+        const pad = 34 * (window.devicePixelRatio || 1);
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = getCss('--color-surface');
+        ctx.fillRect(0, 0, w, h);
+
+        const innerW = w - pad * 2;
+        const innerH = h - pad * 2;
+        ctx.strokeStyle = getCss('--color-border');
+        ctx.lineWidth = 1 * (window.devicePixelRatio || 1);
+        for (let i = 0; i <= 4; i++) {
+          const y = pad + innerH * (i / 4);
+          ctx.beginPath();
+          ctx.moveTo(pad, y);
+          ctx.lineTo(w - pad, y);
+          ctx.stroke();
+        }
+        const series = values.slice(-80);
+        const maxValue = maxHint || Math.max(1, ...series);
+        const minValue = 0;
+        ctx.fillStyle = getCss('--color-text-faint');
+        ctx.font = `${11 * (window.devicePixelRatio || 1)}px Inter, sans-serif`;
+        ctx.fillText(label, pad, pad - 10 * (window.devicePixelRatio || 1));
+        ctx.fillText(maxValue.toFixed(0), 6 * (window.devicePixelRatio || 1), pad + 6 * (window.devicePixelRatio || 1));
+        ctx.fillText('0', 14 * (window.devicePixelRatio || 1), h - pad + 4 * (window.devicePixelRatio || 1));
+
+        if (series.length < 2) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3 * (window.devicePixelRatio || 1);
+        ctx.beginPath();
+        series.forEach((value, idx) => {
+          const x = pad + innerW * (idx / (series.length - 1));
+          const norm = (value - minValue) / Math.max(1e-9, maxValue - minValue);
+          const y = pad + innerH * (1 - norm);
+          if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      function drawScatterChart(canvas, points) {
+        const ctx = fitCanvasToDisplay(canvas);
+        const w = canvas.width;
+        const h = canvas.height;
+        const pad = 36 * (window.devicePixelRatio || 1);
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = getCss('--color-surface');
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = getCss('--color-border');
+        ctx.lineWidth = 1 * (window.devicePixelRatio || 1);
+        ctx.beginPath();
+        ctx.moveTo(pad, pad);
+        ctx.lineTo(pad, h - pad);
+        ctx.lineTo(w - pad, h - pad);
+        ctx.stroke();
+
+        ctx.fillStyle = getCss('--color-text-faint');
+        ctx.font = `${11 * (window.devicePixelRatio || 1)}px Inter, sans-serif`;
+        ctx.fillText('density', w / 2 - 22 * (window.devicePixelRatio || 1), h - 10 * (window.devicePixelRatio || 1));
+        ctx.save();
+        ctx.translate(12 * (window.devicePixelRatio || 1), h / 2 + 24 * (window.devicePixelRatio || 1));
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('flow', 0, 0);
+        ctx.restore();
+
+        const recent = points.slice(-160);
+        const maxDensity = Math.max(40, ...recent.map(p => p.density), currentDensity());
+        const maxFlow = Math.max(2400, ...recent.map(p => p.flow), rollingFlowPerHour());
+        for (const p of recent) {
+          const x = pad + (p.density / maxDensity) * (w - pad * 2);
+          const y = h - pad - (p.flow / maxFlow) * (h - pad * 2);
+          const speedRatio = clamp(p.speed / Math.max(1, state.speedLimitKph), 0, 1);
+          const color = speedRatio < 0.45 ? getCss('--jam') : speedRatio < 0.75 ? getCss('--car-c') : getCss('--car-a');
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.75;
+          ctx.beginPath();
+          ctx.arc(x, y, 3.5 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawCharts() {
+        const samples = state.samples;
+        drawLineChart(els.speedChart, samples.map(s => s.speed), getCss('--car-a'), 'km/h', Math.max(80, state.speedLimitKph * 1.1));
+        drawLineChart(els.densityChart, samples.map(s => s.density), getCss('--truck'), 'veh/km/lane', 60);
+        drawLineChart(els.flowChart, samples.map(s => s.flow), getCss('--car-c'), 'veh/h', 5000);
+        drawScatterChart(els.scatterChart, samples);
+      }
+
+      function renderAll() {
+        drawRoad();
+        drawCharts();
+        updateMetrics();
+      }
+
+      function applyScenario(name) {
+        const preset = presets[name];
+        if (!preset) return;
+        state.inflowPerHour = preset.inflow;
+        state.speedLimitKph = preset.speedLimit;
+        state.truckShare = preset.truckShare / 100;
+        state.noise = preset.noise / 100;
+        state.laneCount = preset.lanes;
+        state.simRate = state.simRate;
+        els.inflowRange.value = String(preset.inflow);
+        els.speedRange.value = String(preset.speedLimit);
+        els.truckRange.value = String(preset.truckShare);
+        els.noiseRange.value = String(preset.noise);
+        els.laneSelect.value = String(preset.lanes);
+        els.scenarioSelect.value = name;
+        syncControlLabels();
+        resetSimulation();
+      }
+
+      function pullControlsIntoState(markCustom = true) {
+        state.inflowPerHour = Number(els.inflowRange.value);
+        state.speedLimitKph = Number(els.speedRange.value);
+        state.truckShare = Number(els.truckRange.value) / 100;
+        state.noise = Number(els.noiseRange.value) / 100;
+        state.laneCount = Number(els.laneSelect.value);
+        state.simRate = Number(els.rateRange.value);
+        if (markCustom) els.scenarioSelect.value = 'custom';
+        syncControlLabels();
+      }
+
+      function stepSeconds(seconds) {
+        runUntil(state.time + seconds);
+        renderAll();
+      }
+
+      function animate(now) {
+        const dtReal = Math.min(0.05, (now - state.lastFrame) / 1000);
+        state.lastFrame = now;
+        if (state.running) {
+          runUntil(state.time + dtReal * state.simRate);
+          renderAll();
+        }
+        requestAnimationFrame(animate);
+      }
+
+      els.playPauseBtn.addEventListener('click', () => {
+        state.running = !state.running;
+        els.playPauseBtn.textContent = state.running ? 'Pause' : 'Resume';
+      });
+      els.stepBtn.addEventListener('click', () => stepSeconds(10));
+      els.resetBtn.addEventListener('click', () => {
+        pullControlsIntoState(false);
+        resetSimulation();
+      });
+
+      [els.inflowRange, els.speedRange, els.truckRange, els.noiseRange, els.rateRange].forEach(input => {
+        input.addEventListener('input', () => { pullControlsIntoState(); });
+        input.addEventListener('change', () => { pullControlsIntoState(); resetSimulation(); });
+      });
+      els.laneSelect.addEventListener('change', () => { pullControlsIntoState(); resetSimulation(); });
+      els.scenarioSelect.addEventListener('change', e => {
+        const value = e.target.value;
+        if (value === 'custom') return;
+        applyScenario(value);
+      });
+      document.querySelectorAll('[data-preset]').forEach(btn => btn.addEventListener('click', () => applyScenario(btn.dataset.preset)));
+
+      window.addEventListener('resize', renderAll);
+
+      pullControlsIntoState(false);
+      resetSimulation();
+      recordSample();
+      renderAll();
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>
