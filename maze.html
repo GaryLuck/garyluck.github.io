@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Maze Generator & Solver</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #1a1a2e;
+    color: #eaeaea;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  h1 {
+    margin: 0 0 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #f5f5f5;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: center;
+    justify-content: center;
+    background: #232340;
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .control {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #aab;
+  }
+  .control label {
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  select, input[type="range"], button {
+    background: #2e2e54;
+    color: #eaeaea;
+    border: 1px solid #44446a;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  select:hover, button:hover:not(:disabled) {
+    background: #3a3a66;
+    border-color: #6a6aa0;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  button.primary {
+    background: #4a6cf7;
+    border-color: #4a6cf7;
+  }
+  button.primary:hover:not(:disabled) {
+    background: #6884ff;
+    border-color: #6884ff;
+  }
+  button.danger {
+    background: #c75050;
+    border-color: #c75050;
+  }
+  button.danger:hover:not(:disabled) {
+    background: #e06464;
+    border-color: #e06464;
+  }
+  input[type="range"] {
+    padding: 0;
+    width: 130px;
+    cursor: pointer;
+  }
+  .value {
+    color: #eaeaea;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .canvas-wrap {
+    background: #000;
+    padding: 4px;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+  .legend {
+    margin-top: 14px;
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: #aab;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+    border: 1px solid #44446a;
+  }
+  .status {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #aab;
+    min-height: 18px;
+  }
+</style>
+</head>
+<body>
+  <h1>Maze Generator & Solver</h1>
+
+  <div class="controls">
+    <div class="control">
+      <label for="genAlgo">Generator</label>
+      <select id="genAlgo">
+        <option value="dfs">Recursive Backtracker (DFS)</option>
+        <option value="prim">Prim's Algorithm</option>
+        <option value="kruskal">Kruskal's Algorithm</option>
+        <option value="wilson">Wilson's Algorithm</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="solveAlgo">Solver</label>
+      <select id="solveAlgo">
+        <option value="bfs">Breadth-First Search</option>
+        <option value="dfs">Depth-First Search</option>
+        <option value="astar">A* Search</option>
+        <option value="dijkstra">Dijkstra</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="gridSize">Grid Size <span class="value" id="gridSizeVal">31</span></label>
+      <input type="range" id="gridSize" min="11" max="81" step="2" value="31">
+    </div>
+
+    <div class="control">
+      <label for="genSpeed">Gen Speed <span class="value" id="genSpeedVal">5</span></label>
+      <input type="range" id="genSpeed" min="0" max="100" value="5">
+    </div>
+
+    <div class="control">
+      <label for="solveSpeed">Solve Speed <span class="value" id="solveSpeedVal">5</span></label>
+      <input type="range" id="solveSpeed" min="0" max="100" value="5">
+    </div>
+
+    <div class="control">
+      <label>&nbsp;</label>
+      <button id="generateBtn" class="primary">Generate</button>
+    </div>
+    <div class="control">
+      <label>&nbsp;</label>
+      <button id="solveBtn" class="primary">Solve</button>
+    </div>
+    <div class="control">
+      <label>&nbsp;</label>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="maze" width="600" height="600"></canvas>
+  </div>
+
+  <div class="legend">
+    <span><i class="swatch" style="background:#000"></i>Wall</span>
+    <span><i class="swatch" style="background:#fff"></i>Path</span>
+    <span><i class="swatch" style="background:#7bd389"></i>Start</span>
+    <span><i class="swatch" style="background:#e06464"></i>End</span>
+    <span><i class="swatch" style="background:#88aaff"></i>Frontier</span>
+    <span><i class="swatch" style="background:#cdb4ff"></i>Visited</span>
+    <span><i class="swatch" style="background:#ffd54a"></i>Solution</span>
+  </div>
+
+  <div class="status" id="status">Press Generate to build a maze.</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('maze');
+  const ctx = canvas.getContext('2d');
+
+  const els = {
+    genAlgo: document.getElementById('genAlgo'),
+    solveAlgo: document.getElementById('solveAlgo'),
+    gridSize: document.getElementById('gridSize'),
+    gridSizeVal: document.getElementById('gridSizeVal'),
+    genSpeed: document.getElementById('genSpeed'),
+    genSpeedVal: document.getElementById('genSpeedVal'),
+    solveSpeed: document.getElementById('solveSpeed'),
+    solveSpeedVal: document.getElementById('solveSpeedVal'),
+    generateBtn: document.getElementById('generateBtn'),
+    solveBtn: document.getElementById('solveBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    status: document.getElementById('status'),
+  };
+
+  const COLORS = {
+    wall: '#000000',
+    path: '#ffffff',
+    start: '#7bd389',
+    end: '#e06464',
+    frontier: '#88aaff',
+    visited: '#cdb4ff',
+    solution: '#ffd54a',
+    cursor: '#ff8c42',
+  };
+
+  const CANVAS_PX = 600;
+  let cols, rows, cell;
+  let grid; // 2D array: 0 wall, 1 path
+  let overlay; // visualization layer
+  let running = false;
+  let cancelToken = { cancelled: false };
+
+  function setStatus(msg) { els.status.textContent = msg; }
+
+  function initGrid() {
+    cols = parseInt(els.gridSize.value);
+    rows = cols;
+    cell = Math.floor(CANVAS_PX / cols);
+    canvas.width = cell * cols;
+    canvas.height = cell * rows;
+    grid = Array.from({length: rows}, () => new Array(cols).fill(0));
+    overlay = Array.from({length: rows}, () => new Array(cols).fill(null));
+    drawAll();
+  }
+
+  function drawCell(x, y) {
+    const o = overlay[y][x];
+    let color;
+    if (o) color = o;
+    else color = grid[y][x] === 1 ? COLORS.path : COLORS.wall;
+    ctx.fillStyle = color;
+    ctx.fillRect(x * cell, y * cell, cell, cell);
+  }
+
+  function drawAll() {
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++)
+        drawCell(x, y);
+  }
+
+  function clearOverlay() {
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++)
+        overlay[y][x] = null;
+  }
+
+  // Speed: slider 0..100 -> delay ms (0 = no delay/fast). Higher slider = faster.
+  // We'll batch steps per frame for high speeds.
+  function speedConfig(sliderVal) {
+    // Returns { stepsPerFrame, delayMs }
+    // 0 -> very slow (1 step / 200ms), 50 -> 1 step/frame, 100 -> 200 steps/frame
+    if (sliderVal <= 50) {
+      const delay = Math.round((50 - sliderVal) * 4); // 0..200ms
+      return { stepsPerFrame: 1, delayMs: delay };
+    } else {
+      const steps = Math.round(1 + Math.pow((sliderVal - 50) / 50, 2) * 400);
+      return { stepsPerFrame: steps, delayMs: 0 };
+    }
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+  function nextFrame() {
+    return new Promise(r => requestAnimationFrame(() => r()));
+  }
+
+  async function pace(speedSlider, counter) {
+    const { stepsPerFrame, delayMs } = speedConfig(speedSlider);
+    counter.n++;
+    if (counter.n >= stepsPerFrame) {
+      counter.n = 0;
+      if (delayMs > 0) await sleep(delayMs);
+      else await nextFrame();
+      if (cancelToken.cancelled) throw new Error('cancelled');
+    }
+  }
+
+  // ====== Generators ======
+  // All generators work on a grid with odd dimensions; cells are at (odd, odd),
+  // walls between them are at even coords.
+
+  function fillWalls() {
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++)
+        grid[y][x] = 0;
+  }
+
+  function carve(x, y) {
+    grid[y][x] = 1;
+    drawCell(x, y);
+  }
+
+  async function genDFS(speedSlider) {
+    fillWalls();
+    drawAll();
+    const counter = { n: 0 };
+    const stack = [[1, 1]];
+    carve(1, 1);
+    const dirs = [[0,-2],[0,2],[-2,0],[2,0]];
+
+    while (stack.length) {
+      const [x, y] = stack[stack.length - 1];
+      const shuffled = dirs.slice().sort(() => Math.random() - 0.5);
+      let carved = false;
+      for (const [dx, dy] of shuffled) {
+        const nx = x + dx, ny = y + dy;
+        if (nx > 0 && ny > 0 && nx < cols - 1 && ny < rows - 1 && grid[ny][nx] === 0) {
+          carve(x + dx/2, y + dy/2);
+          carve(nx, ny);
+          stack.push([nx, ny]);
+          carved = true;
+          await pace(speedSlider, counter);
+          break;
+        }
+      }
+      if (!carved) stack.pop();
+    }
+  }
+
+  async function genPrim(speedSlider) {
+    fillWalls();
+    drawAll();
+    const counter = { n: 0 };
+    const sx = 1, sy = 1;
+    carve(sx, sy);
+    const frontier = [];
+    const dirs = [[0,-2],[0,2],[-2,0],[2,0]];
+
+    function addFrontiers(x, y) {
+      for (const [dx, dy] of dirs) {
+        const nx = x + dx, ny = y + dy;
+        if (nx > 0 && ny > 0 && nx < cols - 1 && ny < rows - 1
+            && grid[ny][nx] === 0 && overlay[ny][nx] !== COLORS.frontier) {
+          overlay[ny][nx] = COLORS.frontier;
+          drawCell(nx, ny);
+          frontier.push([nx, ny]);
+        }
+      }
+    }
+    addFrontiers(sx, sy);
+
+    while (frontier.length) {
+      const i = Math.floor(Math.random() * frontier.length);
+      const [x, y] = frontier.splice(i, 1)[0];
+      // Find a neighbor that's already part of maze
+      const neighbors = [];
+      for (const [dx, dy] of dirs) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < cols && ny < rows && grid[ny][nx] === 1)
+          neighbors.push([nx, ny]);
+      }
+      if (neighbors.length) {
+        const [nx, ny] = neighbors[Math.floor(Math.random() * neighbors.length)];
+        carve((x + nx) / 2, (y + ny) / 2);
+        overlay[y][x] = null;
+        carve(x, y);
+        addFrontiers(x, y);
+        await pace(speedSlider, counter);
+      }
+    }
+    clearOverlay();
+    drawAll();
+  }
+
+  async function genKruskal(speedSlider) {
+    fillWalls();
+    drawAll();
+    const counter = { n: 0 };
+    // Cells at odd coords
+    const cellIds = {};
+    const parent = [];
+    function find(a) { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; }
+    function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) { parent[ra] = rb; return true; } return false; }
+
+    let id = 0;
+    for (let y = 1; y < rows; y += 2) {
+      for (let x = 1; x < cols; x += 2) {
+        cellIds[`${x},${y}`] = id;
+        parent[id] = id;
+        id++;
+        carve(x, y);
+      }
+    }
+
+    const walls = [];
+    for (let y = 1; y < rows; y += 2) {
+      for (let x = 1; x < cols; x += 2) {
+        if (x + 2 < cols) walls.push([x + 1, y, x, y, x + 2, y]);
+        if (y + 2 < rows) walls.push([x, y + 1, x, y, x, y + 2]);
+      }
+    }
+    walls.sort(() => Math.random() - 0.5);
+
+    for (const [wx, wy, ax, ay, bx, by] of walls) {
+      const a = cellIds[`${ax},${ay}`];
+      const b = cellIds[`${bx},${by}`];
+      if (union(a, b)) {
+        carve(wx, wy);
+        await pace(speedSlider, counter);
+      }
+    }
+  }
+
+  async function genWilson(speedSlider) {
+    fillWalls();
+    drawAll();
+    const counter = { n: 0 };
+    const inMaze = Array.from({length: rows}, () => new Array(cols).fill(false));
+    const cellsList = [];
+    for (let y = 1; y < rows; y += 2)
+      for (let x = 1; x < cols; x += 2)
+        cellsList.push([x, y]);
+
+    // Start with a random cell
+    const startIdx = Math.floor(Math.random() * cellsList.length);
+    const [s0x, s0y] = cellsList[startIdx];
+    inMaze[s0y][s0x] = true;
+    carve(s0x, s0y);
+
+    const dirs = [[0,-2],[0,2],[-2,0],[2,0]];
+
+    for (const [cx, cy] of cellsList) {
+      if (inMaze[cy][cx]) continue;
+      // Random walk from (cx, cy) until hit maze
+      const path = [[cx, cy]];
+      const dirAt = {};
+      let x = cx, y = cy;
+      while (!inMaze[y][x]) {
+        const valid = dirs.filter(([dx, dy]) => {
+          const nx = x + dx, ny = y + dy;
+          return nx > 0 && ny > 0 && nx < cols - 1 && ny < rows - 1;
+        });
+        const [dx, dy] = valid[Math.floor(Math.random() * valid.length)];
+        dirAt[`${x},${y}`] = [dx, dy];
+        x += dx; y += dy;
+        // mark walk visually
+        if (!inMaze[y][x]) {
+          overlay[y][x] = COLORS.frontier;
+          drawCell(x, y);
+        }
+      }
+      // Carve along path following dirAt
+      let [px, py] = [cx, cy];
+      while (!inMaze[py][px]) {
+        overlay[py][px] = null;
+        carve(px, py);
+        inMaze[py][px] = true;
+        const [dx, dy] = dirAt[`${px},${py}`];
+        carve(px + dx/2, py + dy/2);
+        px += dx; py += dy;
+        await pace(speedSlider, counter);
+      }
+      // Clear any leftover frontier marks from loops in walk
+      for (let yy = 0; yy < rows; yy++)
+        for (let xx = 0; xx < cols; xx++)
+          if (overlay[yy][xx] === COLORS.frontier) {
+            overlay[yy][xx] = null;
+            drawCell(xx, yy);
+          }
+    }
+  }
+
+  // ====== Solvers ======
+
+  function getStartEnd() {
+    return { sx: 1, sy: 1, ex: cols - 2, ey: rows - 2 };
+  }
+
+  function neighbors4(x, y) {
+    const out = [];
+    if (x > 0 && grid[y][x-1] === 1) out.push([x-1, y]);
+    if (x < cols-1 && grid[y][x+1] === 1) out.push([x+1, y]);
+    if (y > 0 && grid[y-1][x] === 1) out.push([x, y-1]);
+    if (y < rows-1 && grid[y+1][x] === 1) out.push([x, y+1]);
+    return out;
+  }
+
+  function key(x, y) { return y * cols + x; }
+
+  async function reconstructAndDraw(cameFrom, sx, sy, ex, ey, speedSlider) {
+    const counter = { n: 0 };
+    const path = [];
+    let cur = key(ex, ey);
+    while (cur !== undefined) {
+      const x = cur % cols, y = Math.floor(cur / cols);
+      path.push([x, y]);
+      cur = cameFrom[cur];
+    }
+    path.reverse();
+    for (const [x, y] of path) {
+      overlay[y][x] = COLORS.solution;
+      drawCell(x, y);
+      await pace(speedSlider, counter);
+    }
+    // Re-mark start/end distinctly
+    overlay[sy][sx] = COLORS.start; drawCell(sx, sy);
+    overlay[ey][ex] = COLORS.end; drawCell(ex, ey);
+    setStatus(`Solved! Path length: ${path.length}`);
+  }
+
+  async function solveBFS(speedSlider) {
+    const { sx, sy, ex, ey } = getStartEnd();
+    const counter = { n: 0 };
+    const queue = [[sx, sy]];
+    const cameFrom = {};
+    cameFrom[key(sx, sy)] = undefined;
+    overlay[sy][sx] = COLORS.start; drawCell(sx, sy);
+    overlay[ey][ex] = COLORS.end; drawCell(ex, ey);
+
+    let head = 0;
+    while (head < queue.length) {
+      const [x, y] = queue[head++];
+      if (x === ex && y === ey) {
+        await reconstructAndDraw(cameFrom, sx, sy, ex, ey, speedSlider);
+        return;
+      }
+      for (const [nx, ny] of neighbors4(x, y)) {
+        if (cameFrom[key(nx, ny)] === undefined && !(nx === sx && ny === sy)) {
+          cameFrom[key(nx, ny)] = key(x, y);
+          queue.push([nx, ny]);
+          if (!(nx === ex && ny === ey)) {
+            overlay[ny][nx] = COLORS.visited;
+            drawCell(nx, ny);
+          }
+          await pace(speedSlider, counter);
+        }
+      }
+    }
+    setStatus('No solution found.');
+  }
+
+  async function solveDFS(speedSlider) {
+    const { sx, sy, ex, ey } = getStartEnd();
+    const counter = { n: 0 };
+    const stack = [[sx, sy]];
+    const cameFrom = {};
+    cameFrom[key(sx, sy)] = undefined;
+    const visited = new Set([key(sx, sy)]);
+    overlay[sy][sx] = COLORS.start; drawCell(sx, sy);
+    overlay[ey][ex] = COLORS.end; drawCell(ex, ey);
+
+    while (stack.length) {
+      const [x, y] = stack.pop();
+      if (x === ex && y === ey) {
+        await reconstructAndDraw(cameFrom, sx, sy, ex, ey, speedSlider);
+        return;
+      }
+      if (!(x === sx && y === sy) && !(x === ex && y === ey)) {
+        overlay[y][x] = COLORS.visited;
+        drawCell(x, y);
+        await pace(speedSlider, counter);
+      }
+      const nbs = neighbors4(x, y);
+      // Shuffle for variety
+      for (let i = nbs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [nbs[i], nbs[j]] = [nbs[j], nbs[i]];
+      }
+      for (const [nx, ny] of nbs) {
+        const k = key(nx, ny);
+        if (!visited.has(k)) {
+          visited.add(k);
+          cameFrom[k] = key(x, y);
+          stack.push([nx, ny]);
+        }
+      }
+    }
+    setStatus('No solution found.');
+  }
+
+  // Min-heap
+  class MinHeap {
+    constructor() { this.a = []; }
+    push(item) {
+      this.a.push(item);
+      let i = this.a.length - 1;
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (this.a[p][0] > this.a[i][0]) {
+          [this.a[p], this.a[i]] = [this.a[i], this.a[p]];
+          i = p;
+        } else break;
+      }
+    }
+    pop() {
+      const top = this.a[0];
+      const last = this.a.pop();
+      if (this.a.length) {
+        this.a[0] = last;
+        let i = 0;
+        const n = this.a.length;
+        while (true) {
+          const l = i * 2 + 1, r = i * 2 + 2;
+          let m = i;
+          if (l < n && this.a[l][0] < this.a[m][0]) m = l;
+          if (r < n && this.a[r][0] < this.a[m][0]) m = r;
+          if (m !== i) { [this.a[m], this.a[i]] = [this.a[i], this.a[m]]; i = m; }
+          else break;
+        }
+      }
+      return top;
+    }
+    get size() { return this.a.length; }
+  }
+
+  async function solveAStar(speedSlider) {
+    const { sx, sy, ex, ey } = getStartEnd();
+    const counter = { n: 0 };
+    const heap = new MinHeap();
+    const gScore = {};
+    const cameFrom = {};
+    const sk = key(sx, sy);
+    gScore[sk] = 0;
+    cameFrom[sk] = undefined;
+    const h = (x, y) => Math.abs(x - ex) + Math.abs(y - ey);
+    heap.push([h(sx, sy), sx, sy]);
+    overlay[sy][sx] = COLORS.start; drawCell(sx, sy);
+    overlay[ey][ex] = COLORS.end; drawCell(ex, ey);
+    const closed = new Set();
+
+    while (heap.size) {
+      const [, x, y] = heap.pop();
+      const k = key(x, y);
+      if (closed.has(k)) continue;
+      closed.add(k);
+      if (x === ex && y === ey) {
+        await reconstructAndDraw(cameFrom, sx, sy, ex, ey, speedSlider);
+        return;
+      }
+      if (!(x === sx && y === sy)) {
+        overlay[y][x] = COLORS.visited;
+        drawCell(x, y);
+        await pace(speedSlider, counter);
+      }
+      for (const [nx, ny] of neighbors4(x, y)) {
+        const nk = key(nx, ny);
+        const tentative = gScore[k] + 1;
+        if (gScore[nk] === undefined || tentative < gScore[nk]) {
+          gScore[nk] = tentative;
+          cameFrom[nk] = k;
+          heap.push([tentative + h(nx, ny), nx, ny]);
+          if (!closed.has(nk) && !(nx === ex && ny === ey)) {
+            overlay[ny][nx] = COLORS.frontier;
+            drawCell(nx, ny);
+          }
+        }
+      }
+    }
+    setStatus('No solution found.');
+  }
+
+  async function solveDijkstra(speedSlider) {
+    const { sx, sy, ex, ey } = getStartEnd();
+    const counter = { n: 0 };
+    const heap = new MinHeap();
+    const dist = {};
+    const cameFrom = {};
+    const sk = key(sx, sy);
+    dist[sk] = 0;
+    cameFrom[sk] = undefined;
+    heap.push([0, sx, sy]);
+    overlay[sy][sx] = COLORS.start; drawCell(sx, sy);
+    overlay[ey][ex] = COLORS.end; drawCell(ex, ey);
+    const closed = new Set();
+
+    while (heap.size) {
+      const [, x, y] = heap.pop();
+      const k = key(x, y);
+      if (closed.has(k)) continue;
+      closed.add(k);
+      if (x === ex && y === ey) {
+        await reconstructAndDraw(cameFrom, sx, sy, ex, ey, speedSlider);
+        return;
+      }
+      if (!(x === sx && y === sy)) {
+        overlay[y][x] = COLORS.visited;
+        drawCell(x, y);
+        await pace(speedSlider, counter);
+      }
+      for (const [nx, ny] of neighbors4(x, y)) {
+        const nk = key(nx, ny);
+        const nd = dist[k] + 1;
+        if (dist[nk] === undefined || nd < dist[nk]) {
+          dist[nk] = nd;
+          cameFrom[nk] = k;
+          heap.push([nd, nx, ny]);
+          if (!closed.has(nk) && !(nx === ex && ny === ey)) {
+            overlay[ny][nx] = COLORS.frontier;
+            drawCell(nx, ny);
+          }
+        }
+      }
+    }
+    setStatus('No solution found.');
+  }
+
+  // ====== Orchestration ======
+
+  function setRunning(state) {
+    running = state;
+    els.generateBtn.disabled = state;
+    els.solveBtn.disabled = state;
+    els.gridSize.disabled = state;
+    els.genAlgo.disabled = state;
+    els.solveAlgo.disabled = state;
+  }
+
+  async function generate() {
+    if (running) return;
+    cancelToken = { cancelled: false };
+    setRunning(true);
+    initGrid();
+    setStatus('Generating maze...');
+    const algo = els.genAlgo.value;
+    const sp = parseInt(els.genSpeed.value);
+    try {
+      if (algo === 'dfs') await genDFS(sp);
+      else if (algo === 'prim') await genPrim(sp);
+      else if (algo === 'kruskal') await genKruskal(sp);
+      else if (algo === 'wilson') await genWilson(sp);
+      // Mark start/end
+      const { sx, sy, ex, ey } = getStartEnd();
+      overlay[sy][sx] = COLORS.start; drawCell(sx, sy);
+      overlay[ey][ex] = COLORS.end; drawCell(ex, ey);
+      setStatus('Maze generated. Press Solve to find path.');
+    } catch (e) {
+      if (e.message !== 'cancelled') console.error(e);
+      setStatus('Generation cancelled.');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function isMazeBuilt() {
+    // Check that there's at least some path
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++)
+        if (grid[y][x] === 1) return true;
+    return false;
+  }
+
+  async function solve() {
+    if (running) return;
+    if (!isMazeBuilt()) {
+      setStatus('Generate a maze first.');
+      return;
+    }
+    // Clear visited/frontier/solution overlays but keep start/end
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const o = overlay[y][x];
+        if (o === COLORS.visited || o === COLORS.frontier || o === COLORS.solution) {
+          overlay[y][x] = null;
+          drawCell(x, y);
+        }
+      }
+    }
+    cancelToken = { cancelled: false };
+    setRunning(true);
+    setStatus('Solving...');
+    const algo = els.solveAlgo.value;
+    const sp = parseInt(els.solveSpeed.value);
+    try {
+      if (algo === 'bfs') await solveBFS(sp);
+      else if (algo === 'dfs') await solveDFS(sp);
+      else if (algo === 'astar') await solveAStar(sp);
+      else if (algo === 'dijkstra') await solveDijkstra(sp);
+    } catch (e) {
+      if (e.message !== 'cancelled') console.error(e);
+      setStatus('Solve cancelled.');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function reset() {
+    cancelToken.cancelled = true;
+    // Allow async tasks to unwind, then re-init
+    setTimeout(() => {
+      setRunning(false);
+      initGrid();
+      setStatus('Reset. Press Generate to build a maze.');
+    }, 30);
+  }
+
+  // ====== Wiring ======
+  els.gridSize.addEventListener('input', () => {
+    let v = parseInt(els.gridSize.value);
+    if (v % 2 === 0) v += 1;
+    els.gridSizeVal.textContent = v;
+  });
+  els.gridSize.addEventListener('change', () => {
+    if (running) return;
+    initGrid();
+    setStatus('Grid resized. Press Generate.');
+  });
+  els.genSpeed.addEventListener('input', () => {
+    els.genSpeedVal.textContent = els.genSpeed.value;
+  });
+  els.solveSpeed.addEventListener('input', () => {
+    els.solveSpeedVal.textContent = els.solveSpeed.value;
+  });
+  els.generateBtn.addEventListener('click', generate);
+  els.solveBtn.addEventListener('click', solve);
+  els.resetBtn.addEventListener('click', reset);
+
+  // Initial draw
+  initGrid();
+})();
+</script>
+</body>
+</html>
