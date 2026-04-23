@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Queueing System Simulation</title>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f3f4f6;
+            --bg: #ffffff;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--light);
+            color: var(--dark);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar Controls */
+        aside {
+            width: 300px;
+            background: var(--bg);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--primary); }
+        h3 { margin: 0 0 10px 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label { font-size: 0.85rem; font-weight: 600; display: flex; justify-content: space-between; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        input[type="number"] { padding: 5px; border: 1px solid var(--border); border-radius: 4px; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        .btn-start { background-color: var(--success); color: white; }
+        .btn-pause { background-color: var(--warning); color: white; }
+        .btn-reset { background-color: var(--danger); color: white; }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            padding: 20px;
+            gap: 20px;
+            overflow: hidden;
+        }
+
+        /* Animation Area */
+        .simulation-view {
+            background: var(--bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .system-layout {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            gap: 40px;
+            padding: 20px 0;
+        }
+
+        /* Queue Visuals */
+        .queue-area {
+            flex: 1;
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            background: #fafafa;
+            padding: 10px;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            position: relative;
+            transition: all 0.3s;
+        }
+        .queue-area.active { border-color: var(--primary); background: #eff6ff; }
+        .queue-label {
+            position: absolute;
+            top: -10px;
+            left: 10px;
+            background: var(--bg);
+            padding: 0 5px;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+
+        /* Server Visuals */
+        .servers-area {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            padding: 0 20px;
+        }
+
+        .server {
+            width: 80px;
+            height: 100px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: white;
+        }
+        .server.busy { border-color: var(--success); background: #ecfdf5; }
+        .server-icon { font-size: 24px; margin-bottom: 5px; }
+        .progress-bar {
+            width: 80%;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--success);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        /* Customer Entity */
+        .customer {
+            width: 40px;
+            height: 40px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin: 0 5px;
+            flex-shrink: 0;
+            transition: all 0.5s ease;
+            position: relative;
+            z-index: 10;
+        }
+        .customer.waiting { background-color: var(--warning); }
+        .customer.served { background-color: var(--success); }
+
+        /* Dashboard Stats & Charts */
+        .dashboard-view {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .chart-container {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--dark); }
+        .stat-label { font-size: 0.8rem; color: #6b7280; margin-top: 5px; }
+        .stat-trend { font-size: 0.75rem; margin-top: 5px; }
+        .trend-up { color: var(--danger); }
+        .trend-down { color: var(--success); }
+
+        /* Simulation Clock */
+        .sim-clock {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-family: monospace;
+            font-size: 1.2rem;
+            background: var(--dark);
+            color: var(--success);
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<aside>
+    <h2>Queue Sim Dashboard</h2>
+    
+    <div class="control-group">
+        <h3>Parameters</h3>
+        
+        <label>Arrival Rate (per min) <span id="val-arrival">5</span></label>
+        <input type="range" id="param-arrival" min="1" max="20" value="5" step="0.5">
+
+        <label>Avg Service Time (min) <span id="val-service">2</span></label>
+        <input type="range" id="param-service" min="0.5" max="10" value="2" step="0.5">
+
+        <label>Servers (Resources) <span id="val-servers">2</span></label>
+        <input type="range" id="param-servers" min="1" max="6" value="2" step="1">
+
+        <label>Variability (Jitter) <span id="val-var">Low</span></label>
+        <input type="range" id="param-var" min="0" max="100" value="20">
+        <small style="color:#6b7280; font-size: 0.7rem;">Higher variability = unpredictable times</small>
+    </div>
+
+    <div class="control-group">
+        <h3>Simulation Speed</h3>
+        <input type="range" id="param-speed" min="1" max="10" value="1">
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-start" id="btn-start">Start</button>
+        <button class="btn-pause" id="btn-pause">Pause</button>
+    </div>
+    <button class="btn-reset" id="btn-reset" style="margin-top: 10px;">Reset System</button>
+
+    <div style="margin-top: auto; font-size: 0.8rem; color: #6b7280; line-height: 1.4;">
+        <p><strong>How it works:</strong> Customers arrive based on a Poisson process. Service times vary based on your settings. Watch how queue length explodes if Arrival Rate > (Servers / Service Time).</p>
+    </div>
+</aside>
+
+<main>
+    <!-- Animation View -->
+    <div class="simulation-view">
+        <div class="sim-clock" id="sim-clock">00:00</div>
+        <div class="system-layout">
+            <div class="queue-area" id="queue-visual">
+                <span class="queue-label">Waiting Queue</span>
+                <!-- Customers injected here -->
+            </div>
+            
+            <div style="font-size: 2rem; color: #d1d5db;">➜</div>
+
+            <div class="servers-area" id="servers-visual">
+                <!-- Servers injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats & Charts -->
+    <div class="dashboard-view">
+        <div class="chart-container">
+            <canvas id="mainChart"></canvas>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-queue-len">0</div>
+                <div class="stat-label">Current Queue Length</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-wait-time">0.0m</div>
+                <div class="stat-label">Avg Wait Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-util">0%</div>
+                <div class="stat-label">Server Utilization</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-throughput">0</div>
+                <div class="stat-label">Total Served</div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    /**
+     * DISCRETE EVENT SIMULATION ENGINE
+     */
+    class Simulation {
+        constructor() {
+            this.reset();
+            this.chart = null;
+            this.initChart();
+            this.setupEventListeners();
+        }
+
+        reset() {
+            this.clock = 0;
+            this.queue = []; // Array of customer objects waiting
+            this.servers = []; // Array of server objects { busy: bool, customer: obj, finishTime: num }
+            this.stats = {
+                totalArrivals: 0,
+                totalDepartures: 0,
+                totalWaitTime: 0,
+                maxQueueLength: 0,
+                serverBusyTime: 0
+            };
+            this.history = {
+                time: [],
+                queueLen: [],
+                utilization: []
+            };
+            this.isRunning = false;
+            this.lastFrameTime = 0;
+            
+            // Initialize servers based on current UI
+            this.updateServerCount();
+            this.renderSystem();
+            this.updateStatsUI();
+        }
+
+        updateServerCount() {
+            const count = parseInt(document.getElementById('param-servers').value);
+            // Preserve existing server states if possible, or reset
+            while (this.servers.length < count) {
+                this.servers.push({ id: this.servers.length, busy: false, customer: null, finishTime: 0, startTime: 0 });
+            }
+            while (this.servers.length > count) {
+                // If removing a busy server, push customer back to queue (simplified logic)
+                const removed = this.servers.pop();
+                if (removed.busy && removed.customer) {
+                    this.queue.push(removed.customer);
+                }
+            }
+        }
+
+        // Generate random number based on Exponential Distribution (Poisson Process)
+        // Mean = 1/lambda
+        nextExponential(mean) {
+            return -Math.log(1 - Math.random()) * mean;
+        }
+
+        // Generate random number with variability (Normal-ish approximation)
+        nextVariable(mean, variabilityPercent) {
+            if (variabilityPercent === 0) return mean;
+            // Simple uniform distribution around mean for visual clarity
+            const range = mean * (variabilityPercent / 100);
+            return mean + (Math.random() * range * 2 - range); 
+        }
+
+        start() {
+            if (!this.isRunning) {
+                this.isRunning = true;
+                this.lastFrameTime = performance.now();
+                this.loop();
+            }
+        }
+
+        pause() {
+            this.isRunning = false;
+        }
+
+        loop() {
+            if (!this.isRunning) return;
+
+            const now = performance.now();
+            const deltaTime = (now - this.lastFrameTime) / 1000; // Real seconds passed
+            const speedMultiplier = parseFloat(document.getElementById('param-speed').value);
+            
+            // Advance simulation clock
+            // We simulate more time per real second based on speed slider
+            const simDelta = deltaTime * speedMultiplier; 
+            this.clock += simDelta;
+
+            this.processEvents(simDelta);
+            this.renderSystem();
+            this.updateStatsUI();
+            
+            // Update Chart less frequently to save performance
+            if (Math.floor(this.clock * 10) % 5 === 0) { 
+                this.updateChart();
+            }
+
+            this.lastFrameTime = now;
+            requestAnimationFrame(() => this.loop());
+        }
+
+        processEvents(dt) {
+            // 1. Handle Arrivals
+            // We check if a new arrival should happen in this small time step
+            // Probability of arrival in dt = rate * dt
+            const arrivalRate = parseFloat(document.getElementById('param-arrival').value);
+            const serviceTimeMean = parseFloat(document.getElementById('param-service').value);
+            const variability = parseFloat(document.getElementById('param-var').value);
+
+            // Poisson arrival logic: generate next arrival time dynamically
+            // To simplify the loop, we'll just check probability per tick
+            if (Math.random() < (arrivalRate * dt)) {
+                this.stats.totalArrivals++;
+                const customer = {
+                    id: this.stats.totalArrivals,
+                    arrivalTime: this.clock,
+                    serviceStartTime: null,
+                    serviceDuration: this.nextVariable(serviceTimeMean, variability)
+                };
+                this.queue.push(customer);
+                if (this.queue.length > this.stats.maxQueueLength) {
+                    this.stats.maxQueueLength = this.queue.length;
+                }
+            }
+
+            // 2. Handle Service Logic (Assign queue to idle servers)
+            this.servers.forEach(server => {
+                if (!server.busy && this.queue.length > 0) {
+                    // Start service
+                    const customer = this.queue.shift();
+                    server.busy = true;
+                    server.customer = customer;
+                    server.startTime = this.clock;
+                    server.finishTime = this.clock + customer.serviceDuration;
+                    customer.serviceStartTime = this.clock;
+                }
+
+                // Check for completion
+                if (server.busy && this.clock >= server.finishTime) {
+                    // Departure
+                    server.busy = false;
+                    const customer = server.customer;
+                    this.stats.totalDepartures++;
+                    
+                    // Calculate wait time (time in queue)
+                    const waitTime = customer.serviceStartTime - customer.arrivalTime;
+                    this.stats.totalWaitTime += waitTime;
+                    
+                    server.customer = null;
+                }
+            });
+
+            // Track utilization
+            const busyServers = this.servers.filter(s => s.busy).length;
+            this.stats.serverBusyTime += (busyServers / this.servers.length) * dt;
+        }
+
+        /**
+         * VISUALIZATION & UI UPDATES
+         */
+        renderSystem() {
+            // Render Queue
+            const queueContainer = document.getElementById('queue-visual');
+            queueContainer.innerHTML = '<span class="queue-label">Waiting Queue</span>';
+            
+            // Add visual customers
+            this.queue.forEach((c, index) => {
+                const el = document.createElement('div');
+                el.className = 'customer waiting';
+                el.textContent = c.id;
+                // Simple animation delay based on index for visual flow
+                el.style.transform = `translateX(${index * -5}px)`; 
+                queueContainer.appendChild(el);
+            });
+
+            if (this.queue.length > 0) queueContainer.classList.add('active');
+            else queueContainer.classList.remove('active');
+
+            // Render Servers
+            const serversContainer = document.getElementById('servers-visual');
+            serversContainer.innerHTML = '';
+            
+            this.servers.forEach((s, index) => {
+                const sEl = document.createElement('div');
+                sEl.className = `server ${s.busy ? 'busy' : ''}`;
+                
+                let content = `<div class="server-icon">🖥️</div>`;
+                if (s.busy && s.customer) {
+                    content += `<div class="customer served" style="width:30px;height:30px;font-size:8px;margin:0 auto 5px auto;">${s.customer.id}</div>`;
+                    
+                    // Progress bar calculation
+                    const totalDuration = s.finishTime - s.startTime;
+                    const elapsed = this.clock - s.startTime;
+                    const pct = Math.min(100, (elapsed / totalDuration) * 100);
+                    
+                    content += `
+                        <div style="font-size:10px; margin-bottom:2px;">Serving</div>
+                        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+                    `;
+                } else {
+                    content += `<div style="font-size:10px; color:#9ca3af;">Idle</div>`;
+                }
+
+                sEl.innerHTML = content;
+                serversContainer.appendChild(sEl);
+            });
+
+            // Clock
+            document.getElementById('sim-clock').textContent = 
+                Math.floor(this.clock).toString().padStart(2, '0') + ":00";
+        }
+
+        updateStatsUI() {
+            // Queue Length
+            document.getElementById('stat-queue-len').textContent = this.queue.length;
+
+            // Avg Wait Time
+            const avgWait = this.stats.totalDepartures > 0 
+                ? (this.stats.totalWaitTime / this.stats.totalDepartures).toFixed(1) 
+                : 0;
+            document.getElementById('stat-wait-time').textContent = avgWait + "m";
+
+            // Throughput
+            document.getElementById('stat-throughput').textContent = this.stats.totalDepartures;
+
+            // Utilization
+            // Approximate utilization over the whole run
+            const util = this.clock > 0 ? (this.stats.serverBusyTime / (this.clock * this.servers.length)) * 100 : 0;
+            const utilEl = document.getElementById('stat-util');
+            utilEl.textContent = Math.min(100, util).toFixed(1) + "%";
+            
+            // Color code utilization
+            if (util > 90) utilEl.style.color = 'var(--danger)';
+            else if (util > 70) utilEl.style.color = 'var(--warning)';
+            else utilEl.style.color = 'var(--success)';
+        }
+
+        /**
+         * CHARTING
+         */
+        initChart() {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            this.chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Queue Length',
+                            data: [],
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Utilization %',
+                            data: [],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            yAxisID: 'y1',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { display: false }, // Hide time labels for cleaner look
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Queue Length' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            min: 0,
+                            max: 100,
+                            title: { display: true, text: 'Utilization %' }
+                        }
+                    },
+                    animation: false // Disable chart animation for performance during live updates
+                }
+            });
+        }
+
+        updateChart() {
+            if (!this.chart) return;
+
+            const timeLabel = Math.floor(this.clock);
+            
+            // Keep chart manageable (last 50 points)
+            if (this.chart.data.labels.length > 50) {
+                this.chart.data.labels.shift();
+                this.chart.data.datasets[0].data.shift();
+                this.chart.data.datasets[1].data.shift();
+            }
+
+            this.chart.data.labels.push(timeLabel);
+            this.chart.data.datasets[0].data.push(this.queue.length);
+            
+            // Calculate current instantaneous utilization
+            const busyCount = this.servers.filter(s => s.busy).length;
+            const currentUtil = (busyCount / this.servers.length) * 100;
+            this.chart.data.datasets[1].data.push(currentUtil);
+
+            this.chart.update();
+        }
+
+        setupEventListeners() {
+            // Inputs
+            const inputs = ['param-arrival', 'param-service', 'param-servers', 'param-var'];
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('input', (e) => {
+                    // Update label text
+                    const labelId = id.replace('param-', 'val-');
+                    let val = e.target.value;
+                    if(id === 'param-var') {
+                        if(val < 30) val = "Low";
+                        else if(val < 70) val = "Med";
+                        else val = "High";
+                    }
+                    document.getElementById(labelId).textContent = val;
+
+                    // Live update server count if changed
+                    if (id === 'param-servers') {
+                        this.updateServerCount();
+                        this.renderSystem();
+                    }
+                });
+            });
+
+            // Buttons
+            document.getElementById('btn-start').addEventListener('click', () => this.start());
+            document.getElementById('btn-pause').addEventListener('click', () => this.pause());
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                this.pause();
+                this.reset();
+            });
+        }
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+        const sim = new Simulation();
+    });
+
+</script>
+</body>
+</html>
