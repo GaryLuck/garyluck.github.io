@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queueing System Simulator</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --panel: rgba(255, 251, 245, 0.86);
+      --panel-strong: rgba(255, 248, 238, 0.96);
+      --ink: #1d2a33;
+      --muted: #66757f;
+      --accent: #da5a2a;
+      --accent-soft: #f3b394;
+      --accent-alt: #0f8b8d;
+      --warn: #c04c3f;
+      --line: rgba(29, 42, 51, 0.1);
+      --shadow: 0 20px 45px rgba(77, 46, 31, 0.16);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(218, 90, 42, 0.2), transparent 28%),
+        radial-gradient(circle at 85% 15%, rgba(15, 139, 141, 0.16), transparent 24%),
+        linear-gradient(160deg, #f8f1e7 0%, #f2ebdf 35%, #eee4d5 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(29, 42, 51, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(29, 42, 51, 0.02) 1px, transparent 1px);
+      background-size: 24px 24px;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .page {
+      width: min(1360px, calc(100vw - 32px));
+      margin: 24px auto 48px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+      border-radius: var(--radius);
+    }
+
+    .hero {
+      padding: 28px;
+      display: grid;
+      grid-template-columns: 1.3fr 0.9fr;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    .hero-copy h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2.2rem, 4vw, 4.6rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 18px;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: rgba(29, 42, 51, 0.06);
+      color: var(--muted);
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 8px rgba(218, 90, 42, 0.1);
+    }
+
+    .hero-copy p {
+      max-width: 60ch;
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.02rem;
+      line-height: 1.6;
+    }
+
+    .hero-summary {
+      display: grid;
+      gap: 14px;
+      align-content: center;
+    }
+
+    .summary-card {
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.82), rgba(255,248,238,0.72));
+      border: 1px solid rgba(29, 42, 51, 0.08);
+    }
+
+    .summary-card strong,
+    .metric-value {
+      display: block;
+      font-size: clamp(1.5rem, 2.5vw, 2.1rem);
+      line-height: 1;
+      margin-bottom: 6px;
+      letter-spacing: -0.04em;
+    }
+
+    .summary-card span,
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .controls {
+      padding: 20px;
+      position: sticky;
+      top: 20px;
+      display: grid;
+      gap: 18px;
+      background: var(--panel-strong);
+    }
+
+    .controls h2,
+    .dashboard h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      letter-spacing: 0.02em;
+    }
+
+    .control-group {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(29, 42, 51, 0.035);
+      border: 1px solid var(--line);
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+
+    .label-row output {
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      cursor: pointer;
+      transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary {
+      background: var(--accent);
+      color: #fff9f4;
+      box-shadow: 0 12px 24px rgba(218, 90, 42, 0.24);
+    }
+
+    .secondary {
+      background: rgba(29, 42, 51, 0.08);
+      color: var(--ink);
+    }
+
+    .dashboard {
+      display: grid;
+      gap: 18px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .metric {
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.6);
+      box-shadow: var(--shadow);
+      animation: riseIn 650ms ease both;
+    }
+
+    .metric:nth-child(2) { animation-delay: 80ms; }
+    .metric:nth-child(3) { animation-delay: 160ms; }
+    .metric:nth-child(4) { animation-delay: 240ms; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+    }
+
+    .chart-panel,
+    .sim-panel,
+    .notes {
+      padding: 18px;
+    }
+
+    .chart-panel canvas {
+      width: 100%;
+      height: 230px;
+      display: block;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(249,244,238,0.92));
+      border: 1px solid var(--line);
+    }
+
+    .chart-header,
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+
+    .chart-header span,
+    .panel-header span {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .sim-canvas {
+      position: relative;
+      min-height: 340px;
+      border-radius: 18px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(15,139,141,0.08), transparent 35%),
+        linear-gradient(145deg, #fffaf4, #f1e5d9);
+      border: 1px solid var(--line);
+    }
+
+    .sim-canvas::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(transparent 58%, rgba(29,42,51,0.04) 58%, rgba(29,42,51,0.04) 60%, transparent 60%),
+        linear-gradient(90deg, transparent 18%, rgba(29,42,51,0.03) 18%, rgba(29,42,51,0.03) 20%, transparent 20%);
+      pointer-events: none;
+    }
+
+    .queue-zone,
+    .server-zone,
+    .exit-zone {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+    }
+
+    .queue-zone { left: 0; width: 40%; }
+    .server-zone { left: 40%; width: 40%; }
+    .exit-zone { left: 80%; width: 20%; }
+
+    .zone-title {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      font-size: 0.76rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .resource-station {
+      position: absolute;
+      width: 96px;
+      height: 58px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(29,42,51,0.08), rgba(29,42,51,0.16));
+      border: 1px solid rgba(29,42,51,0.1);
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      font-size: 0.88rem;
+    }
+
+    .resource-station.busy {
+      background: linear-gradient(180deg, rgba(218,90,42,0.16), rgba(218,90,42,0.28));
+      box-shadow: 0 10px 18px rgba(218,90,42,0.18);
+    }
+
+    .entity {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #f29d66);
+      box-shadow: 0 8px 18px rgba(218, 90, 42, 0.25);
+      border: 2px solid rgba(255,255,255,0.68);
+      transition: left 260ms linear, top 260ms linear, opacity 260ms linear, transform 220ms ease;
+    }
+
+    .entity.service {
+      background: linear-gradient(135deg, var(--accent-alt), #7cc6bc);
+      box-shadow: 0 8px 18px rgba(15, 139, 141, 0.22);
+    }
+
+    .entity.done {
+      opacity: 0.18;
+      transform: scale(0.8);
+    }
+
+    .legend,
+    .notes-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .legend {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 14px;
+    }
+
+    .legend-item {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+    }
+
+    .notes-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .note {
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(29, 42, 51, 0.04);
+      border: 1px solid var(--line);
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+    }
+
+    .note p,
+    .status-copy {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(15, 139, 141, 0.1);
+      color: var(--accent-alt);
+      font-size: 0.85rem;
+    }
+
+    .status-chip::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 0 6px rgba(15, 139, 141, 0.08);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.55; }
+    }
+
+    @keyframes riseIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1080px) {
+      .hero,
+      .content,
+      .grid,
+      .notes-grid,
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        position: static;
+      }
+
+      .legend {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">Discrete Event Simulation</div>
+        <h1>Queue Dynamics Under Pressure</h1>
+        <p>
+          Model a simple bank teller, help desk, or email handling queue. Change arrival pressure,
+          service pace, staffing, and variability, then watch the system rebalance in real time.
+        </p>
+      </div>
+      <div class="hero-summary">
+        <div class="summary-card">
+          <strong id="stabilityScore">Stable</strong>
+          <span>Capacity assessment based on utilization and queue growth.</span>
+        </div>
+        <div class="summary-card">
+          <strong id="simClock">0.0 min</strong>
+          <span>Simulation clock with event-driven arrivals and completions.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="content">
+      <aside class="controls panel">
+        <h2>System Controls</h2>
+
+        <div class="control-group">
+          <label>
+            <div class="label-row">
+              <span>Scenario Type</span>
+            </div>
+            <select id="scenario">
+              <option value="bank">Bank Teller Desk</option>
+              <option value="email">Email Response Center</option>
+              <option value="support">Support Ticket Queue</option>
+            </select>
+          </label>
+
+          <label>
+            <div class="label-row">
+              <span>Arrival Rate / hour</span>
+              <output id="arrivalRateOutput">24</output>
+            </div>
+            <input id="arrivalRate" type="range" min="4" max="120" value="24" step="1">
+          </label>
+
+          <label>
+            <div class="label-row">
+              <span>Avg Service Time (min)</span>
+              <output id="serviceTimeOutput">8.0</output>
+            </div>
+            <input id="serviceTime" type="range" min="1" max="30" value="8" step="0.5">
+          </label>
+
+          <label>
+            <div class="label-row">
+              <span>Resources</span>
+              <output id="resourcesOutput">3</output>
+            </div>
+            <input id="resources" type="range" min="1" max="8" value="3" step="1">
+          </label>
+        </div>
+
+        <div class="control-group">
+          <label>
+            <div class="label-row">
+              <span>Arrival Variability</span>
+              <output id="arrivalVariabilityOutput">0.60</output>
+            </div>
+            <input id="arrivalVariability" type="range" min="0.1" max="2" value="0.6" step="0.05">
+          </label>
+
+          <label>
+            <div class="label-row">
+              <span>Service Variability</span>
+              <output id="serviceVariabilityOutput">0.70</output>
+            </div>
+            <input id="serviceVariability" type="range" min="0.1" max="2" value="0.7" step="0.05">
+          </label>
+
+          <label>
+            <div class="label-row">
+              <span>Simulation Speed</span>
+              <output id="speedOutput">1.0x</output>
+            </div>
+            <input id="speed" type="range" min="0.25" max="8" value="1" step="0.25">
+          </label>
+
+          <label>
+            <div class="label-row">
+              <span>Warm-up Horizon (min)</span>
+              <output id="horizonOutput">240</output>
+            </div>
+            <input id="horizon" type="range" min="60" max="720" value="240" step="15">
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button id="toggleRun" class="primary">Pause</button>
+          <button id="resetSim" class="secondary">Reset</button>
+        </div>
+
+        <div>
+          <div class="status-chip" id="statusChip">Running live DES</div>
+          <p class="status-copy" id="statusCopy">
+            Resources are keeping pace. Adjust parameters to see when congestion starts to cascade.
+          </p>
+        </div>
+      </aside>
+
+      <section class="dashboard">
+        <div class="metrics">
+          <article class="metric">
+            <span class="metric-value" id="queueLengthMetric">0.0</span>
+            <span class="metric-label">Avg Queue Length</span>
+          </article>
+          <article class="metric">
+            <span class="metric-value" id="waitMetric">0.0 min</span>
+            <span class="metric-label">Avg Wait Time</span>
+          </article>
+          <article class="metric">
+            <span class="metric-value" id="utilMetric">0%</span>
+            <span class="metric-label">Resource Utilization</span>
+          </article>
+          <article class="metric">
+            <span class="metric-value" id="throughputMetric">0.0/hr</span>
+            <span class="metric-label">Throughput</span>
+          </article>
+        </div>
+
+        <div class="grid">
+          <article class="panel chart-panel">
+            <div class="chart-header">
+              <h2>Live Queue and Wait History</h2>
+              <span>Last 60 observation slices</span>
+            </div>
+            <canvas id="historyChart" width="860" height="230"></canvas>
+            <div class="legend">
+              <div class="legend-item"><span class="swatch" style="background: var(--accent);"></span>Queue length</div>
+              <div class="legend-item"><span class="swatch" style="background: var(--accent-alt);"></span>Avg wait time</div>
+            </div>
+          </article>
+
+          <article class="panel sim-panel">
+            <div class="panel-header">
+              <h2>Animated System View</h2>
+              <span>Queue, service, and departures</span>
+            </div>
+            <div class="sim-canvas" id="simCanvas">
+              <div class="queue-zone"><div class="zone-title">Queue</div></div>
+              <div class="server-zone"><div class="zone-title">Service</div></div>
+              <div class="exit-zone"><div class="zone-title">Exit</div></div>
+            </div>
+          </article>
+        </div>
+
+        <article class="panel notes">
+          <div class="panel-header">
+            <h2>System Interpretation</h2>
+            <span>Operational reading of the current parameter set</span>
+          </div>
+          <div class="notes-grid">
+            <div class="note">
+              <strong>Load Factor</strong>
+              <p id="loadNote">Arrival intensity remains below effective service capacity.</p>
+            </div>
+            <div class="note">
+              <strong>Variability Effect</strong>
+              <p id="variabilityNote">Moderate variability creates occasional bursts but limited tail risk.</p>
+            </div>
+            <div class="note">
+              <strong>Action Hint</strong>
+              <p id="actionNote">Current staffing is appropriate for this traffic mix.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const controls = {
+      scenario: document.getElementById("scenario"),
+      arrivalRate: document.getElementById("arrivalRate"),
+      serviceTime: document.getElementById("serviceTime"),
+      resources: document.getElementById("resources"),
+      arrivalVariability: document.getElementById("arrivalVariability"),
+      serviceVariability: document.getElementById("serviceVariability"),
+      speed: document.getElementById("speed"),
+      horizon: document.getElementById("horizon")
+    };
+
+    const outputs = {
+      arrivalRate: document.getElementById("arrivalRateOutput"),
+      serviceTime: document.getElementById("serviceTimeOutput"),
+      resources: document.getElementById("resourcesOutput"),
+      arrivalVariability: document.getElementById("arrivalVariabilityOutput"),
+      serviceVariability: document.getElementById("serviceVariabilityOutput"),
+      speed: document.getElementById("speedOutput"),
+      horizon: document.getElementById("horizonOutput")
+    };
+
+    const elements = {
+      toggleRun: document.getElementById("toggleRun"),
+      resetSim: document.getElementById("resetSim"),
+      queueLengthMetric: document.getElementById("queueLengthMetric"),
+      waitMetric: document.getElementById("waitMetric"),
+      utilMetric: document.getElementById("utilMetric"),
+      throughputMetric: document.getElementById("throughputMetric"),
+      stabilityScore: document.getElementById("stabilityScore"),
+      simClock: document.getElementById("simClock"),
+      statusCopy: document.getElementById("statusCopy"),
+      statusChip: document.getElementById("statusChip"),
+      loadNote: document.getElementById("loadNote"),
+      variabilityNote: document.getElementById("variabilityNote"),
+      actionNote: document.getElementById("actionNote"),
+      simCanvas: document.getElementById("simCanvas"),
+      historyChart: document.getElementById("historyChart")
+    };
+
+    const scenarios = {
+      bank: {
+        arrivalRate: 24,
+        serviceTime: 8,
+        resources: 3,
+        arrivalVariability: 0.6,
+        serviceVariability: 0.7
+      },
+      email: {
+        arrivalRate: 48,
+        serviceTime: 5,
+        resources: 4,
+        arrivalVariability: 1.0,
+        serviceVariability: 0.55
+      },
+      support: {
+        arrivalRate: 34,
+        serviceTime: 9.5,
+        resources: 4,
+        arrivalVariability: 1.2,
+        serviceVariability: 1.1
+      }
+    };
+
+    const state = {
+      running: true,
+      now: 0,
+      lastWallClock: performance.now(),
+      nextCustomerId: 1,
+      nextArrival: 0,
+      queue: [],
+      servers: [],
+      completed: 0,
+      totalWait: 0,
+      totalService: 0,
+      areaQueue: 0,
+      areaBusy: 0,
+      lastEventTime: 0,
+      history: [],
+      animationPool: new Map(),
+      departures: [],
+      chartCtx: elements.historyChart.getContext("2d")
+    };
+
+    function syncOutputs() {
+      outputs.arrivalRate.textContent = controls.arrivalRate.value;
+      outputs.serviceTime.textContent = Number(controls.serviceTime.value).toFixed(1);
+      outputs.resources.textContent = controls.resources.value;
+      outputs.arrivalVariability.textContent = Number(controls.arrivalVariability.value).toFixed(2);
+      outputs.serviceVariability.textContent = Number(controls.serviceVariability.value).toFixed(2);
+      outputs.speed.textContent = `${Number(controls.speed.value).toFixed(2).replace(/\.00$/, "")}x`;
+      outputs.horizon.textContent = controls.horizon.value;
+    }
+
+    function uniform() {
+      return Math.random();
+    }
+
+    function sampleGamma(shape, scale) {
+      if (shape < 1) {
+        const u = uniform();
+        return sampleGamma(1 + shape, scale) * Math.pow(u, 1 / shape);
+      }
+      const d = shape - 1 / 3;
+      const c = 1 / Math.sqrt(9 * d);
+      while (true) {
+        let x;
+        let v;
+        do {
+          const u1 = uniform() || 1e-8;
+          const u2 = uniform() || 1e-8;
+          x = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          v = 1 + c * x;
+        } while (v <= 0);
+        v = v * v * v;
+        const u = uniform();
+        if (u < 1 - 0.0331 * x * x * x * x) {
+          return scale * d * v;
+        }
+        if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) {
+          return scale * d * v;
+        }
+      }
+    }
+
+    function sampleDuration(mean, variability) {
+      const cv = Math.max(0.05, variability);
+      const shape = 1 / (cv * cv);
+      const scale = mean / shape;
+      return Math.max(0.08, sampleGamma(shape, scale));
+    }
+
+    function getParams() {
+      const arrivalRate = Number(controls.arrivalRate.value);
+      const serviceTime = Number(controls.serviceTime.value);
+      const resources = Number(controls.resources.value);
+      return {
+        arrivalRate,
+        serviceTime,
+        resources,
+        arrivalVariability: Number(controls.arrivalVariability.value),
+        serviceVariability: Number(controls.serviceVariability.value),
+        speed: Number(controls.speed.value),
+        horizon: Number(controls.horizon.value),
+        arrivalMean: 60 / arrivalRate
+      };
+    }
+
+    function setScenario(name) {
+      const preset = scenarios[name];
+      controls.arrivalRate.value = preset.arrivalRate;
+      controls.serviceTime.value = preset.serviceTime;
+      controls.resources.value = preset.resources;
+      controls.arrivalVariability.value = preset.arrivalVariability;
+      controls.serviceVariability.value = preset.serviceVariability;
+      syncOutputs();
+      resetSimulation();
+    }
+
+    function createServers(count) {
+      return Array.from({ length: count }, (_, index) => ({
+        id: index + 1,
+        busy: false,
+        customer: null,
+        completeAt: Infinity
+      }));
+    }
+
+    function scheduleNextArrival() {
+      const params = getParams();
+      state.nextArrival = state.now + sampleDuration(params.arrivalMean, params.arrivalVariability);
+    }
+
+    function recordAreas(targetTime) {
+      const delta = targetTime - state.lastEventTime;
+      if (delta <= 0) {
+        return;
+      }
+      const busyCount = state.servers.filter((server) => server.busy).length;
+      state.areaQueue += state.queue.length * delta;
+      state.areaBusy += busyCount * delta;
+      state.lastEventTime = targetTime;
+    }
+
+    function ensureAnimationEntity(id) {
+      if (state.animationPool.has(id)) {
+        return state.animationPool.get(id);
+      }
+      const node = document.createElement("div");
+      node.className = "entity";
+      elements.simCanvas.appendChild(node);
+      state.animationPool.set(id, node);
+      return node;
+    }
+
+    function disposeDepartureGhosts() {
+      const cutoff = state.now - 2;
+      state.departures = state.departures.filter((entry) => {
+        if (entry.time >= cutoff) {
+          return true;
+        }
+        const node = state.animationPool.get(entry.id);
+        if (node) {
+          node.remove();
+          state.animationPool.delete(entry.id);
+        }
+        return false;
+      });
+    }
+
+    function placeEntities() {
+      const width = elements.simCanvas.clientWidth;
+      const height = elements.simCanvas.clientHeight;
+      const queueBaseX = width * 0.12;
+      const serviceBaseX = width * 0.53;
+      const exitBaseX = width * 0.88;
+
+      state.queue.forEach((customer, index) => {
+        const node = ensureAnimationEntity(customer.id);
+        node.className = "entity";
+        const row = index % 6;
+        const col = Math.floor(index / 6);
+        node.style.left = `${queueBaseX + col * 32}px`;
+        node.style.top = `${78 + row * 38}px`;
+      });
+
+      state.servers.forEach((server, index) => {
+        let station = elements.simCanvas.querySelector(`[data-station="${server.id}"]`);
+        const y = 74 + index * 72;
+        if (!station) {
+          station = document.createElement("div");
+          station.dataset.station = server.id;
+          station.className = "resource-station";
+          elements.simCanvas.appendChild(station);
+        }
+        station.classList.toggle("busy", server.busy);
+        station.textContent = server.busy ? `Agent ${server.id}` : `Idle ${server.id}`;
+        station.style.left = `${serviceBaseX - 20}px`;
+        station.style.top = `${y}px`;
+
+        if (server.customer) {
+          const node = ensureAnimationEntity(server.customer.id);
+          node.className = "entity service";
+          node.style.left = `${serviceBaseX + 16}px`;
+          node.style.top = `${y + 16}px`;
+        }
+      });
+
+      state.departures.forEach((entry, index) => {
+        const node = ensureAnimationEntity(entry.id);
+        node.className = "entity done";
+        node.style.left = `${exitBaseX + (index % 2) * 26}px`;
+        node.style.top = `${82 + (index % 6) * 34}px`;
+      });
+
+      const activeIds = new Set([
+        ...state.queue.map((c) => c.id),
+        ...state.servers.filter((s) => s.customer).map((s) => s.customer.id),
+        ...state.departures.map((d) => d.id)
+      ]);
+
+      for (const [id, node] of state.animationPool.entries()) {
+        if (!activeIds.has(id)) {
+          node.remove();
+          state.animationPool.delete(id);
+        }
+      }
+    }
+
+    function pushHistory() {
+      const elapsed = Math.max(state.now, 0.001);
+      const avgQueue = state.areaQueue / elapsed;
+      const avgWait = state.completed ? state.totalWait / state.completed : 0;
+      state.history.push({
+        time: state.now,
+        queue: avgQueue,
+        wait: avgWait
+      });
+      if (state.history.length > 60) {
+        state.history.shift();
+      }
+    }
+
+    function updateMetrics() {
+      const params = getParams();
+      const elapsed = Math.max(state.now, 0.001);
+      const avgQueue = state.areaQueue / elapsed;
+      const avgWait = state.completed ? state.totalWait / state.completed : 0;
+      const utilization = params.resources ? state.areaBusy / (params.resources * elapsed) : 0;
+      const throughput = state.completed / elapsed * 60;
+      const offeredLoad = (params.arrivalRate * params.serviceTime) / (60 * params.resources);
+
+      elements.queueLengthMetric.textContent = avgQueue.toFixed(1);
+      elements.waitMetric.textContent = `${avgWait.toFixed(1)} min`;
+      elements.utilMetric.textContent = `${Math.min(utilization * 100, 999).toFixed(0)}%`;
+      elements.throughputMetric.textContent = `${throughput.toFixed(1)}/hr`;
+      elements.simClock.textContent = `${state.now.toFixed(1)} min`;
+
+      let stability = "Stable";
+      let statusText = "Resources are keeping pace. Adjust parameters to see when congestion starts to cascade.";
+      let chipText = "Running live DES";
+      let loadNote = "Arrival intensity remains below effective service capacity.";
+      let variabilityNote = "Moderate variability creates occasional bursts but limited tail risk.";
+      let actionNote = "Current staffing is appropriate for this traffic mix.";
+
+      if (offeredLoad > 0.95 || utilization > 0.9 || avgQueue > 6) {
+        stability = "Overloaded";
+        chipText = "Congestion detected";
+        statusText = "Demand is overrunning capacity. The queue is compounding faster than the system can clear it.";
+        loadNote = "Effective load is above safe operating range, so delay will grow nonlinearly.";
+        actionNote = "Reduce service time, add resources, or lower variability to restore headroom.";
+      } else if (offeredLoad > 0.8 || utilization > 0.75 || avgWait > params.serviceTime * 0.75) {
+        stability = "Tight";
+        chipText = "Near capacity";
+        statusText = "The system is still functioning, but small bursts now produce visible waiting and queue spillover.";
+        loadNote = "Capacity margin is narrow. Any burst of arrivals can trigger a temporary backlog.";
+        actionNote = "A small staffing increase or faster service rule would materially improve resilience.";
+      }
+
+      if (params.arrivalVariability > 1.1 || params.serviceVariability > 1.1) {
+        variabilityNote = "High variability is amplifying spikes, so averages understate tail delays.";
+      } else if (params.arrivalVariability < 0.45 && params.serviceVariability < 0.45) {
+        variabilityNote = "Low variability keeps flow smooth and reduces queue volatility.";
+      }
+
+      elements.stabilityScore.textContent = stability;
+      elements.statusCopy.textContent = statusText;
+      elements.statusChip.textContent = chipText;
+      elements.loadNote.textContent = loadNote;
+      elements.variabilityNote.textContent = variabilityNote;
+      elements.actionNote.textContent = actionNote;
+    }
+
+    function drawHistoryChart() {
+      const canvas = elements.historyChart;
+      const ctx = state.chartCtx;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const displayWidth = Math.floor(rect.width * dpr);
+      const displayHeight = Math.floor(rect.height * dpr);
+      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const pad = 32 * dpr;
+      const width = canvas.width - pad * 2;
+      const height = canvas.height - pad * 2;
+      const maxQueue = Math.max(2, ...state.history.map((d) => d.queue));
+      const maxWait = Math.max(2, ...state.history.map((d) => d.wait));
+
+      ctx.strokeStyle = "rgba(29,42,51,0.08)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = pad + (height * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(pad, y);
+        ctx.lineTo(pad + width, y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(102,117,127,0.9)";
+      ctx.font = `${12 * dpr}px Georgia`;
+      ctx.fillText("0", 10 * dpr, pad + height + 4 * dpr);
+      ctx.fillText(maxQueue.toFixed(1), 10 * dpr, pad + 10 * dpr);
+      ctx.fillText(`${maxWait.toFixed(1)}m`, pad + width - 38 * dpr, pad + 10 * dpr);
+
+      const drawLine = (key, maxValue, color) => {
+        if (state.history.length < 2) {
+          return;
+        }
+        ctx.beginPath();
+        state.history.forEach((point, index) => {
+          const x = pad + width * (index / (state.history.length - 1));
+          const y = pad + height - (point[key] / maxValue) * height;
+          if (index === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5 * dpr;
+        ctx.stroke();
+      };
+
+      drawLine("queue", maxQueue, "#da5a2a");
+      drawLine("wait", maxWait, "#0f8b8d");
+    }
+
+    function startService(server, customer) {
+      const params = getParams();
+      const serviceDuration = sampleDuration(params.serviceTime, params.serviceVariability);
+      server.busy = true;
+      server.customer = customer;
+      server.completeAt = state.now + serviceDuration;
+      state.totalWait += state.now - customer.arrivalTime;
+    }
+
+    function tryAssignQueue() {
+      for (const server of state.servers) {
+        if (!server.busy && state.queue.length) {
+          const customer = state.queue.shift();
+          startService(server, customer);
+        }
+      }
+    }
+
+    function processArrival() {
+      const customer = {
+        id: state.nextCustomerId++,
+        arrivalTime: state.now
+      };
+      state.queue.push(customer);
+      scheduleNextArrival();
+      tryAssignQueue();
+    }
+
+    function processDeparture(server) {
+      const serviceTime = state.now - server.customer.arrivalTime;
+      state.totalService += serviceTime;
+      state.completed += 1;
+      state.departures.unshift({ id: server.customer.id, time: state.now });
+      state.departures = state.departures.slice(0, 8);
+      server.busy = false;
+      server.customer = null;
+      server.completeAt = Infinity;
+      tryAssignQueue();
+    }
+
+    function advanceTo(targetTime) {
+      while (true) {
+        let nextDepartureServer = null;
+        let nextDepartureTime = Infinity;
+        for (const server of state.servers) {
+          if (server.busy && server.completeAt < nextDepartureTime) {
+            nextDepartureTime = server.completeAt;
+            nextDepartureServer = server;
+          }
+        }
+
+        const nextEventTime = Math.min(state.nextArrival, nextDepartureTime);
+        if (nextEventTime > targetTime) {
+          break;
+        }
+
+        recordAreas(nextEventTime);
+        state.now = nextEventTime;
+
+        if (state.nextArrival <= nextDepartureTime) {
+          processArrival();
+        } else if (nextDepartureServer) {
+          processDeparture(nextDepartureServer);
+        }
+      }
+
+      recordAreas(targetTime);
+      state.now = targetTime;
+      disposeDepartureGhosts();
+    }
+
+    function resetSimulation() {
+      const params = getParams();
+      state.now = 0;
+      state.lastEventTime = 0;
+      state.nextCustomerId = 1;
+      state.queue = [];
+      state.servers = createServers(params.resources);
+      state.completed = 0;
+      state.totalWait = 0;
+      state.totalService = 0;
+      state.areaQueue = 0;
+      state.areaBusy = 0;
+      state.history = [];
+      state.departures = [];
+      state.lastWallClock = performance.now();
+      for (const node of state.animationPool.values()) {
+        node.remove();
+      }
+      state.animationPool.clear();
+      elements.simCanvas.querySelectorAll(".resource-station").forEach((node) => node.remove());
+      scheduleNextArrival();
+
+      const warmupTarget = Math.min(params.horizon, 90);
+      while (state.now < warmupTarget) {
+        advanceTo(Math.min(warmupTarget, state.now + 2));
+        pushHistory();
+      }
+      updateMetrics();
+      drawHistoryChart();
+      placeEntities();
+    }
+
+    function handleResourceCountChange() {
+      const params = getParams();
+      if (params.resources === state.servers.length) {
+        return;
+      }
+      resetSimulation();
+    }
+
+    function tick(nowMs) {
+      const params = getParams();
+      const deltaSeconds = (nowMs - state.lastWallClock) / 1000;
+      state.lastWallClock = nowMs;
+
+      if (state.running) {
+        const deltaSimMinutes = deltaSeconds * 8 * params.speed;
+        advanceTo(state.now + deltaSimMinutes);
+        if (!state.history.length || state.now - state.history[state.history.length - 1].time >= 2) {
+          pushHistory();
+        }
+        if (state.now > params.horizon) {
+          const trimFrom = state.now - params.horizon;
+          state.history = state.history.filter((point) => point.time >= trimFrom);
+        }
+        updateMetrics();
+        drawHistoryChart();
+        placeEntities();
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    controls.scenario.addEventListener("change", (event) => setScenario(event.target.value));
+
+    Object.values(controls).forEach((control) => {
+      control.addEventListener("input", () => {
+        syncOutputs();
+        if (control === controls.resources) {
+          handleResourceCountChange();
+        } else {
+          updateMetrics();
+          drawHistoryChart();
+        }
+      });
+    });
+
+    controls.arrivalRate.addEventListener("change", resetSimulation);
+    controls.serviceTime.addEventListener("change", resetSimulation);
+    controls.arrivalVariability.addEventListener("change", resetSimulation);
+    controls.serviceVariability.addEventListener("change", resetSimulation);
+    controls.horizon.addEventListener("change", resetSimulation);
+
+    elements.toggleRun.addEventListener("click", () => {
+      state.running = !state.running;
+      elements.toggleRun.textContent = state.running ? "Pause" : "Resume";
+      elements.statusChip.textContent = state.running ? "Running live DES" : "Paused";
+      state.lastWallClock = performance.now();
+    });
+
+    elements.resetSim.addEventListener("click", resetSimulation);
+    window.addEventListener("resize", () => {
+      drawHistoryChart();
+      placeEntities();
+    });
+
+    syncOutputs();
+    setScenario("bank");
+    requestAnimationFrame((ts) => {
+      state.lastWallClock = ts;
+      requestAnimationFrame(tick);
+    });
+  </script>
+</body>
+</html>
