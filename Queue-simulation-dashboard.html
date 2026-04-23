@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bank Teller / Email Center Queue Simulation</title>
+<style>
+:root {
+  --bg:#0b1220;
+  --panel:#0f172a;
+  --card:#111827;
+  --muted:#94a3b8;
+  --accent:#3b82f6;
+  --border:#1f2937;
+  --green:#22c55e;
+  --orange:#f97316;
+  --blue:#60a5fa;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: radial-gradient(1200px 800px at 20% -10%, #13203b 0%, var(--bg) 60%);
+  color:#e5e7eb;
+}
+.app{
+  display:flex;
+  min-height:100vh;
+}
+.panel{
+  width:340px;
+  background:var(--panel);
+  border-right:1px solid var(--border);
+  padding:20px;
+  overflow:auto;
+}
+.panel h2{
+  margin:0 0 16px;
+  font-size:18px;
+  letter-spacing:.3px;
+}
+.control{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:12px;
+}
+.control label{
+  display:block;
+  font-size:12px;
+  color:var(--muted);
+  margin-bottom:6px;
+}
+.control .row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+input[type="range"]{
+  flex:1;
+  accent-color:var(--accent);
+}
+input[type="number"], select{
+  background:#0b1220;
+  color:#e5e7eb;
+  border:1px solid #334155;
+  border-radius:8px;
+  padding:6px 8px;
+  font-size:13px;
+}
+input[type="number"]{width:80px}
+select{width:100%}
+.buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:12px;
+}
+button{
+  background:var(--accent);
+  color:white;
+  border:none;
+  padding:10px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:600;
+  letter-spacing:.2px;
+  transition:transform .05s ease, opacity .2s;
+}
+button:active{transform:translateY(1px)}
+#pauseBtn{background:#475569}
+#resetBtn{background:#ef4444}
+#stepBtn{background:#0ea5e9}
+.badge{
+  display:inline-block;
+  font-size:11px;
+  padding:2px 6px;
+  border-radius:6px;
+  background:#1e293b;
+  color:#cbd5e1;
+  margin-left:6px;
+}
+.main{
+  flex:1;
+  padding:20px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.anim-card, .chart-card, .stat{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+}
+.anim-card{padding:12px}
+.anim-card canvas{width:100%; height:220px; display:block; border-radius:10px; background:#0a101f}
+.stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:12px;
+}
+.stat{padding:12px}
+.stat .label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px}
+.stat .value{font-size:22px; font-weight:700; margin-top:4px}
+.charts{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+.chart-card{padding:12px}
+.chart-card h3{margin:0 0 8px; font-size:13px; color:var(--muted); font-weight:600}
+.chart-card canvas{width:100%; height:200px; display:block; border-radius:8px; background:#0a101f}
+.legend{display:flex; gap:12px; font-size:12px; color:var(--muted); margin-top:6px; flex-wrap:wrap}
+.dot{width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:4px; vertical-align:middle}
+@media(max-width:1024px){
+  .app{flex-direction:column}
+  .panel{width:100%; border-right:none; border-bottom:1px solid var(--border)}
+  .charts{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <h2>Simulation Controls</h2>
+    
+    <div class="control">
+      <label for="arrivalRate">Arrival Rate per hour <span class="badge" id="arrivalRateBadge">60</span></label>
+      <div class="row">
+        <input type="range" id="arrivalRate" min="1" max="200" value="60" step="1">
+        <input type="number" id="arrivalRateNum" min="1" max="200" value="60">
+      </div>
+    </div>
+
+    <div class="control">
+      <label for="meanService">Mean Service Time (s) <span class="badge" id="meanServiceBadge">45</span></label>
+      <div class="row">
+        <input type="range" id="meanService" min="5" max="300" value="45" step="1">
+        <input type="number" id="meanServiceNum" min="5" max="300" value="45">
+      </div>
+    </div>
+
+    <div class="control">
+      <label for="dist">Service Distribution</label>
+      <select id="dist">
+        <option value="Exponential">Exponential</option>
+        <option value="Deterministic">Deterministic</option>
+        <option value="Lognormal">Lognormal</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="cv">CV for Lognormal <span class="badge" id="cvBadge">0.6</span></label>
+      <div class="row">
+        <input type="range" id="cv" min="0.1" max="2" value="0.6" step="0.05">
+        <input type="number" id="cvNum" min="0.1" max="2" value="0.6" step="0.05">
+      </div>
+    </div>
+
+    <div class="control">
+      <label for="numServers">Number of Servers <span class="badge" id="numServersBadge">3</span></label>
+      <div class="row">
+        <input type="range" id="numServers" min="1" max="20" value="3" step="1">
+        <input type="number" id="numServersNum" min="1" max="20" value="3">
+      </div>
+    </div>
+
+    <div class="control">
+      <label for="speed">Simulation Speed <span class="badge" id="speedBadge">5x</span></label>
+      <div class="row">
+        <input type="range" id="speed" min="0.5" max="50" value="5" step="0.5">
+        <input type="number" id="speedNum" min="0.5" max="50" value="5" step="0.5">
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button id="startBtn">Start</button>
+      <button id="pauseBtn">Pause</button>
+      <button id="stepBtn">Step</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+
+    <div class="legend" style="margin-top:14px">
+      <span><i class="dot" style="background:var(--blue)"></i>Arriving</span>
+      <span><i class="dot" style="background:var(--orange)"></i>Waiting</span>
+      <span><i class="dot" style="background:var(--green)"></i>In Service</span>
+      <span><i class="dot" style="background:#9ca3af"></i>Done</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="anim-card">
+      <canvas id="anim"></canvas>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="label">Avg Wait (s)</div><div class="value" id="statAvgWait">0.0</div></div>
+      <div class="stat"><div class="label">Max Wait (s)</div><div class="value" id="statMaxWait">0.0</div></div>
+      <div class="stat"><div class="label">Avg Queue Length</div><div class="value" id="statAvgQL">0.00</div></div>
+      <div class="stat"><div class="label">Utilization %</div><div class="value" id="statUtil">0.0</div></div>
+      <div class="stat"><div class="label">Throughput / hr</div><div class="value" id="statThr">0.0</div></div>
+      <div class="stat"><div class="label">Served</div><div class="value" id="statServed">0</div></div>
+      <div class="stat"><div class="label">In System</div><div class="value" id="statInSys">0</div></div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-card"><h3>Queue Length Over Time (last 300s)</h3><canvas id="queueChart"></canvas></div>
+      <div class="chart-card"><h3>Wait Times (last 200 customers)</h3><canvas id="waitChart"></canvas></div>
+      <div class="chart-card"><h3>Utilization % per Server</h3><canvas id="utilChart"></canvas></div>
+      <div class="chart-card"><h3>Throughput Cumulative</h3><canvas id="thrChart"></canvas></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const params = {
+  arrivalRatePerHour: 60,
+  meanServiceTime: 45,
+  distribution: 'Exponential',
+  cv: 0.6,
+  numServers: 3,
+  speed: 5
+};
+
+// UI bindings
+function bindPair(rangeId, numId, badgeId, key, min, max, formatter = v=>v){
+  const r = $(rangeId), n = $(numId), b = $(badgeId);
+  const update = v => {
+    v = Math.max(min, Math.min(max, v));
+    params[key] = v;
+    r.value = v;
+    n.value = v;
+    if(b) b.textContent = formatter(v);
+  };
+  r.addEventListener('input', ()=> update(+r.value));
+  n.addEventListener('change', ()=> update(+n.value));
+  update(params[key]);
+}
+bindPair('arrivalRate','arrivalRateNum','arrivalRateBadge','arrivalRatePerHour',1,200);
+bindPair('meanService','meanServiceNum','meanServiceBadge','meanServiceTime',5,300);
+bindPair('cv','cvNum','cvBadge','cv',0.1,2, v=>v.toFixed(2));
+bindPair('numServers','numServersNum','numServersBadge','numServers',1,20);
+bindPair('speed','speedNum','speedBadge','speed',0.5,50, v=>v+'x');
+
+const distSel = $('dist');
+distSel.addEventListener('change', ()=>{
+  params.distribution = distSel.value;
+  const disabled = params.distribution !== 'Lognormal';
+  $('cv').disabled = disabled;
+  $('cvNum').disabled = disabled;
+});
+distSel.value = params.distribution;
+$('cv').disabled = true;
+$('cvNum').disabled = true;
+
+// Simulation state
+let clock, nextArrivalTime, servers, queue, customers, nextCustomerId;
+let servedCount, cumulativeWaits, maxWait, queueLengthTimeIntegral;
+let queueLengthHistory, waitHistory, throughputHistory;
+let running = false, lastTs = 0;
+
+// Canvases
+const animCanvas = $('anim');
+const queueChart = $('queueChart');
+const waitChart = $('waitChart');
+const utilChart = $('utilChart');
+const thrChart = $('thrChart');
+
+function resizeCanvases(){
+  document.querySelectorAll('canvas').forEach(c=>{
+    const rect = c.getBoundingClientRect();
+    c.width = Math.max(10, Math.floor(rect.width));
+    c.height = Math.max(10, Math.floor(rect.height));
+  });
+}
+window.addEventListener('resize', ()=>{ resizeCanvases(); assignTargets(); drawAll(); });
+
+// Random helpers
+function expSample(mean){ return -Math.log(1-Math.random()) * mean; }
+function normalSample(){
+  let u=0,v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function lognormalSample(mean, cv){
+  const sigma2 = Math.log(1+cv*cv);
+  const sigma = Math.sqrt(sigma2);
+  const mu = Math.log(mean) - sigma2/2;
+  return Math.exp(mu + sigma * normalSample());
+}
+function sampleInterarrival(){
+  const ratePerSec = params.arrivalRatePerHour / 3600;
+  const mean = 1 / ratePerSec;
+  return expSample(mean);
+}
+function sampleService(){
+  const m = params.meanServiceTime;
+  if(params.distribution === 'Exponential') return expSample(m);
+  if(params.distribution === 'Deterministic') return m;
+  return lognormalSample(m, params.cv);
+}
+
+function initSimulation(){
+  clock = 0;
+  nextArrivalTime = sampleInterarrival();
+  servers = [];
+  for(let i=0;i<params.numServers;i++){
+    servers.push({id:i, busyUntil:Infinity, currentCustomer:null, totalBusy:0, currentServiceStart:0, _y:0});
+  }
+  queue = [];
+  customers = [];
+  nextCustomerId = 1;
+  servedCount = 0;
+  cumulativeWaits = 0;
+  maxWait = 0;
+  queueLengthTimeIntegral = 0;
+  queueLengthHistory = [{t:0, q:0}];
+  waitHistory = [];
+  throughputHistory = [{t:0, count:0}];
+  assignTargets();
+}
+
+function getNextDepartureTime(){
+  let min = Infinity;
+  for(const s of servers){ if(s.busyUntil < min) min = s.busyUntil; }
+  return min;
+}
+
+function assignTargets(){
+  const w = animCanvas.width;
+  const h = animCanvas.height;
+  const serverX = w - 80;
+  const queueY = h/2 + 35;
+  const queueBaseX = serverX - 70;
+  const spacing = 20;
+  
+  queue.forEach((c,i)=>{
+    c.tx = queueBaseX - i*spacing;
+    c.ty = queueY;
+    if(c.state !== 'done') c.state = 'waiting';
+  });
+  const n = servers.length;
+  servers.forEach((srv, idx)=>{
+    const sy = n===1 ? h/2 : 30 + idx * ((h-60) / (n-1));
+    srv._y = sy;
+    if(srv.currentCustomer){
+      const cc = srv.currentCustomer;
+      cc.tx = serverX - 28;
+      cc.ty = sy;
+      cc.state = 'inservice';
+    }
+  });
+}
+
+function processEventsUpTo(targetTime){
+  while(true){
+    const nextDep = getNextDepartureTime();
+    const nextEvent = Math.min(nextArrivalTime, nextDep);
+    if(nextEvent > targetTime || nextEvent === Infinity) break;
+
+    // advance integral
+    const dt = nextEvent - clock;
+    if(dt > 0) queueLengthTimeIntegral += queue.length * dt;
+    clock = nextEvent;
+
+    if(nextEvent === nextArrivalTime){
+      // Arrival
+      const cust = {
+        id: nextCustomerId++,
+        arrivalTime: clock,
+        serviceStart: null,
+        departure: null,
+        wait: 0,
+        x: 40,
+        y: animCanvas.height/2 + 35,
+        tx: 40,
+        ty: animCanvas.height/2 + 35,
+        state: 'arriving'
+      };
+      customers.push(cust);
+
+      // assign to idle server if any
+      let idle = servers.find(s => s.currentCustomer === null);
+      if(idle){
+        cust.serviceStart = clock;
+        cust.state = 'inservice';
+        idle.currentCustomer = cust;
+        const svc = sampleService();
+        idle.busyUntil = clock + svc;
+        idle.currentServiceStart = clock;
+      } else {
+        queue.push(cust);
+        cust.state = 'waiting';
+      }
+      nextArrivalTime = clock + sampleInterarrival();
+    } else {
+      // Departure
+      const srv = servers.find(s => Math.abs(s.busyUntil - nextEvent) < 1e-9);
+      if(srv && srv.currentCustomer){
+        const cust = srv.currentCustomer;
+        cust.departure = clock;
+        cust.wait = cust.serviceStart !== null ? (cust.serviceStart - cust.arrivalTime) : 0;
+        cumulativeWaits += cust.wait;
+        if(cust.wait > maxWait) maxWait = cust.wait;
+        servedCount++;
+        srv.totalBusy += (clock - srv.currentServiceStart);
+        srv.currentCustomer = null;
+
+        // mark done for animation
+        cust.state = 'done';
+        cust.tx = animCanvas.width + 30;
+        cust.ty = 20 + Math.random()* (animCanvas.height-40);
+
+        waitHistory.push({t:clock, wait:cust.wait});
+        if(waitHistory.length > 500) waitHistory.shift();
+        throughputHistory.push({t:clock, count:servedCount});
+        if(throughputHistory.length > 2000) throughputHistory.shift();
+
+        // pull from queue
+        if(queue.length > 0){
+          const next = queue.shift();
+          next.serviceStart = clock;
+          next.state = 'inservice';
+          srv.currentCustomer = next;
+          const svc = sampleService();
+          srv.busyUntil = clock + svc;
+          srv.currentServiceStart = clock;
+        } else {
+          srv.busyUntil = Infinity;
+        }
+      }
+    }
+    queueLengthHistory.push({t:clock, q:queue.length});
+    if(queueLengthHistory.length > 5000) queueLengthHistory.shift();
+    assignTargets();
+  }
+  // advance to targetTime
+  if(targetTime > clock){
+    queueLengthTimeIntegral += queue.length * (targetTime - clock);
+    clock = targetTime;
+  }
+}
+
+function updateVisualPositions(){
+  const speed = 0.18;
+  customers = customers.filter(c=>{
+    c.x += (c.tx - c.x) * speed;
+    c.y += (c.ty - c.y) * speed;
+    if(c.state === 'done' && c.x > animCanvas.width + 20) return false;
+    return true;
+  });
+}
+
+function drawAnimation(){
+  const ctx = animCanvas.getContext('2d');
+  const w = animCanvas.width, h = animCanvas.height;
+  ctx.clearRect(0,0,w,h);
+  // floor line
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(20, h/2 + 50);
+  ctx.lineTo(w-20, h/2 + 50);
+  ctx.stroke();
+
+  // servers
+  const serverX = w - 80;
+  servers.forEach(srv=>{
+    const sy = srv._y;
+    ctx.fillStyle = srv.currentCustomer ? '#065f46' : '#1f2937';
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    const rx = 8;
+    const rw = 52, rh=30;
+    const x = serverX, y = sy - 15;
+    ctx.beginPath();
+    ctx.moveTo(x+rx, y);
+    ctx.arcTo(x+rw, y, x+rw, y+rh, rx);
+    ctx.arcTo(x+rw, y+rh, x, y+rh, rx);
+    ctx.arcTo(x, y+rh, x, y, rx);
+    ctx.arcTo(x, y, x+rw, y, rx);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '11px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText('Srv '+(srv.id+1), x+rw/2, y+rh+14);
+  });
+
+  // customers
+  customers.forEach(c=>{
+    let col = '#60a5fa';
+    if(c.state==='waiting') col = '#f97316';
+    else if(c.state==='inservice') col = '#22c55e';
+    else if(c.state==='done') col = '#9ca3af';
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 9, 0, Math.PI*2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#0b1220';
+    ctx.stroke();
+  });
+}
+
+function drawQueueChart(){
+  const ctx = queueChart.getContext('2d');
+  const w = queueChart.width, h = queueChart.height;
+  ctx.clearRect(0,0,w,h);
+  const pad = 32;
+  const data = queueLengthHistory.filter(p=> p.t >= clock - 300);
+  if(data.length===0) return;
+  const last = data[data.length-1];
+  if(last.t < clock) data.push({t:clock, q:last.q});
+  const minX = clock - 300, maxX = clock;
+  const maxY = Math.max(5, ...data.map(d=>d.q));
+  // grid
+  ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+  for(let i=0;i<=4;i++){
+    const y = pad + i*(h-2*pad)/4;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w-pad, y); ctx.stroke();
+  }
+  // step line
+  ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2; ctx.beginPath();
+  data.forEach((p,i)=>{
+    const x = pad + (p.t - minX)/(maxX-minX)*(w-2*pad);
+    const y = h - pad - (p.q/maxY)*(h-2*pad);
+    if(i===0) ctx.moveTo(x,y);
+    else {
+      const prev = data[i-1];
+      const px = pad + (prev.t - minX)/(maxX-minX)*(w-2*pad);
+      const py = h - pad - (prev.q/maxY)*(h-2*pad);
+      ctx.lineTo(x, py);
+      ctx.lineTo(x, y);
+    }
+  });
+  ctx.stroke();
+  // axes labels
+  ctx.fillStyle = '#94a3b8'; ctx.font='11px Inter';
+  ctx.fillText('0s', pad, h-8);
+  ctx.fillText('300s', w-pad-28, h-8);
+  ctx.fillText(String(maxY), 6, pad+10);
+}
+
+function drawWaitChart(){
+  const ctx = waitChart.getContext('2d');
+  const w = waitChart.width, h = waitChart.height;
+  ctx.clearRect(0,0,w,h);
+  const pad = 32;
+  const data = waitHistory.slice(-200);
+  if(data.length===0) return;
+  const maxY = Math.max(1, ...data.map(d=>d.wait)) * 1.1;
+  // grid
+  ctx.strokeStyle = '#1e293b';
+  for(let i=0;i<=4;i++){
+    const y = pad + i*(h-2*pad)/4;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w-pad, y); ctx.stroke();
+  }
+  ctx.fillStyle = '#f97316';
+  data.forEach((p,i)=>{
+    const x = pad + (i/(data.length-1 || 1))*(w-2*pad);
+    const y = h - pad - (p.wait/maxY)*(h-2*pad);
+    ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.fillStyle = '#94a3b8'; ctx.font='11px Inter';
+  ctx.fillText('last '+data.length, w-pad-60, pad+12);
+}
+
+function drawUtilChart(){
+  const ctx = utilChart.getContext('2d');
+  const w = utilChart.width, h = utilChart.height;
+  ctx.clearRect(0,0,w,h);
+  const pad = 32;
+  const n = servers.length;
+  if(n===0) return;
+  const barW = (w - 2*pad) / n * 0.7;
+  // grid 0-100
+  ctx.strokeStyle = '#1e293b';
+  for(let i=0;i<=4;i++){
+    const y = pad + i*(h-2*pad)/4;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w-pad, y); ctx.stroke();
+    ctx.fillStyle = '#94a3b8'; ctx.font='11px Inter';
+    ctx.fillText(String(100 - i*25), 6, y+4);
+  }
+  servers.forEach((srv,i)=>{
+    const busy = srv.totalBusy + (srv.currentCustomer ? (clock - srv.currentServiceStart) : 0);
+    const util = clock>0 ? (busy / clock * 100) : 0;
+    const x = pad + i*(w-2*pad)/n + ((w-2*pad)/n - barW)/2;
+    const bh = (util/100)*(h-2*pad);
+    const y = h - pad - bh;
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(x, y, barW, bh);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.textAlign='center';
+    ctx.font='11px Inter';
+    ctx.fillText('S'+(i+1), x+barW/2, h-8);
+  });
+}
+
+function drawThroughputChart(){
+  const ctx = thrChart.getContext('2d');
+  const w = thrChart.width, h = thrChart.height;
+  ctx.clearRect(0,0,w,h);
+  const pad = 32;
+  const data = throughputHistory.filter(p=> p.t >= clock - 300);
+  if(data.length===0) return;
+  const last = data[data.length-1];
+  if(last.t < clock) data.push({t:clock, count:last.count});
+  const minX = clock - 300, maxX = clock;
+  const maxY = Math.max(1, ...data.map(d=>d.count));
+  // grid
+  ctx.strokeStyle = '#1e293b';
+  for(let i=0;i<=4;i++){
+    const y = pad + i*(h-2*pad)/4;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w-pad, y); ctx.stroke();
+  }
+  ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 2; ctx.beginPath();
+  data.forEach((p,i)=>{
+    const x = pad + (p.t - minX)/(maxX-minX)*(w-2*pad);
+    const y = h - pad - (p.count/maxY)*(h-2*pad);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = '#94a3b8'; ctx.font='11px Inter';
+  ctx.fillText(String(maxY), 6, pad+10);
+}
+
+function updateStats(){
+  const busyCount = servers.filter(s=>s.currentCustomer).length;
+  const inSystem = queue.length + busyCount;
+  const totalBusy = servers.reduce((sum,s)=> sum + s.totalBusy + (s.currentCustomer ? (clock - s.currentServiceStart) : 0), 0);
+  const util = (clock>0 && servers.length>0) ? totalBusy / (clock * servers.length) * 100 : 0;
+  const avgWait = servedCount>0 ? cumulativeWaits / servedCount : 0;
+  const avgQL = clock>0 ? queueLengthTimeIntegral / clock : 0;
+  const thr = clock>0 ? servedCount / (clock/3600) : 0;
+
+  $('statAvgWait').textContent = avgWait.toFixed(1);
+  $('statMaxWait').textContent = maxWait.toFixed(1);
+  $('statAvgQL').textContent = avgQL.toFixed(2);
+  $('statUtil').textContent = util.toFixed(1);
+  $('statThr').textContent = thr.toFixed(1);
+  $('statServed').textContent = servedCount;
+  $('statInSys').textContent = inSystem;
+}
+
+function drawAll(){
+  drawAnimation();
+  drawQueueChart();
+  drawWaitChart();
+  drawUtilChart();
+  drawThroughputChart();
+  updateStats();
+}
+
+function loop(ts){
+  if(!running) return;
+  const delta = (ts - lastTs)/1000;
+  lastTs = ts;
+  const simDelta = delta * params.speed;
+  processEventsUpTo(clock + simDelta);
+  updateVisualPositions();
+  drawAll();
+  requestAnimationFrame(loop);
+}
+
+// Buttons
+$('startBtn').onclick = ()=>{
+  if(!running){
+    running = true;
+    lastTs = performance.now();
+    requestAnimationFrame(loop);
+  }
+};
+$('pauseBtn').onclick = ()=>{ running = false; };
+$('stepBtn').onclick = ()=>{
+  if(!running){
+    processEventsUpTo(clock + 1);
+    updateVisualPositions();
+    drawAll();
+  }
+};
+$('resetBtn').onclick = ()=>{
+  running = false;
+  initSimulation();
+  resizeCanvases();
+  drawAll();
+};
+
+// Init
+resizeCanvases();
+initSimulation();
+drawAll();
+
+</script>
+</body>
+</html>
