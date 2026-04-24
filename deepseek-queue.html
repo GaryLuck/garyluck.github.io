@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>QueueSim: Discrete Event Simulation Dashboard | Bank Teller / Service Center</title>
+    <!-- Chart.js CDN for live charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Inter', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        }
+        body {
+            background: linear-gradient(145deg, #e9eef3 0%, #dce3ec 100%);
+            margin: 0;
+            padding: 24px;
+            min-height: 100vh;
+        }
+        .dashboard {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.65);
+            backdrop-filter: blur(2px);
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -12px rgba(0,0,0,0.2);
+            overflow: hidden;
+            padding: 1.8rem 2rem 2rem 2rem;
+            transition: all 0.2s;
+        }
+        h1 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.9rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #1a2a3a, #2c4c6c);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -0.3px;
+        }
+        .sub {
+            color: #2c4e6e;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #2c6e9e;
+            padding-left: 0.8rem;
+            font-weight: 500;
+        }
+        .controls-panel {
+            background: white;
+            border-radius: 1.5rem;
+            padding: 1.2rem 1.8rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.05);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: flex-end;
+            justify-content: space-between;
+        }
+        .param-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            min-width: 130px;
+        }
+        .param-group label {
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #2c5a7a;
+        }
+        .param-group input {
+            background: #f0f4fa;
+            border: 1px solid #cbdde9;
+            border-radius: 1rem;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            width: 140px;
+            transition: 0.1s;
+        }
+        .param-group input:focus {
+            outline: none;
+            border-color: #2c8fcf;
+            box-shadow: 0 0 0 2px #2c8fcf40;
+        }
+        button {
+            background: #1e6f9f;
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 0.6rem 1.4rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button:hover {
+            background: #0e5a85;
+            transform: translateY(-1px);
+        }
+        .reset-btn {
+            background: #4a627a;
+        }
+        .reset-btn:hover {
+            background: #2f4968;
+        }
+        .stat-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: white;
+            border-radius: 1.2rem;
+            padding: 0.8rem 1.4rem;
+            flex: 1 1 160px;
+            box-shadow: 0 5px 12px rgba(0,0,0,0.05);
+            border-left: 5px solid #2c8fcf;
+        }
+        .card .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: #5a6e7c;
+        }
+        .card .value {
+            font-size: 1.9rem;
+            font-weight: 800;
+            color: #1e3b4f;
+            line-height: 1.2;
+        }
+        .two-columns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.8rem;
+            margin-bottom: 1.8rem;
+        }
+        .chart-panel {
+            flex: 2;
+            min-width: 280px;
+            background: white;
+            padding: 1rem;
+            border-radius: 1.2rem;
+            box-shadow: 0 5px 12px rgba(0,0,0,0.05);
+        }
+        .animation-panel {
+            flex: 1.2;
+            min-width: 260px;
+            background: #fefefe;
+            border-radius: 1.2rem;
+            padding: 1rem;
+            box-shadow: 0 5px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        .animation-queue {
+            background: #eef2f7;
+            border-radius: 1rem;
+            min-height: 180px;
+            padding: 0.8rem;
+            margin-bottom: 0.8rem;
+        }
+        .resources-grid {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+        }
+        .resource {
+            background: #d9e2ec;
+            border-radius: 1rem;
+            padding: 0.4rem 0.6rem;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.7rem;
+            flex: 1 0 60px;
+            transition: 0.1s;
+        }
+        .resource.busy {
+            background: #ffb347;
+            color: #3b2a1f;
+            box-shadow: 0 0 0 2px #ff9800;
+        }
+        .resource.idle {
+            background: #abd9c4;
+            color: #1e4632;
+        }
+        .queue-visual {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+            max-height: 110px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        .customer-icon {
+            background: #2c8fcf;
+            color: white;
+            border-radius: 30px;
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h3 {
+            font-size: 1rem;
+            margin: 0 0 0.6rem 0;
+            color: #1f4e6e;
+        }
+        .footer-note {
+            text-align: center;
+            font-size: 0.7rem;
+            margin-top: 1rem;
+            color: #5a6f80;
+        }
+        @media (max-width: 800px) {
+            .dashboard { padding: 1rem; }
+            .param-group input { width: 110px; }
+        }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <h1>⚙️ QueueSim: Discrete Event Dashboard</h1>
+    <div class="sub">Bank Teller / Email Support Center — real-time discrete event simulation</div>
+
+    <div class="controls-panel">
+        <div class="param-group"><label>📈 Arrival Rate (λ / min)</label><input type="number" id="arrivalRate" step="0.2" value="3.0" min="0.5" max="12"></div>
+        <div class="param-group"><label>⏱️ Service Rate (μ / min)</label><input type="number" id="serviceRate" step="0.2" value="2.5" min="1.0" max="10"></div>
+        <div class="param-group"><label>🔄 Resources (# tellers)</label><input type="number" id="numServers" step="1" value="2" min="1" max="6"></div>
+        <div class="param-group"><label>📊 Variability (CV)</label><input type="number" id="variability" step="0.1" value="1.0" min="0.3" max="2.0"></div>
+        <button id="applyBtn">▶️ Apply & Restart</button>
+        <button id="resetBtn" class="reset-btn">🔄 Reset Simulation</button>
+    </div>
+
+    <div class="stat-cards">
+        <div class="card"><div class="label">📊 Avg Queue Length</div><div class="value" id="avgQueueLen">0.00</div></div>
+        <div class="card"><div class="label">⏳ Avg Wait Time (min)</div><div class="value" id="avgWaitTime">0.00</div></div>
+        <div class="card"><div class="label">⚙️ Utilization (%)</div><div class="value" id="utilization">0.0</div></div>
+        <div class="card"><div class="label">🚀 Throughput (cust/min)</div><div class="value" id="throughput">0.00</div></div>
+        <div class="card"><div class="label">👥 Current Queue</div><div class="value" id="currentQueue">0</div></div>
+    </div>
+
+    <div class="two-columns">
+        <div class="chart-panel">
+            <canvas id="liveChart" width="400" height="200" style="max-height: 280px; width:100%"></canvas>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size:0.7rem;">
+                <span>🔵 Queue Length over time</span><span>🟠 Cumulative served (throughput)</span>
+            </div>
+        </div>
+        <div class="animation-panel">
+            <h3>👥 Waiting Queue <span id="queueLenBadge" style="background:#1e6f9f; padding:2px 8px; border-radius:20px; color:white; font-size:0.7rem;">0</span></h3>
+            <div class="animation-queue">
+                <div class="queue-visual" id="queueVisual"></div>
+            </div>
+            <h3>🛎️ Service Resources <span id="busyCounter"></span></h3>
+            <div class="resources-grid" id="resourcesGrid"></div>
+            <div style="margin-top: 12px; font-size:0.7rem; background:#eef2f7; border-radius:1rem; padding:6px; text-align:center;">
+                <span id="simTimeLabel">⏱️ Simulated minutes: 0.00</span>
+            </div>
+        </div>
+    </div>
+    <div class="footer-note">
+        ⚡ Discrete Event Simulation (next-event time advance) | Arrivals ~ exponential, service ~ lognormal with given CV | Adjust parameters → auto-restart
+    </div>
+</div>
+
+<script>
+    // ---------- Discrete Event Simulation (M/G/c with variability factor) ----------
+    // Using event-based approach: arrival events & departure events.
+    let simActive = true;
+    let animationFrameId = null;
+    
+    // Simulation state
+    let currentTime = 0.0;
+    let queueLength = 0;            // number of customers waiting (not in service)
+    let totalCustomersArrived = 0;
+    let totalCustomersServed = 0;
+    let busyServers = 0;            // current number of busy resources
+    let numServers = 2;             // will be set from UI
+    
+    // statistics accumulators
+    let totalWaitTime = 0.0;        // sum of waiting times for completed customers
+    let areaQueueLength = 0.0;      // integral of queue length over time
+    let lastEventTime = 0.0;
+    
+    // event queue (min-heap priority queue by event time)
+    let eventQueue = [];
+    
+    // For chart & time series logging
+    let timeHistory = [];      // stored time points (simulated minutes)
+    let queueHistory = [];     // queue length at those points
+    let servedHistory = [];    // cumulative served count at time points
+    
+    // chart update interval: record every 0.2 sim minutes or after events
+    let lastRecordTime = 0;
+    const RECORD_INTERVAL = 0.2;
+    
+    // parameters (dynamically updatable)
+    let arrivalRate = 3.0;     // λ per min
+    let serviceRate = 2.5;     // μ per min (mean service time = 1/serviceRate)
+    let variabilityCV = 1.0;   // coefficient of variation for service time (lognormal)
+    
+    // Helper: generate exponential interarrival time (mean 1/λ)
+    function exponential(rate) {
+        if (rate <= 0) return Infinity;
+        return -Math.log(1 - Math.random()) / rate;
+    }
+    
+    // generate service time with given mean and CV using lognormal distribution
+    // mean = 1/serviceRate, CV = variabilityCV. lognormal params: mu, sigma
+    function generateServiceTime() {
+        const meanService = 1.0 / serviceRate;
+        const cv = variabilityCV;
+        if (cv <= 0.01) return meanService; // deterministic
+        // For lognormal: mean = exp(mu + sigma^2/2), variance = (exp(sigma^2)-1)*exp(2*mu+sigma^2)
+        // sigma^2 = ln(1 + CV^2), mu = ln(mean) - sigma^2/2
+        const sigmaSq = Math.log(1 + cv * cv);
+        const sigma = Math.sqrt(sigmaSq);
+        const mu = Math.log(meanService) - sigmaSq / 2;
+        const normalSample = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+        const service = Math.exp(mu + sigma * normalSample);
+        // prevent unrealistically low times (min 0.02 min)
+        return Math.max(0.02, service);
+    }
+    
+    // event queue operations
+    function pushEvent(time, type, customerId = null) {
+        eventQueue.push({ time, type, customerId });
+        eventQueue.sort((a,b) => a.time - b.time);
+    }
+    
+    function popEvent() {
+        return eventQueue.shift();
+    }
+    
+    function clearEvents() {
+        eventQueue = [];
+    }
+    
+    // record system state for integral & update stats snapshots
+    function recordState(now) {
+        if (now > lastEventTime) {
+            const dt = now - lastEventTime;
+            areaQueueLength += queueLength * dt;
+            lastEventTime = now;
+        }
+        // time-series logging for chart
+        if (now - lastRecordTime >= RECORD_INTERVAL || timeHistory.length === 0) {
+            lastRecordTime = now;
+            timeHistory.push(now);
+            queueHistory.push(queueLength);
+            servedHistory.push(totalCustomersServed);
+            // keep last 200 points for performance
+            if (timeHistory.length > 200) {
+                timeHistory.shift();
+                queueHistory.shift();
+                servedHistory.shift();
+            }
+            updateCharts();
+        }
+    }
+    
+    // schedule next arrival if simulation is active
+    function scheduleNextArrival() {
+        if (!simActive) return;
+        const interarrival = exponential(arrivalRate);
+        const nextArrivalTime = currentTime + interarrival;
+        pushEvent(nextArrivalTime, 'ARRIVAL');
+    }
+    
+    // arrival event handler
+    function handleArrival(arrivalTime) {
+        currentTime = arrivalTime;
+        recordState(currentTime);
+        totalCustomersArrived++;
+        const customerId = totalCustomersArrived;
+        
+        if (busyServers < numServers) {
+            // server available -> start service immediately
+            busyServers++;
+            const serviceTime = generateServiceTime();
+            const departureTime = currentTime + serviceTime;
+            pushEvent(departureTime, 'DEPARTURE', customerId);
+            // wait time = 0 for this customer
+        } else {
+            // must wait in queue
+            queueLength++;
+        }
+        // schedule future arrival (unless simulation stopped)
+        scheduleNextArrival();
+        updateUI();
+    }
+    
+    // departure event handler
+    function handleDeparture(departTime, customerId) {
+        currentTime = departTime;
+        recordState(currentTime);
+        
+        // customer finished: update throughput stats
+        totalCustomersServed++;
+        
+        if (queueLength > 0) {
+            // there is waiting customer - start serving immediately
+            queueLength--;
+            const serviceTime = generateServiceTime();
+            const newDepartureTime = currentTime + serviceTime;
+            pushEvent(newDepartureTime, 'DEPARTURE', null);
+            // The customer that starts now had a wait time = (currentTime - arrival?), but we approximate via queue delay
+            // To compute proper average wait times, we track individual waiting times. For simplicity & accuracy:
+            // We'll track waiting time per customer using arrival timestamps stored.
+            // But since we didn't store arrival time per customer, we enhance: when a customer enters service, we need arrival time.
+            // Let's restructure: each waiting customer holds arrival time. Use array for queue with timestamps.
+        }
+        
+        // If no waiting, free a server
+        if (queueLength === 0) {
+            busyServers--;
+        } else {
+            // we already moved one from queue to server above, so busyServers unchanged? careful:
+            // In the branch queueLength>0, we reduced queueLength and added departure, but busyServers remains same (since one left service but another started)
+            // That's correct.
+        }
+        
+        // To compute average wait time accurately, we need per-customer waiting time. Let's implement proper FIFO queue with arrival stamps.
+        // Refactor: maintain waitingQueue array storing arrivalTime.
+        updateUI();
+    }
+    
+    // ---------- revised simulation with proper waiting-time tracking ----------
+    let waitingLine = [];   // stores { arrivalTime, customerId }
+    
+    function handleArrivalV2(arrivalTime) {
+        currentTime = arrivalTime;
+        recordState(currentTime);
+        totalCustomersArrived++;
+        const custId = totalCustomersArrived;
+        
+        if (busyServers < numServers) {
+            busyServers++;
+            const serviceTime = generateServiceTime();
+            const departureTime = currentTime + serviceTime;
+            // waiting time = 0 for this customer
+            pushEvent(departureTime, 'DEPARTURE', custId);
+        } else {
+            waitingLine.push({ arrivalTime: currentTime, customerId: custId });
+            queueLength = waitingLine.length;
+        }
+        scheduleNextArrival();
+        updateUI();
+    }
+    
+    function handleDepartureV2(departTime, custId) {
+        currentTime = departTime;
+        recordState(currentTime);
+        totalCustomersServed++;
+        
+        if (waitingLine.length > 0) {
+            // serve the next waiting customer
+            const nextCust = waitingLine.shift();
+            const waitTime = currentTime - nextCust.arrivalTime;
+            totalWaitTime += waitTime;
+            queueLength = waitingLine.length;
+            const serviceTime = generateServiceTime();
+            const newDeparture = currentTime + serviceTime;
+            pushEvent(newDeparture, 'DEPARTURE', nextCust.customerId);
+            // busyServers remains same (one finishes, next starts)
+        } else {
+            busyServers--;
+        }
+        updateUI();
+    }
+    
+    // master event loop (process discrete events until simulation reaches a limit or idle)
+    let simulationRunning = false;
+    let maxSimTime = 120.0;   // run up to 120 min per apply, then can continue; but we reset easily
+    
+    function runEventLoop(untilTime = 180.0) {
+        if (!simActive) return;
+        while (eventQueue.length > 0 && eventQueue[0].time <= untilTime && simulationRunning) {
+            const ev = popEvent();
+            if (ev.time > untilTime) {
+                pushEvent(ev.time, ev.type, ev.customerId); // push back
+                break;
+            }
+            if (ev.type === 'ARRIVAL') handleArrivalV2(ev.time);
+            else if (ev.type === 'DEPARTURE') handleDepartureV2(ev.time, ev.customerId);
+            if (!simActive) break;
+        }
+        // final state record
+        if (eventQueue.length === 0 && simulationRunning) {
+            // idle, record final moment
+            recordState(currentTime);
+        }
+        updateStatsAndMetrics();
+        updateUI();
+    }
+    
+    // periodic update for animation & chart
+    function stepSimulation() {
+        if (!simulationRunning) return;
+        const now = currentTime;
+        const nextEventTime = eventQueue.length > 0 ? eventQueue[0].time : now + 10;
+        const target = Math.min(now + 0.5, nextEventTime);
+        if (eventQueue.length > 0 && eventQueue[0].time <= target) {
+            runEventLoop(target);
+        } else {
+            // advance time just a tiny bit to show steady state if needed
+            if (eventQueue.length === 0) simulationRunning = false;
+        }
+        updateStatsAndMetrics();
+        updateUI();
+        if (simulationRunning) {
+            animationFrameId = requestAnimationFrame(() => stepSimulation());
+        }
+    }
+    
+    function startSimulationLoop() {
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        simulationRunning = true;
+        stepSimulation();
+    }
+    
+    // reset and initialize simulation with current parameters
+    function resetAndRestart() {
+        simActive = true;
+        simulationRunning = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        
+        // reset state
+        currentTime = 0;
+        queueLength = 0;
+        totalCustomersArrived = 0;
+        totalCustomersServed = 0;
+        busyServers = 0;
+        totalWaitTime = 0;
+        areaQueueLength = 0;
+        lastEventTime = 0;
+        waitingLine = [];
+        clearEvents();
+        
+        timeHistory = [];
+        queueHistory = [];
+        servedHistory = [];
+        lastRecordTime = 0;
+        
+        // schedule first arrival
+        const firstArrival = exponential(arrivalRate);
+        pushEvent(firstArrival, 'ARRIVAL');
+        recordState(0);
+        updateStatsAndMetrics();
+        updateUI();
+        
+        startSimulationLoop();
+    }
+    
+    function applyNewParameters() {
+        // read UI
+        arrivalRate = parseFloat(document.getElementById('arrivalRate').value);
+        serviceRate = parseFloat(document.getElementById('serviceRate').value);
+        numServers = parseInt(document.getElementById('numServers').value);
+        variabilityCV = parseFloat(document.getElementById('variability').value);
+        if (isNaN(arrivalRate)) arrivalRate = 3.0;
+        if (isNaN(serviceRate)) serviceRate = 2.5;
+        if (isNaN(numServers)) numServers = 2;
+        if (isNaN(variabilityCV)) variabilityCV = 1.0;
+        arrivalRate = Math.min(15, Math.max(0.5, arrivalRate));
+        serviceRate = Math.min(12, Math.max(0.8, serviceRate));
+        numServers = Math.min(6, Math.max(1, numServers));
+        variabilityCV = Math.min(2.5, Math.max(0.3, variabilityCV));
+        document.getElementById('arrivalRate').value = arrivalRate;
+        document.getElementById('serviceRate').value = serviceRate;
+        document.getElementById('numServers').value = numServers;
+        resetAndRestart();
+    }
+    
+    function updateStatsAndMetrics() {
+        const avgQueue = areaQueueLength / (currentTime + 0.0001);
+        const avgWait = totalCustomersServed > 0 ? totalWaitTime / totalCustomersServed : 0;
+        const utilization = (busyServers / numServers) * 100;
+        const throughput = totalCustomersServed / (currentTime + 0.0001);
+        document.getElementById('avgQueueLen').innerText = avgQueue.toFixed(2);
+        document.getElementById('avgWaitTime').innerText = avgWait.toFixed(2);
+        document.getElementById('utilization').innerText = utilization.toFixed(1);
+        document.getElementById('throughput').innerText = throughput.toFixed(2);
+        document.getElementById('currentQueue').innerText = waitingLine.length;
+        document.getElementById('simTimeLabel').innerHTML = `⏱️ Simulated minutes: ${currentTime.toFixed(2)}`;
+    }
+    
+    function updateUI() {
+        const queueLen = waitingLine.length;
+        document.getElementById('queueLenBadge').innerText = queueLen;
+        document.getElementById('currentQueue').innerText = queueLen;
+        // visual queue icons
+        const queueContainer = document.getElementById('queueVisual');
+        queueContainer.innerHTML = '';
+        const showCount = Math.min(queueLen, 28);
+        for (let i = 0; i < showCount; i++) {
+            const icon = document.createElement('div');
+            icon.className = 'customer-icon';
+            icon.innerText = `${waitingLine[i]?.customerId ?? i+1}`.slice(-2);
+            queueContainer.appendChild(icon);
+        }
+        if (queueLen > 28) {
+            const more = document.createElement('div');
+            more.className = 'customer-icon';
+            more.innerText = `+${queueLen-28}`;
+            queueContainer.appendChild(more);
+        }
+        const resourcesDiv = document.getElementById('resourcesGrid');
+        resourcesDiv.innerHTML = '';
+        for (let i = 0; i < numServers; i++) {
+            const res = document.createElement('div');
+            res.className = `resource ${i < busyServers ? 'busy' : 'idle'}`;
+            res.innerText = `Teller ${i+1}`;
+            resourcesDiv.appendChild(res);
+        }
+        document.getElementById('busyCounter').innerHTML = `${busyServers}/${numServers} busy`;
+    }
+    
+    let chart;
+    function updateCharts() {
+        const ctx = document.getElementById('liveChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeHistory.map(t => t.toFixed(1)),
+                datasets: [
+                    { label: 'Queue Length', data: queueHistory, borderColor: '#2c8fcf', backgroundColor: '#2c8fcf20', fill: true, tension: 0.2, pointRadius: 0 },
+                    { label: 'Cumulative Served', data: servedHistory, borderColor: '#ff9f4a', borderWidth: 2, fill: false, yAxisID: 'y1', tension: 0.2, pointRadius: 0 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: true,
+                plugins: { legend: { position: 'top' } },
+                scales: { y: { title: { display: true, text: 'Queue Length' } }, y1: { position: 'right', title: { text: 'Served (cust)' }, grid: { drawOnChartArea: false } } }
+            }
+        });
+    }
+    
+    // event bindings
+    document.getElementById('applyBtn').addEventListener('click', () => applyNewParameters());
+    document.getElementById('resetBtn').addEventListener('click', () => resetAndRestart());
+    
+    // initial reset to start simulation
+    resetAndRestart();
+</script>
+</body>
+</html>
