@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Queue Simulator</title>
+    <style>
+        :root {
+            --bank-blue: #2c3e50;
+            --teller-gold: #f1c40f;
+            --person-color: #3498db;
+            --served-color: #2ecc71;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .dashboard {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+            width: 800px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: var(--bank-blue);
+        }
+
+        input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .stats {
+            grid-column: span 3;
+            display: flex;
+            justify-content: space-around;
+            background: #ecf0f1;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        /* Bank Visuals */
+        #bank-floor {
+            width: 900px;
+            height: 400px;
+            background: white;
+            border: 4px solid var(--bank-blue);
+            border-radius: 15px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .tellers-area {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 40px;
+        }
+
+        .teller {
+            width: 60px;
+            height: 80px;
+            background: var(--teller-gold);
+            border-radius: 5px;
+            text-align: center;
+            position: relative;
+            font-weight: bold;
+            font-size: 12px;
+            border-bottom: 5px solid #d4ac0d;
+        }
+
+        .teller .status {
+            margin-top: 10px;
+            font-size: 10px;
+        }
+
+        .queue-area {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            right: 50px;
+            height: 100px;
+            border-top: 2px dashed #ccc;
+            display: flex;
+            align-items: center;
+            flex-direction: row-reverse; /* People join from the left, move right */
+            gap: 10px;
+            padding-right: 20px;
+        }
+
+        .person {
+            width: 30px;
+            height: 30px;
+            background: var(--person-color);
+            border-radius: 50%;
+            transition: all 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .serving {
+            background: var(--served-color) !important;
+            transform: scale(1.2);
+        }
+
+        .btn {
+            grid-column: span 3;
+            padding: 10px;
+            background: var(--bank-blue);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background: #34495e;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🏦 Bank Queue Simulator</h1>
+
+    <div class="dashboard">
+        <div class="control-group">
+            <label>Arrival Rate (seconds)</label>
+            <input type="number" id="arrivalRate" value="3" min="1">
+            <small>New person every X seconds</small>
+        </div>
+        <div class="control-group">
+            <label>Avg. Service Time (seconds)</label>
+            <input type="number" id="serviceTime" value="5" min="1">
+            <small>Time to serve one person</small>
+        </div>
+        <div class="control-group">
+            <label>Number of Tellers</label>
+            <input type="number" id="tellerCount" value="3" min="1" max="8">
+            <small>How many staff are working?</small>
+        </div>
+        
+        <div class="stats">
+            <div>Current Queue: <span id="statQueue">0</span></div>
+            <div>Total Served: <span id="statServed">0</span></div>
+            <div>Avg Wait: <span id="statWait">0</span>s</div>
+        </div>
+
+        <button class="btn" onclick="initSimulation()">Apply Settings & Restart</button>
+    </div>
+
+    <div id="bank-floor">
+        <div class="tellers-area" id="tellersArea"></div>
+        <div class="queue-area" id="queueArea"></div>
+    </div>
+
+    <script>
+        let queue = [];
+        let tellers = [];
+        let totalServed = 0;
+        let totalWaitTime = 0;
+        let personIdCounter = 0;
+        let simulationInterval;
+        let arrivalInterval;
+
+        function initSimulation() {
+            // Reset variables
+            clearInterval(simulationInterval);
+            clearInterval(arrivalInterval);
+            queue = [];
+            tellers = [];
+            totalServed = 0;
+            totalWaitTime = 0;
+            personIdCounter = 0;
+
+            const tellerCount = parseInt(document.getElementById('tellerCount').value);
+            const arrivalRate = parseInt(document.getElementById('arrivalRate').value);
+
+            // Create Tellers
+            const tellersArea = document.getElementById('tellersArea');
+            tellersArea.innerHTML = '';
+            for (let i = 0; i < tellerCount; i++) {
+                tellers.push({ id: i, busy: false, timer: 0 });
+                const div = document.createElement('div');
+                div.className = 'teller';
+                div.id = `teller-${i}`;
+                div.innerHTML = `Teller ${i+1}<div class="status">Idle</div>`;
+                tellersArea.appendChild(div);
+            }
+
+            // Start Arrival Cycle
+            arrivalInterval = setInterval(spawnPerson, arrivalRate * 1000);
+            
+            // Start Simulation Engine (runs every second)
+            simulationInterval = setInterval(updateSimulation, 1000);
+            
+            updateDisplay();
+        }
+
+        function spawnPerson() {
+            personIdCounter++;
+            queue.push({
+                id: personIdCounter,
+                arrivalTime: Date.now()
+            });
+            updateDisplay();
+        }
+
+        function updateSimulation() {
+            // 1. Check for idle tellers and assign them people from the queue
+            tellers.forEach(teller => {
+                if (!teller.busy && queue.length > 0) {
+                    const person = queue.shift();
+                    
+                    // Calculate wait time
+                    const wait = (Date.now() - person.arrivalTime) / 1000;
+                    totalWaitTime += wait;
+                    
+                    teller.busy = true;
+                    teller.timer = parseInt(document.getElementById('serviceTime').value);
+                    
+                    // Visual update for teller
+                    const tellerDiv = document.getElementById(`teller-${teller.id}`);
+                    tellerDiv.querySelector('.status').innerText = `Serving #${person.id}`;
+                    tellerDiv.classList.add('serving');
+                }
+
+                // 2. Decrease timer for busy tellers
+                if (teller.busy) {
+                    teller.timer--;
+                    if (teller.timer <= 0) {
+                        teller.busy = false;
+                        totalServed++;
+                        const tellerDiv = document.getElementById(`teller-${teller.id}`);
+                        tellerDiv.querySelector('.status').innerText = `Idle`;
+                        tellerDiv.classList.remove('serving');
+                    }
+                }
+            });
+
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            // Update Stats
+            document.getElementById('statQueue').innerText = queue.length;
+            document.getElementById('statServed').innerText = totalServed;
+            const avgWait = totalServed === 0 ? 0 : (totalWaitTime / totalServed).toFixed(1);
+            document.getElementById('statWait').innerText = avgWait;
+
+            // Update Queue Visuals
+            const queueArea = document.getElementById('queueArea');
+            queueArea.innerHTML = '';
+            queue.forEach(person => {
+                const pDiv = document.createElement('div');
+                pDiv.className = 'person';
+                pDiv.innerText = person.id;
+                queueArea.appendChild(pDiv);
+            });
+        }
+
+        // Initial start
+        initSimulation();
+    </script>
+</body>
+</html>
