@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elevator Discrete-Event Simulation</title>
+    <!-- Google Fonts for premium styling -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <span class="logo-icon">⇅</span>
+                <div>
+                    <h1>AERO-SIM</h1>
+                    <p class="subtitle">Discrete-Event Elevator Simulator</p>
+                </div>
+            </div>
+            <div class="header-metrics">
+                <div class="metric-badge">
+                    <span class="badge-label">SIM TIME</span>
+                    <span id="sim-time" class="badge-value">0.00s</span>
+                </div>
+                <div class="metric-badge">
+                    <span class="badge-label">STATUS</span>
+                    <span id="sim-status" class="badge-value status-paused">PAUSED</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="app-main">
+            <!-- Left Side: Building Visualizer -->
+            <section class="panel building-panel">
+                <div class="panel-header">
+                    <h2>Building View</h2>
+                    <span class="panel-desc">4-Story Vertical Cross-Section</span>
+                </div>
+                <div class="building-container">
+                    <div class="building">
+                        <!-- Shaft (Shared space for elevator cabin) -->
+                        <div class="elevator-shaft" id="shaft">
+                            <div class="elevator-cabin" id="elevator">
+                                <div class="cabin-display">
+                                    <span id="cabin-floor-num">1</span>
+                                    <span id="cabin-dir-arrow">▲</span>
+                                </div>
+                                <div class="cabin-passengers" id="cabin-passengers">
+                                    <!-- Passenger dots will render here -->
+                                </div>
+                                <div class="elevator-doors">
+                                    <div class="door door-left" id="door-l"></div>
+                                    <div class="door door-right" id="door-r"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Floors (4 down to 1) -->
+                        <div class="floors-container">
+                            <!-- Floor 4 -->
+                            <div class="floor" data-floor="4">
+                                <div class="floor-left">
+                                    <div class="floor-indicator">
+                                        <div class="floor-num">4</div>
+                                        <div class="floor-name">Roof Garden</div>
+                                    </div>
+                                    <div class="hall-calls">
+                                        <button class="btn-call call-down" data-floor="4" data-dir="down">▼</button>
+                                    </div>
+                                </div>
+                                <div class="floor-lobby" id="lobby-4">
+                                    <!-- Waiting passengers render here -->
+                                </div>
+                            </div>
+
+                            <!-- Floor 3 -->
+                            <div class="floor" data-floor="3">
+                                <div class="floor-left">
+                                    <div class="floor-indicator">
+                                        <div class="floor-num">3</div>
+                                        <div class="floor-name">Office Hub</div>
+                                    </div>
+                                    <div class="hall-calls">
+                                        <button class="btn-call call-up" data-floor="3" data-dir="up">▲</button>
+                                        <button class="btn-call call-down" data-floor="3" data-dir="down">▼</button>
+                                    </div>
+                                </div>
+                                <div class="floor-lobby" id="lobby-3">
+                                    <!-- Waiting passengers render here -->
+                                </div>
+                            </div>
+
+                            <!-- Floor 2 -->
+                            <div class="floor" data-floor="2">
+                                <div class="floor-left">
+                                    <div class="floor-indicator">
+                                        <div class="floor-num">2</div>
+                                        <div class="floor-name">Residential</div>
+                                    </div>
+                                    <div class="hall-calls">
+                                        <button class="btn-call call-up" data-floor="2" data-dir="up">▲</button>
+                                        <button class="btn-call call-down" data-floor="2" data-dir="down">▼</button>
+                                    </div>
+                                </div>
+                                <div class="floor-lobby" id="lobby-2">
+                                    <!-- Waiting passengers render here -->
+                                </div>
+                            </div>
+
+                            <!-- Floor 1 -->
+                            <div class="floor" data-floor="1">
+                                <div class="floor-left">
+                                    <div class="floor-indicator">
+                                        <div class="floor-num">1</div>
+                                        <div class="floor-name">Main Lobby</div>
+                                    </div>
+                                    <div class="hall-calls">
+                                        <button class="btn-call call-up" data-floor="1" data-dir="up">▲</button>
+                                    </div>
+                                </div>
+                                <div class="floor-lobby" id="lobby-1">
+                                    <!-- Waiting passengers render here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Center/Right Side: Controls & Logs Split -->
+            <div class="sidebar-container">
+                <!-- Controls and Config Panel -->
+                <section class="panel control-panel">
+                    <div class="panel-header">
+                        <h2>Simulation Controls</h2>
+                    </div>
+                    
+                    <div class="control-grid">
+                        <!-- Play/Pause & Step Buttons -->
+                        <div class="btn-group">
+                            <button id="btn-play" class="btn btn-primary">Play</button>
+                            <button id="btn-pause" class="btn btn-secondary" disabled>Pause</button>
+                            <button id="btn-step" class="btn btn-outline">Step Event</button>
+                            <button id="btn-reset" class="btn btn-danger">Reset</button>
+                        </div>
+
+                        <!-- Speed Slider -->
+                        <div class="input-group">
+                            <div class="slider-header">
+                                <label for="sim-speed">Speed Multiplier</label>
+                                <span id="speed-val">1.0x</span>
+                            </div>
+                            <input type="range" id="sim-speed" min="0.1" max="10" step="0.1" value="1.0">
+                        </div>
+
+                        <!-- Algorithm Selector -->
+                        <div class="input-group">
+                            <label for="algo-select">Dispatching Algorithm</label>
+                            <select id="algo-select">
+                                <option value="LOOK" selected>LOOK (Standard Elevator)</option>
+                                <option value="SSTF">Shortest Seek Time First (SSTF)</option>
+                                <option value="FCFS">First-Come, First-Served (FCFS)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- Spawn Passenger & Config -->
+                    <div class="config-tabs">
+                        <div class="tab-headers">
+                            <button class="tab-header active" data-tab="spawn">Spawn Passenger</button>
+                            <button class="tab-header" data-tab="config">Configuration</button>
+                        </div>
+                        
+                        <div class="tab-contents">
+                            <!-- Spawn Tab -->
+                            <div class="tab-content active" id="tab-spawn">
+                                <div class="spawn-inputs">
+                                    <div class="input-pair">
+                                        <label for="spawn-from">From</label>
+                                        <select id="spawn-from">
+                                            <option value="1">Floor 1 (Lobby)</option>
+                                            <option value="2">Floor 2 (Res)</option>
+                                            <option value="3">Floor 3 (Office)</option>
+                                            <option value="4">Floor 4 (Roof)</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-pair">
+                                        <label for="spawn-to">To</label>
+                                        <select id="spawn-to">
+                                            <option value="1">Floor 1 (Lobby)</option>
+                                            <option value="2">Floor 2 (Res)</option>
+                                            <option value="3" selected>Floor 3 (Office)</option>
+                                            <option value="4">Floor 4 (Roof)</option>
+                                        </select>
+                                    </div>
+                                    <button id="btn-spawn" class="btn btn-accent">Spawn Now</button>
+                                </div>
+                                <div class="spawn-auto">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="auto-spawn" checked>
+                                        <span class="checkmark"></span>
+                                        Auto-Spawn (Poisson Process)
+                                    </label>
+                                    <div class="slider-header inline-header">
+                                        <label for="spawn-rate">Mean Arrival Rate</label>
+                                        <span id="rate-val">10s</span>
+                                    </div>
+                                    <input type="range" id="spawn-rate" min="3" max="30" step="1" value="10">
+                                </div>
+                            </div>
+
+                            <!-- Config Tab -->
+                            <div class="tab-content" id="tab-config">
+                                <div class="config-grid">
+                                    <div class="config-row">
+                                        <label for="cfg-capacity">Cabin Capacity</label>
+                                        <input type="number" id="cfg-capacity" min="1" max="10" value="4">
+                                    </div>
+                                    <div class="config-row">
+                                        <label for="cfg-speed">Travel Speed (s/floor)</label>
+                                        <input type="number" id="cfg-speed" min="0.5" max="5.0" step="0.1" value="1.5">
+                                    </div>
+                                    <div class="config-row">
+                                        <label for="cfg-door-time">Door Cycle Time (s)</label>
+                                        <input type="number" id="cfg-door-time" min="0.5" max="5.0" step="0.1" value="1.0">
+                                    </div>
+                                    <div class="config-row">
+                                        <label for="cfg-board-time">Boarding Time (s/pax)</label>
+                                        <input type="number" id="cfg-board-time" min="0.1" max="2.0" step="0.1" value="0.5">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Future Event List (FEL) Panel -->
+                <section class="panel fel-panel">
+                    <div class="panel-header">
+                        <h2>Future Event List (FEL)</h2>
+                        <span class="panel-desc">Pending Discrete Events</span>
+                    </div>
+                    <div class="fel-list" id="fel-list">
+                        <!-- Events populate here -->
+                    </div>
+                </section>
+
+                <!-- System Event Log Panel -->
+                <section class="panel log-panel">
+                    <div class="panel-header">
+                        <h2>Simulation Log</h2>
+                        <span class="panel-desc">Executed history</span>
+                    </div>
+                    <div class="log-output" id="log-output">
+                        <!-- Historical logs populate here -->
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Stats & Graph Section -->
+        <footer class="app-footer">
+            <!-- Stats -->
+            <section class="panel stats-panel">
+                <div class="panel-header">
+                    <h2>Live Statistics</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-val" id="stat-served">0</span>
+                        <span class="stat-lbl">Served Passengers</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-val" id="stat-avg-wait">0.0s</span>
+                        <span class="stat-lbl">Avg Wait Time</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-val" id="stat-avg-transit">0.0s</span>
+                        <span class="stat-lbl">Avg Transit Time</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-val" id="stat-avg-trip">0.0s</span>
+                        <span class="stat-lbl">Avg Total Trip Time</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-val" id="stat-utilization">0%</span>
+                        <span class="stat-lbl">Cabin Utilization</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chart -->
+            <section class="panel chart-panel">
+                <div class="panel-header">
+                    <h2>Elevator Height & Queues Over Time</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="live-chart"></canvas>
+                </div>
+            </section>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="simulation.js"></script>
+    <script src="algorithms.js"></script>
+    <script src="ui.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
