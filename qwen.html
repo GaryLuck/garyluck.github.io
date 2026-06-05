@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4-Story Elevator Emulation</title>
+    <style>
+        :root {
+            --building-bg: #2c3e50;
+            --floor-bg: #34495e;
+            --shaft-bg: #1a1a1a;
+            --car-bg: #bdc3c7;
+            --car-border: #7f8c8d;
+            --btn-inactive: #ecf0f1;
+            --btn-active: #f39c12;
+            --btn-text: #2c3e50;
+            --led-color: #e74c3c;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #222;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .instructions {
+            margin-bottom: 20px;
+            color: #aaa;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .building {
+            display: flex;
+            background: var(--building-bg);
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            overflow: hidden;
+            border: 4px solid #1a252f;
+        }
+
+        .floors-container {
+            display: flex;
+            flex-direction: column;
+            width: 120px;
+        }
+
+        .floor {
+            height: 100px;
+            background: var(--floor-bg);
+            border-bottom: 2px solid #2c3e50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .floor:first-child {
+            border-top: 2px solid #2c3e50;
+        }
+
+        .floor-label {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #bdc3c7;
+        }
+
+        .call-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .call-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #7f8c8d;
+            background: var(--btn-inactive);
+            color: var(--btn-text);
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 0.8rem;
+        }
+
+        .call-btn:hover { background: #bdc3c7; }
+
+        .call-btn.active {
+            background: var(--btn-active);
+            border-color: #d35400;
+            color: white;
+            box-shadow: 0 0 10px var(--btn-active);
+        }
+
+        .shaft {
+            width: 160px;
+            height: 400px; 
+            background: var(--shaft-bg);
+            position: relative;
+            border-left: 4px solid #1a252f;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .elevator-car {
+            position: absolute;
+            width: 100%;
+            height: 100px;
+            left: 0;
+            top: 300px; 
+            transition: top 1.0s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+            z-index: 5;
+        }
+
+        .car-interior {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #d5dbdb, #bdc3c7);
+            border: 2px solid var(--car-border);
+            border-top: 4px solid #7f8c8d;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        .car-display {
+            background: #000;
+            color: var(--led-color);
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 1.5rem;
+            padding: 4px 12px;
+            border-radius: 4px;
+            border: 2px solid #555;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: inset 0 0 5px rgba(231, 76, 60, 0.3);
+            min-width: 70px;
+            justify-content: center;
+        }
+
+        .direction-indicator {
+            font-size: 1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .car-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+            z-index: 40; 
+            position: relative;
+        }
+
+        .floor-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #7f8c8d;
+            background: var(--btn-inactive);
+            color: var(--btn-text);
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .floor-btn:hover { background: #bdc3c7; }
+
+        .floor-btn.active {
+            background: var(--btn-active);
+            border-color: #d35400;
+            color: white;
+            box-shadow: 0 0 8px var(--btn-active);
+        }
+
+        .control-btns {
+            grid-column: span 2;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .door-btn {
+            width: 36px;
+            height: 24px;
+            border-radius: 4px;
+            border: 1px solid #7f8c8d;
+            background: #95a5a6;
+            color: white;
+            font-size: 0.7rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .door-btn:hover { background: #7f8c8d; }
+        .door-btn:active { transform: scale(0.95); }
+
+        .doors-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 30;
+            pointer-events: none; 
+        }
+
+        .door {
+            position: absolute;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, #7f8c8d, #bdc3c7, #7f8c8d);
+            border: 1px solid #555;
+            transition: transform 0.4s cubic-bezier(0.4, 0.0, 0.2, 1);
+            z-index: 30;
+            pointer-events: none; 
+        }
+
+        .door.left {
+            left: 0;
+            border-right: 2px solid #555;
+            transform: translateX(0);
+        }
+
+        .door.right {
+            right: 0;
+            border-left: 2px solid #555;
+            transform: translateX(0);
+        }
+
+        .elevator-car.doors-open .door.left { transform: translateX(-98%); }
+        .elevator-car.doors-open .door.right { transform: translateX(98%); }
+
+        .alarm-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e74c3c;
+            border: 2px solid #c0392b;
+            color: white;
+            font-size: 0.6rem;
+            cursor: pointer;
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .alarm-btn:hover { background: #c0392b; }
+
+        .alarm-btn.ringing {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both infinite;
+            background: #ff0000;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        @media (max-width: 400px) {
+            .building { transform: scale(0.85); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ELEVATOR SIM</h1>
+    <div class="instructions">Click floor buttons inside the car or call buttons on the floors.</div>
+
+    <div class="building">
+        <div class="floors-container">
+            <div class="floor" data-floor="4">
+                <div class="floor-label">Floor 4</div>
+                <div class="call-buttons">
+                    <button class="call-btn" data-floor="4" data-dir="down">▼</button>
+                </div>
+            </div>
+            <div class="floor" data-floor="3">
+                <div class="floor-label">Floor 3</div>
+                <div class="call-buttons">
+                    <button class="call-btn" data-floor="3" data-dir="up">▲</button>
+                    <button class="call-btn" data-floor="3" data-dir="down">▼</button>
+                </div>
+            </div>
+            <div class="floor" data-floor="2">
+                <div class="floor-label">Floor 2</div>
+                <div class="call-buttons">
+                    <button class="call-btn" data-floor="2" data-dir="up">▲</button>
+                    <button class="call-btn" data-floor="2" data-dir="down">▼</button>
+                </div>
+            </div>
+            <div class="floor" data-floor="1">
+                <div class="floor-label">Floor 1</div>
+                <div class="call-buttons">
+                    <button class="call-btn" data-floor="1" data-dir="up">▲</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="shaft">
+            <div class="elevator-car" id="elevator-car">
+                <div class="car-interior">
+                    <div class="car-display">
+                        <span id="direction-indicator" class="direction-indicator">-</span>
+                        <span id="floor-display">1</span>
+                    </div>
+                    
+                    <div class="car-buttons">
+                        <button class="floor-btn" data-floor="4">4</button>
+                        <button class="floor-btn" data-floor="3">3</button>
+                        <button class="floor-btn" data-floor="2">2</button>
+                        <button class="floor-btn" data-floor="1">1</button>
+                        
+                        <div class="control-btns">
+                            <button class="door-btn" title="Open Doors">◀ ▶</button>
+                            <button class="door-btn" title="Close Doors">▶ ◀</button>
+                        </div>
+                    </div>
+
+                    <button class="alarm-btn" title="Alarm">🔔</button>
+
+                    <div class="doors-container">
+                        <div class="door left"></div>
+                        <div class="door right"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class Elevator {
+            constructor() {
+                this.currentFloor = 1;
+                this.targetFloor = 1;
+                this.direction = 'idle';
+                this.isDoorOpen = false;
+                this.isMoving = false;
+                this.requests = new Set();
+                this.autoCloseTimeout = null;
+                this.alarmTimeout = null;
+
+                this.car = document.getElementById('elevator-car');
+                this.floorDisplay = document.getElementById('floor-display');
+                this.dirDisplay = document.getElementById('direction-indicator');
+                
+                this.updatePosition();
+                this.updateButtonStates();
+                
+                this.openDoors();
+            }
+
+            request(floor) {
+                if (floor === this.currentFloor) {
+                    if (!this.isDoorOpen && !this.isMoving) this.openDoors();
+                    return;
+                }
+                this.requests.add(floor);
+                this.updateButtonStates();
+                
+                // FIX: If doors are open, close them immediately so we can move
+                if (this.isDoorOpen) {
+                    this.closeDoors();
+                } else if (!this.isMoving) {
+                    this.processQueue();
+                }
+            }
+
+            call(floor, dir) {
+                this.requests.add(floor);
+                this.updateButtonStates();
+                
+                if (this.isDoorOpen) {
+                    this.closeDoors();
+                } else if (!this.isMoving) {
+                    this.processQueue();
+                }
+            }
+
+            processQueue() {
+                if (this.isMoving || this.isDoorOpen) return;
+
+                if (this.requests.size === 0) {
+                    this.direction = 'idle';
+                    this.updateDirectionDisplay();
+                    return;
+                }
+
+                const nextFloor = this.getNextFloor();
+                if (nextFloor !== null && nextFloor !== this.currentFloor) {
+                    this.moveToFloor(nextFloor);
+                } else if (this.requests.has(this.currentFloor)) {
+                    this.requests.delete(this.currentFloor);
+                    this.updateButtonStates();
+                    this.openDoors();
+                }
+            }
+
+            getNextFloor() {
+                const reqs = Array.from(this.requests).sort((a, b) => a - b);
+                if (reqs.length === 0) return null;
+
+                if (this.direction === 'up') {
+                    const nextUp = reqs.find(f => f > this.currentFloor);
+                    if (nextUp) return nextUp;
+                    if (reqs.some(f => f < this.currentFloor)) {
+                        this.direction = 'down';
+                        return this.getNextFloor();
+                    }
+                }
+
+                if (this.direction === 'down') {
+                    const nextDown = reqs.filter(f => f < this.currentFloor).reverse()[0];
+                    if (nextDown) return nextDown;
+                    if (reqs.some(f => f > this.currentFloor)) {
+                        this.direction = 'up';
+                        return this.getNextFloor();
+                    }
+                }
+
+                return reqs.reduce((prev, curr) => 
+                    Math.abs(curr - this.currentFloor) < Math.abs(prev - this.currentFloor) ? curr : prev
+                );
+            }
+
+            moveToFloor(floor) {
+                this.isMoving = true;
+                this.targetFloor = floor;
+                this.direction = floor > this.currentFloor ? 'up' : 'down';
+                this.updateDirectionDisplay();
+                
+                // FIX: Move the car visually to the TARGET floor, not the current floor!
+                const topPosition = (4 - floor) * 100;
+                this.car.style.top = `${topPosition}px`;
+
+                setTimeout(() => {
+                    this.currentFloor = floor;
+                    this.requests.delete(floor);
+                    this.isMoving = false;
+                    this.floorDisplay.textContent = this.currentFloor;
+                    this.updateButtonStates();
+                    this.openDoors();
+                }, 1000);
+            }
+
+            updatePosition() {
+                const topPosition = (4 - this.currentFloor) * 100;
+                this.car.style.top = `${topPosition}px`;
+            }
+
+            updateDirectionDisplay() {
+                if (this.isMoving) {
+                    this.dirDisplay.textContent = this.direction === 'up' ? '▲' : '▼';
+                } else if (this.isDoorOpen) {
+                    this.dirDisplay.textContent = '≡';
+                } else {
+                    this.dirDisplay.textContent = '-';
+                }
+            }
+
+            updateButtonStates() {
+                document.querySelectorAll('.floor-btn').forEach(btn => {
+                    const f = parseInt(btn.dataset.floor);
+                    btn.classList.toggle('active', this.requests.has(f));
+                });
+
+                document.querySelectorAll('.call-btn').forEach(btn => {
+                    const f = parseInt(btn.dataset.floor);
+                    btn.classList.toggle('active', this.requests.has(f));
+                });
+            }
+
+            openDoors() {
+                this.isDoorOpen = true;
+                this.car.classList.add('doors-open');
+                this.updateDirectionDisplay();
+                
+                this.autoCloseTimeout = setTimeout(() => {
+                    this.closeDoors();
+                }, 1500);
+            }
+
+            closeDoors() {
+                clearTimeout(this.autoCloseTimeout);
+                this.isDoorOpen = false;
+                this.car.classList.remove('doors-open');
+                this.updateDirectionDisplay();
+                
+                setTimeout(() => {
+                    this.processQueue();
+                }, 400);
+            }
+
+            manualOpen() {
+                if (!this.isDoorOpen && !this.isMoving) this.openDoors();
+            }
+
+            manualClose() {
+                if (this.isDoorOpen) this.closeDoors();
+            }
+
+            triggerAlarm() {
+                const btn = document.querySelector('.alarm-btn');
+                btn.classList.add('ringing');
+                clearTimeout(this.alarmTimeout);
+                this.alarmTimeout = setTimeout(() => {
+                    btn.classList.remove('ringing');
+                }, 2000);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.elevator = new Elevator();
+            
+            document.querySelectorAll('.floor-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    window.elevator.request(parseInt(btn.dataset.floor));
+                });
+            });
+
+            document.querySelectorAll('.call-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    window.elevator.call(parseInt(btn.dataset.floor), btn.dataset.dir);
+                });
+            });
+
+            const openBtn = document.querySelector('.door-btn[title="Open Doors"]');
+            if(openBtn) openBtn.addEventListener('click', () => window.elevator.manualOpen());
+            
+            const closeBtn = document.querySelector('.door-btn[title="Close Doors"]');
+            if(closeBtn) closeBtn.addEventListener('click', () => window.elevator.manualClose());
+            
+            const alarmBtn = document.querySelector('.alarm-btn');
+            if(alarmBtn) alarmBtn.addEventListener('click', () => window.elevator.triggerAlarm());
+        });
+    </script>
+</body>
+</html>
