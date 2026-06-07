@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Kid-Friendly Tic-Tac-Toe</title>
+<style>
+  body {
+    font-family: "Comic Sans MS", "Segoe UI", sans-serif;
+    background: linear-gradient(135deg, #8fd3f4, #fbc2eb);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    color: #333;
+  }
+
+  h1 {
+    margin-top: 20px;
+    color: #ffffff;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  }
+
+  #controls {
+    margin: 15px 0;
+    padding: 10px 15px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }
+
+  #controls label {
+    margin-right: 8px;
+    font-weight: bold;
+  }
+
+  select, button {
+    margin: 5px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  select {
+    background: #ffeaa7;
+  }
+
+  button {
+    background: #74b9ff;
+    color: #fff;
+    font-weight: bold;
+  }
+
+  button:hover {
+    background: #0984e3;
+  }
+
+  #status {
+    margin: 10px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 10px;
+    min-height: 24px;
+    font-size: 16px;
+    text-align: center;
+  }
+
+  #board {
+    display: grid;
+    grid-template-columns: repeat(3, 90px);
+    grid-template-rows: repeat(3, 90px);
+    gap: 8px;
+    margin: 15px 0 25px;
+  }
+
+  .cell {
+    width: 90px;
+    height: 90px;
+    background: #ffeaa7;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    font-weight: bold;
+    color: #2d3436;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+  }
+
+  .cell:hover {
+    transform: scale(1.05);
+    background: #fdcb6e;
+  }
+
+  .cell.disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .win {
+    background: #55efc4 !important;
+  }
+
+  #footer {
+    margin-bottom: 15px;
+    font-size: 12px;
+    color: #ffffff;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+  }
+</style>
+</head>
+<body>
+  <h1>Tic-Tac-Toe Fun!</h1>
+
+  <div id="controls">
+    <div>
+      <label for="mode">Game Mode:</label>
+      <select id="mode">
+        <option value="human">Two Players</option>
+        <option value="computer">Play vs Computer</option>
+      </select>
+    </div>
+    <div>
+      <label for="playerMark">Your Mark:</label>
+      <select id="playerMark">
+        <option value="X">X</option>
+        <option value="O">O</option>
+      </select>
+    </div>
+    <button id="newGameBtn">New Game</button>
+  </div>
+
+  <div id="status">Pick options and press "New Game" to start!</div>
+
+  <div id="board"></div>
+
+  <div id="footer">Have fun and take turns nicely! 😊</div>
+
+<script>
+  const boardEl = document.getElementById("board");
+  const statusEl = document.getElementById("status");
+  const modeEl = document.getElementById("mode");
+  const playerMarkEl = document.getElementById("playerMark");
+  const newGameBtn = document.getElementById("newGameBtn");
+
+  let board = [];
+  let currentPlayer = "X";
+  let gameOver = false;
+  let vsComputer = false;
+  let humanMark = "X";
+  let computerMark = "O";
+
+  function createBoard() {
+    boardEl.innerHTML = "";
+    board = Array(9).fill("");
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.dataset.index = i;
+      cell.addEventListener("click", onCellClick);
+      boardEl.appendChild(cell);
+    }
+  }
+
+  function startGame() {
+    vsComputer = (modeEl.value === "computer");
+    humanMark = playerMarkEl.value;
+    computerMark = humanMark === "X" ? "O" : "X";
+    currentPlayer = "X"; // X always starts
+    gameOver = false;
+    createBoard();
+    clearWinHighlight();
+    if (vsComputer) {
+      if (humanMark === "X") {
+        statusEl.textContent = "You are X. Your turn!";
+      } else {
+        statusEl.textContent = "You are O. Computer goes first!";
+        computerMove();
+      }
+    } else {
+      statusEl.textContent = "Two Players: X goes first!";
+    }
+  }
+
+  function onCellClick(e) {
+    if (gameOver) return;
+    const index = parseInt(e.target.dataset.index, 10);
+    if (board[index] !== "") return;
+
+    if (vsComputer) {
+      // Human can only play their mark
+      if (currentPlayer !== humanMark) return;
+      makeMove(index, humanMark);
+      if (!gameOver) {
+        computerMove();
+      }
+    } else {
+      // Two-player mode
+      makeMove(index, currentPlayer);
+      if (!gameOver) {
+        currentPlayer = currentPlayer === "X" ? "O" : "X";
+        statusEl.textContent = `Player ${currentPlayer}'s turn`;
+      }
+    }
+  }
+
+  function makeMove(index, mark) {
+    board[index] = mark;
+    const cell = boardEl.querySelector(`.cell[data-index="${index}"]`);
+    cell.textContent = mark;
+    cell.classList.add("disabled");
+    checkGameState(mark);
+  }
+
+  function computerMove() {
+    if (gameOver) return;
+    currentPlayer = computerMark;
+
+    // Simple AI: try to win, then block, else random
+    let move = findBestMove(computerMark);
+    if (move === null) {
+      move = findBestMove(humanMark); // block
+    }
+    if (move === null) {
+      const emptyIndices = board
+        .map((v, i) => (v === "" ? i : null))
+        .filter(v => v !== null);
+      move = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+    }
+
+    makeMove(move, computerMark);
+    if (!gameOver) {
+      currentPlayer = humanMark;
+      statusEl.textContent = "Your turn!";
+    }
+  }
+
+  function findBestMove(mark) {
+    const winPatterns = [
+      [0,1,2],[3,4,5],[6,7,8],
+      [0,3,6],[1,4,7],[2,5,8],
+      [0,4,8],[2,4,6]
+    ];
+    for (const pattern of winPatterns) {
+      const [a,b,c] = pattern;
+      const values = [board[a], board[b], board[c]];
+      const countMark = values.filter(v => v === mark).length;
+      const countEmpty = values.filter(v => v === "").length;
+      if (countMark === 2 && countEmpty === 1) {
+        const emptyIndex = pattern[values.indexOf("")];
+        return emptyIndex;
+      }
+    }
+    return null;
+  }
+
+  function checkGameState(markJustPlayed) {
+    const winner = getWinner();
+    if (winner) {
+      gameOver = true;
+      highlightWinner(winner.pattern);
+      if (vsComputer) {
+        if (winner.mark === humanMark) {
+          statusEl.textContent = "You win! 🎉";
+        } else if (winner.mark === computerMark) {
+          statusEl.textContent = "Computer wins! 🤖";
+        }
+      } else {
+        statusEl.textContent = `Player ${winner.mark} wins! 🎉`;
+      }
+      return;
+    }
+
+    if (board.every(cell => cell !== "")) {
+      gameOver = true;
+      statusEl.textContent = "It's a draw! 😄";
+      return;
+    }
+
+    // Update status for vsComputer
+    if (vsComputer) {
+      if (markJustPlayed === humanMark) {
+        statusEl.textContent = "Computer's turn...";
+      } else {
+        statusEl.textContent = "Your turn!";
+      }
+    }
+  }
+
+  function getWinner() {
+    const winPatterns = [
+      [0,1,2],[3,4,5],[6,7,8],
+      [0,3,6],[1,4,7],[2,5,8],
+      [0,4,8],[2,4,6]
+    ];
+    for (const pattern of winPatterns) {
+      const [a,b,c] = pattern;
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+        return { mark: board[a], pattern };
+      }
+    }
+    return null;
+  }
+
+  function highlightWinner(pattern) {
+    pattern.forEach(i => {
+      const cell = boardEl.querySelector(`.cell[data-index="${i}"]`);
+      if (cell) cell.classList.add("win");
+    });
+  }
+
+  function clearWinHighlight() {
+    const cells = boardEl.querySelectorAll(".cell");
+    cells.forEach(cell => cell.classList.remove("win", "disabled"));
+  }
+
+  newGameBtn.addEventListener("click", startGame);
+
+  // Initial board
+  createBoard();
+</script>
+</body>
+</html>
