@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>15‑Tile Puzzle</title>
+<style>
+    :root {
+        --bg: #f5e6d3;        /* beige */
+        --bg-dark: #d2b48c;   /* tan/brown */
+        --tile: #fdf3e3;
+        --tile-border: #8b6b3f;
+        --tile-text: #4a3b24;
+        --accent: #b08b57;
+    }
+
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+        background: radial-gradient(circle at top, #fdf3e3 0, var(--bg) 40%, #e0c7a3 100%);
+        color: var(--tile-text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+    }
+
+    .wrapper {
+        background: rgba(210, 180, 140, 0.9);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(74, 59, 36, 0.45);
+        padding: 24px 28px 30px;
+        max-width: 420px;
+        width: 100%;
+        border: 1px solid rgba(139, 107, 63, 0.6);
+    }
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 16px;
+    }
+
+    .title {
+        font-size: 1.4rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #3b2b18;
+    }
+
+    .subtitle {
+        font-size: 0.85rem;
+        color: #5b4528;
+    }
+
+    .controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+        gap: 10px;
+        font-size: 0.9rem;
+    }
+
+    .status-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .status-line {
+        display: flex;
+        gap: 8px;
+    }
+
+    .label {
+        font-weight: 600;
+        color: #3b2b18;
+    }
+
+    .value {
+        color: #4a3b24;
+    }
+
+    button {
+        background: linear-gradient(135deg, #fdf3e3, #e4c9a0);
+        color: #3b2b18;
+        border-radius: 999px;
+        border: 1px solid var(--tile-border);
+        padding: 6px 14px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 2px 0 rgba(74, 59, 36, 0.4);
+        transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.12s ease;
+        white-space: nowrap;
+    }
+
+    button:hover {
+        background: linear-gradient(135deg, #fff7eb, #e9cfaa);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(74, 59, 36, 0.35);
+    }
+
+    button:active {
+        transform: translateY(1px);
+        box-shadow: 0 1px 2px rgba(74, 59, 36, 0.5);
+    }
+
+    .board {
+        width: 320px;
+        height: 320px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        gap: 6px;
+        padding: 8px;
+        border-radius: 14px;
+        background: radial-gradient(circle at top left, #fdf3e3 0, #e0c7a3 40%, #c49a6c 100%);
+        box-shadow: inset 0 0 0 1px rgba(139, 107, 63, 0.4);
+    }
+
+    .tile {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at top, #fff7eb 0, var(--tile) 40%, #e4c9a0 100%);
+        border-radius: 10px;
+        border: 1px solid var(--tile-border);
+        color: var(--tile-text);
+        font-size: 1.4rem;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 3px 0 rgba(74, 59, 36, 0.5);
+        user-select: none;
+        transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.12s ease;
+    }
+
+    .tile:hover {
+        background: radial-gradient(circle at top, #fffdf5 0, #fdf3e3 40%, #e9cfaa 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(74, 59, 36, 0.45);
+    }
+
+    .tile:active {
+        transform: translateY(1px);
+        box-shadow: 0 1px 2px rgba(74, 59, 36, 0.7);
+    }
+
+    .tile.empty {
+        background: transparent;
+        border: 1px dashed rgba(139, 107, 63, 0.4);
+        box-shadow: none;
+        cursor: default;
+    }
+
+    .tile.empty:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
+    .footer {
+        margin-top: 14px;
+        font-size: 0.8rem;
+        text-align: center;
+        color: #4a3b24;
+    }
+
+    .footer span {
+        background: rgba(253, 243, 227, 0.7);
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(139, 107, 63, 0.4);
+    }
+
+    .win {
+        color: #2f5b2f;
+        font-weight: 700;
+    }
+</style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <div class="title">15 Puzzle</div>
+        <div class="subtitle">Slide tiles to restore order</div>
+    </div>
+
+    <div class="controls">
+        <div class="status-group">
+            <div class="status-line">
+                <span class="label">Moves:</span>
+                <span class="value" id="moves">0</span>
+            </div>
+            <div class="status-line">
+                <span class="label">State:</span>
+                <span class="value" id="state">Shuffled</span>
+            </div>
+        </div>
+        <button id="shuffleBtn">Shuffle</button>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <div class="footer">
+        <span id="message">Click a tile adjacent to the empty space to move it.</span>
+    </div>
+</div>
+
+<script>
+(function () {
+    const boardEl = document.getElementById('board');
+    const movesEl = document.getElementById('moves');
+    const stateEl = document.getElementById('state');
+    const messageEl = document.getElementById('message');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+
+    let tiles = [];
+    let moves = 0;
+
+    function createInitialTiles() {
+        tiles = [];
+        for (let i = 1; i <= 15; i++) tiles.push(i);
+        tiles.push(null);
+    }
+
+    function renderBoard() {
+        boardEl.innerHTML = '';
+        tiles.forEach((value, index) => {
+            const tile = document.createElement('div');
+            tile.classList.add('tile');
+            if (value === null) {
+                tile.classList.add('empty');
+            } else {
+                tile.textContent = value;
+                tile.addEventListener('click', () => onTileClick(index));
+            }
+            boardEl.appendChild(tile);
+        });
+    }
+
+    function indexToCoord(index) {
+        return { row: Math.floor(index / 4), col: index % 4 };
+    }
+
+    function areAdjacent(i1, i2) {
+        const c1 = indexToCoord(i1);
+        const c2 = indexToCoord(i2);
+        return Math.abs(c1.row - c2.row) + Math.abs(c1.col - c2.col) === 1;
+    }
+
+    function onTileClick(index) {
+        const emptyIndex = tiles.indexOf(null);
+        if (areAdjacent(index, emptyIndex)) {
+            [tiles[index], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[index]];
+            moves++;
+            movesEl.textContent = moves;
+            renderBoard();
+            checkWin();
+        }
+    }
+
+    function shuffleTiles() {
+        createInitialTiles();
+        let emptyIndex = 15;
+
+        // Perform 300 random valid moves
+        for (let i = 0; i < 300; i++) {
+            const { row, col } = indexToCoord(emptyIndex);
+            const neighbors = [];
+
+            if (row > 0) neighbors.push(emptyIndex - 4);
+            if (row < 3) neighbors.push(emptyIndex + 4);
+            if (col > 0) neighbors.push(emptyIndex - 1);
+            if (col < 3) neighbors.push(emptyIndex + 1);
+
+            const swapWith = neighbors[Math.floor(Math.random() * neighbors.length)];
+            [tiles[emptyIndex], tiles[swapWith]] = [tiles[swapWith], tiles[emptyIndex]];
+            emptyIndex = swapWith;
+        }
+
+        moves = 0;
+        movesEl.textContent = moves;
+        stateEl.textContent = 'Shuffled';
+        messageEl.textContent = 'Click a tile adjacent to the empty space to move it.';
+        messageEl.classList.remove('win');
+        renderBoard();
+    }
+
+    function isSolved() {
+        for (let i = 0; i < 15; i++) {
+            if (tiles[i] !== i + 1) return false;
+        }
+        return tiles[15] === null;
+    }
+
+    function checkWin() {
+        if (isSolved()) {
+            stateEl.textContent = 'Solved';
+            messageEl.textContent = 'Nice! Puzzle solved.';
+            messageEl.classList.add('win');
+        } else {
+            stateEl.textContent = 'In progress';
+        }
+    }
+
+    shuffleBtn.addEventListener('click', shuffleTiles);
+
+    // Initialize
+    createInitialTiles();
+    renderBoard();
+    shuffleTiles();
+})();
+</script>
+</body>
+</html>
