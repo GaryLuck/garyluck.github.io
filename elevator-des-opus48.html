@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Four-Story Elevator — Discrete-Event Simulation</title>
+<style>
+  /* ============================================================
+     Design tokens — an "instrumentation console" look.
+     Amber = mechanical / live elevator signals (the hero color).
+     Cyan  = data & measurement readouts.
+     Direction is encoded by glyph + a muted tint, never by hue alone.
+     ============================================================ */
+  :root{
+    --bg:#0d1014;
+    --panel:#161b22;
+    --panel-2:#1b222c;
+    --shaft:#080a0d;
+    --line:#28303b;
+    --line-soft:#1f262f;
+    --ink:#e6e9ed;
+    --muted:#8b97a6;
+    --faint:#5b6573;
+    --amber:#ffb02e;
+    --amber-dim:#6f521f;
+    --cyan:#46d6c8;
+    --cyan-dim:#1f5650;
+    --up:#86d6a8;     /* up-bound tint */
+    --down:#f0a07a;   /* down-bound tint */
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --floor-h:96px;
+    --car-h:80px;
+    --shaft-w:140px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #131a22 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.45;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    gap:24px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    padding-bottom:18px;margin-bottom:22px;
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--cyan);margin:0 0 6px;
+  }
+  h1{
+    font-size:clamp(26px,4vw,40px);
+    font-weight:650;letter-spacing:-.015em;margin:0;
+  }
+  .sub{color:var(--muted);font-size:14px;margin:8px 0 0;max-width:54ch;}
+
+  /* big seven-seg clock */
+  .clockbox{
+    text-align:right;font-family:var(--mono);
+  }
+  .clock-label{
+    font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--faint);
+  }
+  .clock{
+    font-size:clamp(30px,6vw,46px);
+    font-weight:600;letter-spacing:.06em;color:var(--amber);
+    text-shadow:0 0 18px rgba(255,176,46,.28);
+    font-variant-numeric:tabular-nums;line-height:1;margin-top:4px;
+  }
+  .clock-sub{font-size:11px;color:var(--faint);letter-spacing:.12em;margin-top:6px;}
+
+  /* ---------- transport bar ---------- */
+  .transport{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    margin-bottom:22px;
+  }
+  button{
+    font-family:var(--sans);font-size:14px;cursor:pointer;
+    color:var(--ink);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:8px;
+    padding:9px 15px;display:inline-flex;align-items:center;gap:8px;
+    transition:border-color .15s, background .15s, transform .05s;
+  }
+  button:hover{border-color:var(--faint);background:#222a35;}
+  button:active{transform:translateY(1px);}
+  button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;}
+  button.primary{
+    background:linear-gradient(180deg,#ffc14d,#f59e16);
+    color:#1a1206;border-color:#d98e10;font-weight:600;
+  }
+  button.primary:hover{filter:brightness(1.05);background:linear-gradient(180deg,#ffc14d,#f59e16);}
+  .glyph{font-family:var(--mono);font-size:15px;line-height:1;}
+  .spacer{flex:1 1 auto;}
+  .legend{
+    font-family:var(--mono);font-size:11px;color:var(--faint);
+    display:flex;gap:14px;flex-wrap:wrap;
+  }
+  .legend b{color:var(--muted);font-weight:600;}
+
+  /* ---------- main layout ---------- */
+  .layout{
+    display:grid;grid-template-columns:minmax(360px,460px) 1fr;gap:22px;align-items:start;
+  }
+  @media (max-width:900px){ .layout{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px;
+  }
+  .card + .card{margin-top:18px;}
+  .card-title{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 14px;display:flex;align-items:center;gap:8px;
+  }
+  .card-title::before{
+    content:"";width:6px;height:6px;border-radius:1px;background:var(--cyan);
+    box-shadow:0 0 8px var(--cyan);
+  }
+
+  /* ---------- building / shaft (the signature element) ---------- */
+  .building{
+    display:flex;justify-content:center;gap:0;
+    padding:6px 4px 0;
+  }
+  .halls{
+    width:200px;flex:0 0 auto;height:calc(var(--floor-h) * 4);position:relative;
+    border-right:2px solid var(--line);
+  }
+  .floor-row{
+    position:absolute;left:0;right:0;height:var(--floor-h);
+    border-top:1px dashed var(--line-soft);
+    padding:6px 12px 6px 8px;display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .floor-row.ground{border-top:1px solid var(--line);}
+  .floor-head{display:flex;align-items:center;gap:8px;}
+  .floor-num{
+    font-family:var(--mono);font-weight:700;font-size:17px;color:var(--ink);
+    width:22px;text-align:center;
+  }
+  .floor-tag{font-size:9px;letter-spacing:.18em;color:var(--faint);text-transform:uppercase;}
+  .lantern{display:flex;gap:4px;margin-left:auto;}
+  .arrow{
+    font-family:var(--mono);font-size:12px;color:var(--faint);
+    width:16px;height:16px;display:grid;place-items:center;border-radius:3px;
+    border:1px solid var(--line-soft);
+  }
+  .arrow.lit{
+    color:#1a1206;background:var(--amber);border-color:var(--amber);
+    box-shadow:0 0 10px rgba(255,176,46,.55);
+    animation:pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{50%{box-shadow:0 0 3px rgba(255,176,46,.3);}}
+  .queue{display:flex;flex-wrap:wrap;gap:4px;align-content:flex-end;min-height:22px;}
+
+  .chip{
+    font-family:var(--mono);font-size:11px;font-weight:600;
+    padding:2px 6px;border-radius:5px;background:#10151c;
+    border:1px solid var(--line);color:var(--muted);
+    display:inline-flex;align-items:center;gap:3px;line-height:1.3;
+  }
+  .chip.up{border-color:var(--cyan-dim);color:var(--up);}
+  .chip.down{border-color:var(--amber-dim);color:var(--down);}
+  .chip .dir{opacity:.85;font-size:10px;}
+  .more{font-family:var(--mono);font-size:10px;color:var(--faint);align-self:center;}
+
+  .shaft{
+    width:var(--shaft-w);flex:0 0 auto;position:relative;
+    height:calc(var(--floor-h) * 4);
+    background:
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--floor-h) - 1px), var(--line-soft) calc(var(--floor-h) - 1px) var(--floor-h)),
+      var(--shaft);
+    border-left:1px solid var(--line);border-right:1px solid var(--line);
+    overflow:hidden;
+  }
+  .rail{position:absolute;top:0;bottom:0;width:2px;background:#11161d;}
+  .rail.l{left:10px;} .rail.r{right:10px;}
+
+  .car{
+    position:absolute;left:8px;right:8px;height:var(--car-h);
+    background:linear-gradient(180deg,#222a34,#171d25);
+    border:1px solid #39424f;border-radius:7px;
+    box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 0 26px rgba(255,176,46,.10);
+    overflow:hidden;will-change:top;
+  }
+  .car-top{
+    position:absolute;top:0;left:0;right:0;height:18px;
+    background:#11161d;border-bottom:1px solid #2c343f;
+    display:flex;align-items:center;justify-content:space-between;padding:0 8px;
+  }
+  .car-readout{
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.05em;
+    color:var(--amber);text-shadow:0 0 8px rgba(255,176,46,.4);
+  }
+  .car-dir{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .cab{
+    position:absolute;top:18px;left:0;right:0;bottom:0;
+    display:flex;flex-wrap:wrap;gap:3px;align-content:center;justify-content:center;
+    padding:4px 6px;
+  }
+  .pax{
+    width:13px;height:13px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #cfd6df, #7f8a98);
+    border:1px solid #586474;position:relative;
+  }
+  .pax::after{
+    content:attr(data-d);position:absolute;inset:0;display:grid;place-items:center;
+    font-family:var(--mono);font-size:8px;font-weight:700;color:#11161d;
+  }
+  .door{
+    position:absolute;top:18px;bottom:0;background:linear-gradient(180deg,#2b333e,#1c232c);
+    border-top:0;z-index:3;will-change:width;
+  }
+  .door::before{
+    content:"";position:absolute;top:0;bottom:0;width:1px;background:#454f5c;
+  }
+  .door.l{left:0;border-right:1px solid #0b0e12;}
+  .door.l::before{right:0;}
+  .door.r{right:0;border-left:1px solid #0b0e12;}
+  .door.r::before{left:0;}
+
+  /* ---------- controls ---------- */
+  .ctrl{margin-bottom:16px;}
+  .ctrl:last-child{margin-bottom:0;}
+  .ctrl-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;}
+  .ctrl-name{font-size:13px;color:var(--ink);}
+  .ctrl-val{font-family:var(--mono);font-size:13px;color:var(--cyan);font-weight:600;}
+  .ctrl-val small{color:var(--faint);font-weight:400;}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:linear-gradient(90deg,var(--cyan-dim),var(--line));outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:var(--cyan);border:2px solid #0d1014;cursor:pointer;
+    box-shadow:0 0 8px rgba(70,214,200,.5);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px;height:16px;border-radius:50%;background:var(--cyan);
+    border:2px solid #0d1014;cursor:pointer;
+  }
+  input[type=range]:focus-visible{box-shadow:0 0 0 2px var(--cyan);}
+  .addbtn{width:100%;margin-top:4px;}
+
+  /* ---------- stats grid ---------- */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  @media (max-width:520px){ .stats{grid-template-columns:repeat(2,1fr);} }
+  .stat{
+    background:var(--panel-2);border:1px solid var(--line-soft);border-radius:9px;
+    padding:11px 12px;
+  }
+  .stat-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);}
+  .stat-v{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px;}
+  .stat-v small{font-size:11px;color:var(--muted);font-weight:400;margin-left:2px;}
+  .stat.accent .stat-v{color:var(--cyan);}
+
+  /* ---------- FEL + log ---------- */
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media (max-width:620px){ .twocol{grid-template-columns:1fr;} }
+  .feed{font-family:var(--mono);font-size:12px;max-height:262px;overflow-y:auto;}
+  .feed::-webkit-scrollbar{width:8px;}
+  .feed::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+  .frow{
+    display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line-soft);
+    align-items:baseline;
+  }
+  .frow:last-child{border-bottom:0;}
+  .ft{color:var(--amber);font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:52px;}
+  .fk{color:var(--faint);flex:0 0 auto;min-width:72px;text-transform:uppercase;font-size:10px;letter-spacing:.08em;}
+  .fx{color:var(--muted);}
+  .fel .ft{color:var(--cyan);}
+  .fel .dt{color:var(--faint);font-size:11px;}
+
+  .foot{margin-top:26px;color:var(--faint);font-size:12px;text-align:center;line-height:1.7;}
+  .foot code{font-family:var(--mono);color:var(--muted);background:var(--panel-2);padding:1px 5px;border-radius:4px;}
+
+  @media (prefers-reduced-motion: reduce){
+    .arrow.lit{animation:none;}
+    button{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">Discrete-Event Simulation</p>
+      <h1>Four-Story Elevator</h1>
+      <p class="sub">A single elevator car served by a LOOK scheduler. The clock advances event-to-event &mdash; arrivals, floor crossings, doors &mdash; not by fixed time steps. Tune the load and watch the queue.</p>
+    </div>
+    <div class="clockbox">
+      <div class="clock-label">Sim clock</div>
+      <div class="clock" id="clock">00:00.0</div>
+      <div class="clock-sub" id="clockSub">paused</div>
+    </div>
+  </header>
+
+  <div class="transport">
+    <button class="primary" id="play"><span class="glyph" id="playGlyph">&#9654;</span><span id="playText">Play</span></button>
+    <button id="step"><span class="glyph">&#9197;</span>Step event</button>
+    <button id="reset"><span class="glyph">&#8635;</span>Reset</button>
+    <div class="spacer"></div>
+    <div class="legend">
+      <span><b style="color:var(--up)">&#9650;</b> up-bound</span>
+      <span><b style="color:var(--down)">&#9660;</b> down-bound</span>
+      <span><b>n</b> = destination floor</span>
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- LEFT: the building -->
+    <section class="card">
+      <p class="card-title">Building</p>
+      <div class="building">
+        <div class="halls" id="halls"></div>
+        <div class="shaft" id="shaft">
+          <div class="rail l"></div>
+          <div class="rail r"></div>
+          <div class="car" id="car">
+            <div class="car-top">
+              <span class="car-dir" id="carDir">&middot;</span>
+              <span class="car-readout" id="carReadout">0/6</span>
+            </div>
+            <div class="cab" id="cab"></div>
+            <div class="door l" id="doorL"></div>
+            <div class="door r" id="doorR"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: controls, stats, feeds -->
+    <div>
+      <section class="card">
+        <p class="card-title">Controls</p>
+
+        <div class="ctrl">
+          <div class="ctrl-head">
+            <span class="ctrl-name">Passenger arrival rate</span>
+            <span class="ctrl-val" id="rateVal">8<small>/min</small></span>
+          </div>
+          <input type="range" id="rate" min="1" max="30" step="1" value="8">
+          <div class="stat-k" id="rateMean" style="margin-top:6px;">mean interarrival 7.5 s</div>
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-head">
+            <span class="ctrl-name">Car capacity</span>
+            <span class="ctrl-val" id="capVal">6</span>
+          </div>
+          <input type="range" id="cap" min="1" max="10" step="1" value="6">
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-head">
+            <span class="ctrl-name">Travel time per floor</span>
+            <span class="ctrl-val" id="travelVal">2.0<small>s</small></span>
+          </div>
+          <input type="range" id="travel" min="0.5" max="5" step="0.1" value="2.0">
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-head">
+            <span class="ctrl-name">Door dwell (loading)</span>
+            <span class="ctrl-val" id="dwellVal">2.5<small>s</small></span>
+          </div>
+          <input type="range" id="dwell" min="0.5" max="6" step="0.1" value="2.5">
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-head">
+            <span class="ctrl-name">Simulation speed</span>
+            <span class="ctrl-val" id="speedVal">3.0&times;</span>
+          </div>
+          <input type="range" id="speed" min="0.25" max="30" step="0.25" value="3">
+        </div>
+
+        <button class="addbtn" id="addPax"><span class="glyph">&#43;</span>Add a passenger now</button>
+      </section>
+
+      <section class="card">
+        <p class="card-title">Statistics</p>
+        <div class="stats">
+          <div class="stat accent"><div class="stat-k">Avg wait</div><div class="stat-v" id="sAvgWait">&mdash;</div></div>
+          <div class="stat accent"><div class="stat-k">Avg in system</div><div class="stat-v" id="sAvgSys">&mdash;</div></div>
+          <div class="stat accent"><div class="stat-k">Throughput</div><div class="stat-v" id="sThru">&mdash;</div></div>
+          <div class="stat"><div class="stat-k">In system now</div><div class="stat-v" id="sNow">0</div></div>
+          <div class="stat"><div class="stat-k">Max wait</div><div class="stat-v" id="sMaxWait">&mdash;</div></div>
+          <div class="stat"><div class="stat-k">Car utilization</div><div class="stat-v" id="sUtil">0<small>%</small></div></div>
+          <div class="stat"><div class="stat-k">Generated</div><div class="stat-v" id="sGen">0</div></div>
+          <div class="stat"><div class="stat-k">Served</div><div class="stat-v" id="sServed">0</div></div>
+          <div class="stat"><div class="stat-k">Avg L (mean #)</div><div class="stat-v" id="sL">&mdash;</div></div>
+          <div class="stat"><div class="stat-k">Stops made</div><div class="stat-v" id="sStops">0</div></div>
+          <div class="stat"><div class="stat-k">Floors traveled</div><div class="stat-v" id="sFloors">0</div></div>
+          <div class="stat"><div class="stat-k">Riding</div><div class="stat-v" id="sRiding">0</div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="twocol">
+          <div>
+            <p class="card-title">Future events</p>
+            <div class="feed fel" id="fel"></div>
+          </div>
+          <div>
+            <p class="card-title">Event log</p>
+            <div class="feed" id="log"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div>
+
+  <p class="foot">
+    Floor 1 is the lobby. Origins and destinations are drawn uniformly over distinct floors; arrivals form a Poisson process.<br>
+    Controller: <code>LOOK</code> &mdash; keep moving in the current direction while requests remain ahead, then reverse. A full car skips hall calls.
+  </p>
+
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   FOUR-STORY ELEVATOR — DISCRETE-EVENT SIMULATION
+   ----------------------------------------------------------------
+   The model is genuinely event-driven: a min-heap (the Future Event
+   List) holds timestamped events; the clock jumps from one event to
+   the next. The on-screen car is interpolated between event times
+   purely for display, so the underlying logic never "tween-steps".
+
+   Event types:
+     ARRIVAL      a passenger appears at a floor with a destination
+     ARRIVE_FLOOR the car reaches a floor; decide whether to stop
+     OPEN_DOORS   doors fully open; alight then board
+     CLOSE_DOORS  begin closing (or re-open if more can board)
+     DEPART       doors shut; choose direction and start moving
+   ================================================================ */
+
+const N = 4;                 // floors, numbered 1..4 (1 = lobby)
+const DOOR_OPEN = 0.7;       // seconds for doors to open
+const DOOR_CLOSE = 0.7;      // seconds for doors to close
+
+/* ---- live configuration (read fresh at every event) ---- */
+const cfg = { rate:8, capacity:6, travel:2.0, dwell:2.5, speed:3.0 };
+
+/* ---------------- Future Event List: binary min-heap --------------- */
+/* ordered by (time, seq) so simultaneous events keep insertion order  */
+class EventQueue {
+  constructor(){ this.h=[]; }
+  size(){ return this.h.length; }
+  clear(){ this.h.length=0; }
+  _less(a,b){ return a.time<b.time || (a.time===b.time && a.seq<b.seq); }
+  push(ev){
+    const h=this.h; h.push(ev); let i=h.length-1;
+    while(i>0){ const p=(i-1)>>1; if(this._less(h[i],h[p])){ [h[i],h[p]]=[h[p],h[i]]; i=p; } else break; }
+  }
+  peek(){ return this.h[0]; }
+  pop(){
+    const h=this.h, top=h[0], last=h.pop();
+    if(h.length){ h[0]=last; let i=0;
+      for(;;){ const l=2*i+1, r=l+1; let s=i;
+        if(l<h.length && this._less(h[l],h[s])) s=l;
+        if(r<h.length && this._less(h[r],h[s])) s=r;
+        if(s===i) break; [h[i],h[s]]=[h[s],h[i]]; i=s; }
+    }
+    return top;
+  }
+  sorted(){ return [...this.h].sort((a,b)=> a.time-b.time || a.seq-b.seq); }
+}
+
+/* ---------------- seedable PRNG (reproducible runs) ---------------- */
+let rngState = 0;
+function seedRng(s){ rngState = s>>>0; }
+function rand(){ // mulberry32
+  rngState |= 0; rngState = (rngState + 0x6D2B79F5) | 0;
+  let t = Math.imul(rngState ^ (rngState>>>15), 1 | rngState);
+  t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t;
+  return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+}
+const randInt=(a,b)=> a + Math.floor(rand()*(b-a+1));     // inclusive
+function expInterarrival(){ const lam=cfg.rate/60; return -Math.log(1-rand())/lam; }
+
+/* ---------------------------- state -------------------------------- */
+const E = { ARRIVAL:'ARRIVAL', ARRIVE_FLOOR:'ARRIVE_FLOOR', OPEN_DOORS:'OPEN_DOORS',
+            CLOSE_DOORS:'CLOSE_DOORS', DEPART:'DEPART' };
+
+let clock, running, fel, paxId, evSeq;
+let lift;          // the car
+let waiting;       // waiting[floor] = array of passengers (FIFO)
+let stats, log;
+
+function freshState(){
+  clock = 0; running = false; evSeq = 0; paxId = 0;
+  fel = new EventQueue();
+  lift = { floor:1, dir:'idle', door:'closed', moving:false,
+           pax:[],                                   // riders {id,origin,dest,arrival,board}
+           from:1, to:1, mStart:0, mEnd:0,           // motion segment (display)
+           dPhase:'closed', dStart:0, dDur:0 };      // door phase (display)
+  waiting = {}; for(let f=1;f<=N;f++) waiting[f]=[];
+  stats = { gen:0, served:0, waitN:0, sumWait:0, maxWait:0,
+            sysN:0, sumSys:0, sumTravel:0, stops:0, floors:0,
+            areaSys:0, areaWait:0, busy:0, lastT:0 };
+  log = [];
+}
+
+/* ----------------------- scheduling helpers ------------------------ */
+function schedule(dt, type, payload){
+  fel.push({ time: clock+dt, seq: evSeq++, type, payload: payload||null });
+}
+function note(kind, text){
+  log.push({ t:clock, kind, text });
+  if(log.length>250) log.shift();
+}
+
+/* ---- statistics integration (state is constant between events) ---- */
+function accumulate(upto){
+  const dt = upto - stats.lastT;
+  if(dt>0){
+    stats.areaSys  += (stats.gen - stats.served) * dt;
+    stats.areaWait += totalWaiting() * dt;
+    if(lift.moving || lift.door!=='closed') stats.busy += dt;
+  }
+  stats.lastT = upto;
+}
+function totalWaiting(){ let s=0; for(let f=1;f<=N;f++) s+=waiting[f].length; return s; }
+
+/* --------------------- controller (LOOK) helpers ------------------- */
+const capLeft = ()=> cfg.capacity - lift.pax.length;
+const carDestAt = (g)=> lift.pax.some(p=>p.dest===g);
+const hasWaitingDir = (f,dir)=> waiting[f].some(p=> dir==='up' ? p.dest>f : p.dest<f);
+
+function pendingAbove(f){
+  if(lift.pax.some(p=>p.dest>f)) return true;
+  for(let g=f+1;g<=N;g++) if(waiting[g].length) return true;
+  return hasWaitingDir(f,'up');
+}
+function pendingBelow(f){
+  if(lift.pax.some(p=>p.dest<f)) return true;
+  for(let g=f-1;g>=1;g--) if(waiting[g].length) return true;
+  return hasWaitingDir(f,'down');
+}
+
+/* direction to commit, given current direction `cur` (LOOK) */
+function decideDirection(f, cur){
+  const ab = pendingAbove(f), be = pendingBelow(f);
+  if(cur==='up')   return ab ? 'up'   : (be ? 'down' : 'idle');
+  if(cur==='down') return be ? 'down' : (ab ? 'up'   : 'idle');
+  // idle: head toward the nearest demand
+  if(ab && !be) return 'up';
+  if(be && !ab) return 'down';
+  if(ab && be){
+    let up=Infinity, dn=Infinity;
+    if(hasWaitingDir(f,'up')) up=0;
+    if(hasWaitingDir(f,'down')) dn=0;
+    for(let g=f+1;g<=N && up===Infinity;g++) if(waiting[g].length){ up=g-f; }
+    for(let g=f-1;g>=1 && dn===Infinity;g--) if(waiting[g].length){ dn=f-g; }
+    return dn<up ? 'down' : 'up';
+  }
+  return 'idle';
+}
+
+/* should the car stop at floor f, given it arrived travelling `dir`? */
+function shouldStop(f){
+  if(carDestAt(f)) return true;                 // a rider's destination
+  const room = capLeft()>0;
+  if(lift.dir==='up'){
+    if(hasWaitingDir(f,'up') && room) return true;
+    if(!pendingAbove(f) && hasWaitingDir(f,'down') && room) return true; // reversing here
+  } else if(lift.dir==='down'){
+    if(hasWaitingDir(f,'down') && room) return true;
+    if(!pendingBelow(f) && hasWaitingDir(f,'up') && room) return true;   // reversing here
+  } else {
+    if((hasWaitingDir(f,'up')||hasWaitingDir(f,'down')) && room) return true;
+  }
+  return false;
+}
+
+/* ----------------------- event handlers ---------------------------- */
+function handle(ev){
+  switch(ev.type){
+    case E.ARRIVAL:      onArrival(); break;
+    case E.ARRIVE_FLOOR: onArriveFloor(ev.payload); break;
+    case E.OPEN_DOORS:   onOpenDoors(); break;
+    case E.CLOSE_DOORS:  onCloseDoors(); break;
+    case E.DEPART:       onDepart(); break;
+  }
+}
+
+function spawnPassenger(){
+  const o = randInt(1,N);
+  let d = randInt(1,N-1); if(d>=o) d++;          // distinct destination
+  const p = { id:++paxId, origin:o, dest:d, arrival:clock, board:null };
+  waiting[o].push(p); stats.gen++;
+  note('arrival', `#${p.id} at ${o} \u2192 ${d}`);
+  wakeIfIdle();
+}
+function onArrival(){
+  spawnPassenger();
+  schedule(expInterarrival(), E.ARRIVAL);        // next arrival
+}
+
+function onArriveFloor(f){
+  lift.floor = f; lift.moving = false; lift.from = f; lift.to = f;
+  if(shouldStop(f)){
+    stats.stops++;
+    beginOpen();
+  } else {
+    moveNext();                                   // continue, reverse, or park
+  }
+}
+
+function beginOpen(){
+  lift.door = 'opening'; lift.dPhase='opening'; lift.dStart=clock; lift.dDur=DOOR_OPEN;
+  schedule(DOOR_OPEN, E.OPEN_DOORS);
+}
+
+function onOpenDoors(){
+  lift.door='open'; lift.dPhase='open';
+  const f = lift.floor;
+  // alight
+  let off=0;
+  lift.pax = lift.pax.filter(p=>{
+    if(p.dest===f){
+      off++; stats.served++; stats.sysN++;
+      stats.sumSys += clock-p.arrival; stats.sumTravel += clock-p.board;
+      return false;
+    }
+    return true;
+  });
+  if(off) note('alight', `${off} off at ${f}`);
+  // commit a serving direction, then board matching riders
+  lift.dir = decideDirection(f, lift.dir);
+  let on=0;
+  const q = waiting[f]; const keep=[];
+  for(const p of q){
+    const goesUp = p.dest>f, goesDn = p.dest<f;
+    const match = (lift.dir==='up'&&goesUp) || (lift.dir==='down'&&goesDn);
+    if(match && lift.pax.length<cfg.capacity){
+      p.board=clock; lift.pax.push(p); on++;
+      const w = p.board - p.arrival;                  // time spent waiting at the floor
+      stats.waitN++; stats.sumWait += w; if(w>stats.maxWait) stats.maxWait = w;
+    } else keep.push(p);
+  }
+  waiting[f]=keep;
+  if(on){ note('board', `${on} on at ${f}`); }
+  schedule(cfg.dwell, E.CLOSE_DOORS);
+}
+
+function onCloseDoors(){
+  const f = lift.floor;
+  // if more riders arrived during dwell and we can still take them, re-open
+  const dir = decideDirection(f, lift.dir);
+  if(dir!=='idle' && capLeft()>0 && hasWaitingDir(f,dir)){
+    lift.dir = dir;
+    beginOpen();
+    return;
+  }
+  lift.door='closing'; lift.dPhase='closing'; lift.dStart=clock; lift.dDur=DOOR_CLOSE;
+  schedule(DOOR_CLOSE, E.DEPART);
+}
+
+function onDepart(){
+  lift.door='closed'; lift.dPhase='closed';
+  moveNext();
+}
+
+/* choose direction and, if any, launch a one-floor move */
+function moveNext(){
+  const f = lift.floor;
+  const dir = decideDirection(f, lift.dir);
+  lift.dir = dir;
+  if(dir==='idle'){ lift.moving=false; return; }   // park
+  const target = dir==='up' ? f+1 : f-1;
+  if(target<1 || target>N){ lift.dir='idle'; lift.moving=false; return; }
+  lift.moving=true; lift.from=f; lift.to=target;
+  lift.mStart=clock; lift.mEnd=clock+cfg.travel;
+  stats.floors++;
+  schedule(cfg.travel, E.ARRIVE_FLOOR, target);
+}
+
+/* an arrival can wake a parked car */
+function wakeIfIdle(){
+  if(lift.dir!=='idle' || lift.door!=='closed' || lift.moving) return;
+  const f = lift.floor;
+  if(!pendingAbove(f) && !pendingBelow(f) && !shouldStop(f)) return;
+  if(shouldStop(f)){ stats.stops++; beginOpen(); }
+  else moveNext();
+}
+
+/* --------------------------- engine -------------------------------- */
+function drain(){                 // process all events that are due
+  let budget=6000;
+  while(fel.size() && fel.peek().time<=clock && budget-->0){
+    const ev = fel.pop();
+    accumulate(ev.time);
+    handle(ev);
+  }
+}
+function stepOneEvent(){          // canonical DES step: jump to next event time
+  if(!fel.size()) return;
+  running=false;
+  const t = fel.peek().time;
+  while(fel.size() && fel.peek().time<=t){
+    const ev=fel.pop(); accumulate(ev.time); handle(ev);
+  }
+  clock = t;
+  render();
+}
+
+/* --------------------------- rendering ----------------------------- */
+const $ = id=>document.getElementById(id);
+const shaftEl=$('shaft'), carEl=$('car'), cab=$('cab'),
+      doorL=$('doorL'), doorR=$('doorR'), hallsEl=$('halls');
+
+function floorTopPx(v){ // v can be fractional; floor 1 sits at the bottom
+  const fh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--floor-h'));
+  const ch = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--car-h'));
+  return (N - v)*fh + (fh - ch)/2;
+}
+function liftPosition(){
+  if(lift.moving && clock>=lift.mStart && lift.mEnd>lift.mStart){
+    const a = Math.min(1,(clock-lift.mStart)/(lift.mEnd-lift.mStart));
+    return lift.from + (lift.to-lift.from)*a;
+  }
+  return lift.floor;
+}
+function doorOpenness(){
+  const e = clock - lift.dStart;
+  if(lift.dPhase==='opening') return Math.max(0,Math.min(1,e/lift.dDur));
+  if(lift.dPhase==='closing') return 1-Math.max(0,Math.min(1,e/lift.dDur));
+  if(lift.dPhase==='open') return 1;
+  return 0;
+}
+
+/* build the static hall rows once */
+function buildHalls(){
+  hallsEl.innerHTML='';
+  const fh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--floor-h'));
+  for(let f=N; f>=1; f--){
+    const row=document.createElement('div');
+    row.className='floor-row'+(f===1?' ground':'');
+    row.style.top = (N-f)*fh + 'px';
+    row.innerHTML =
+      `<div class="floor-head">
+         <span class="floor-num">${f}</span>
+         ${f===1?'<span class="floor-tag">Lobby</span>':''}
+         <span class="lantern">
+           <span class="arrow" data-up="${f}">&#9650;</span>
+           <span class="arrow" data-dn="${f}">&#9660;</span>
+         </span>
+       </div>
+       <div class="queue" data-q="${f}"></div>`;
+    hallsEl.appendChild(row);
+  }
+}
+
+function fmtClock(t){
+  const m=Math.floor(t/60), s=t-60*m;
+  return String(m).padStart(2,'0')+':'+s.toFixed(1).padStart(4,'0');
+}
+
+function render(){
+  // --- car position & doors ---
+  carEl.style.top = floorTopPx(liftPosition()) + 'px';
+  const inner = carEl.clientWidth/2;
+  const w = inner*(1-doorOpenness());
+  doorL.style.width = w+'px';
+  doorR.style.width = w+'px';
+
+  // --- car readout ---
+  $('carReadout').textContent = `${lift.pax.length}/${cfg.capacity}`;
+  $('carDir').textContent = lift.moving ? (lift.dir==='up'?'\u25B2':'\u25BC')
+                          : (lift.door!=='closed' ? '\u2014' : (lift.dir==='idle'?'\u00B7':' '));
+
+  // --- riders ---
+  cab.innerHTML='';
+  for(const p of lift.pax){
+    const d=document.createElement('div'); d.className='pax'; d.dataset.d=p.dest;
+    cab.appendChild(d);
+  }
+
+  // --- halls: queues + lanterns ---
+  for(let f=1;f<=N;f++){
+    const q=hallsEl.querySelector(`[data-q="${f}"]`);
+    const list=waiting[f];
+    let html='';
+    const show=Math.min(list.length,7);
+    for(let i=0;i<show;i++){
+      const p=list[i], up=p.dest>f;
+      html+=`<span class="chip ${up?'up':'down'}"><span class="dir">${up?'\u25B2':'\u25BC'}</span>${p.dest}</span>`;
+    }
+    if(list.length>7) html+=`<span class="more">+${list.length-7}</span>`;
+    q.innerHTML=html;
+
+    const upA=hallsEl.querySelector(`[data-up="${f}"]`);
+    const dnA=hallsEl.querySelector(`[data-dn="${f}"]`);
+    upA.classList.toggle('lit', hasWaitingDir(f,'up'));
+    dnA.classList.toggle('lit', hasWaitingDir(f,'down'));
+  }
+
+  // --- clock ---
+  $('clock').textContent = fmtClock(clock);
+  $('clockSub').textContent = running ? `running \u00b7 ${cfg.speed.toFixed(2)}\u00d7`
+                           : (clock>0 ? 'paused' : 'ready');
+
+  // --- statistics (integrate up to clock for display only) ---
+  const el = clock>0 ? clock : 0;
+  const liveAreaSys  = stats.areaSys  + (stats.gen-stats.served)*(clock-stats.lastT);
+  const liveBusy     = stats.busy + ((lift.moving||lift.door!=='closed')?(clock-stats.lastT):0);
+  const dash='\u2014';
+  $('sAvgWait').innerHTML = stats.waitN ? (stats.sumWait/stats.waitN).toFixed(1)+'<small>s</small>' : dash;
+  $('sAvgSys').innerHTML  = stats.sysN  ? (stats.sumSys/stats.sysN).toFixed(1)+'<small>s</small>' : dash;
+  $('sThru').innerHTML    = el>0 ? (stats.served/(el/60)).toFixed(1)+'<small>/min</small>' : dash;
+  $('sNow').textContent   = stats.gen-stats.served;
+  $('sMaxWait').innerHTML = stats.waitN ? stats.maxWait.toFixed(1)+'<small>s</small>' : dash;
+  $('sUtil').innerHTML    = el>0 ? Math.round(100*liveBusy/el)+'<small>%</small>' : '0<small>%</small>';
+  $('sGen').textContent   = stats.gen;
+  $('sServed').textContent= stats.served;
+  $('sL').textContent     = el>0 ? (liveAreaSys/el).toFixed(2) : dash;
+  $('sStops').textContent = stats.stops;
+  $('sFloors').textContent= stats.floors;
+  $('sRiding').textContent= lift.pax.length;
+
+  // --- Future Event List ---
+  const labels={ARRIVAL:'arrival',ARRIVE_FLOOR:'arrive',OPEN_DOORS:'doors open',
+                CLOSE_DOORS:'doors close',DEPART:'depart'};
+  const up=fel.sorted().slice(0,7);
+  $('fel').innerHTML = up.map(ev=>{
+    const extra = ev.type===E.ARRIVE_FLOOR ? ' f'+ev.payload : '';
+    return `<div class="frow"><span class="ft">${fmtClock(ev.time)}</span>`+
+           `<span class="fk">${labels[ev.type]}${extra}</span>`+
+           `<span class="dt">+${(ev.time-clock).toFixed(1)}s</span></div>`;
+  }).join('') || `<div class="frow"><span class="fx">empty</span></div>`;
+
+  // --- event log (newest first) ---
+  const last=log.slice(-14).reverse();
+  $('log').innerHTML = last.map(e=>
+    `<div class="frow"><span class="ft">${fmtClock(e.t)}</span>`+
+    `<span class="fk">${e.kind}</span><span class="fx">${e.text}</span></div>`
+  ).join('') || `<div class="frow"><span class="fx">no events yet</span></div>`;
+}
+
+/* --------------------------- main loop ----------------------------- */
+let lastTs=null;
+function frame(ts){
+  if(lastTs==null) lastTs=ts;
+  let dt=(ts-lastTs)/1000; lastTs=ts;
+  if(dt>0.1) dt=0.1;                 // guard against background-tab jumps
+  if(running){
+    clock += dt*cfg.speed;           // advance simulated time
+    drain();                         // fire every event now due
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+
+/* ----------------------------- wiring ------------------------------ */
+function setPlay(on){
+  running=on;
+  $('playGlyph').innerHTML = on ? '&#10073;&#10073;' : '&#9654;';
+  $('playText').textContent = on ? 'Pause' : 'Play';
+}
+function resetSim(){
+  setPlay(false);
+  seedRng((Date.now() ^ (Math.random()*1e9))>>>0);
+  freshState();
+  schedule(expInterarrival(), E.ARRIVAL);   // first arrival
+  buildHalls();
+  render();
+}
+
+$('play').onclick = ()=> setPlay(!running);
+$('step').onclick = ()=> stepOneEvent();
+$('reset').onclick = ()=> resetSim();
+$('addPax').onclick = ()=>{ accumulate(clock); spawnPassenger(); render(); };
+
+function bindRange(id, key, fmt){
+  const el=$(id), out=$(id+'Val');
+  el.oninput = ()=>{
+    cfg[key] = parseFloat(el.value);
+    if(out) out.innerHTML = fmt(cfg[key]);
+    if(key==='rate') $('rateMean').textContent = `mean interarrival ${(60/cfg.rate).toFixed(1)} s`;
+  };
+}
+bindRange('rate','rate', v=>`${v}<small>/min</small>`);
+bindRange('cap','capacity', v=>`${v}`);
+bindRange('travel','travel', v=>`${v.toFixed(1)}<small>s</small>`);
+bindRange('dwell','dwell', v=>`${v.toFixed(1)}<small>s</small>`);
+bindRange('speed','speed', v=>`${v.toFixed(2)}&times;`);
+
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.code==='Space'){ e.preventDefault(); setPlay(!running); }
+  else if(e.key==='s'||e.key==='S'){ stepOneEvent(); }
+  else if(e.key==='r'||e.key==='R'){ resetSim(); }
+});
+
+resetSim();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
