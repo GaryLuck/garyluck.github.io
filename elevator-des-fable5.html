@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elevator — Discrete Event Simulator</title>
+<!--
+  ELEVATOR / DES — a discrete event simulation of a single elevator
+  serving a four-story building.
+
+  Architecture
+  ────────────
+  • Simulation clock (seconds, decoupled from wall time; speed-scalable).
+  • Min-heap event queue ordered by (time, sequence). Sequence breaks ties
+    so event ordering is deterministic.
+  • Event types:
+      ARRIVAL      a passenger appears at a floor (Poisson process —
+                   exponential interarrival times), presses a hall call,
+                   and schedules the next ARRIVAL.
+      CAR_ARRIVE   the car reaches a floor; controller decides stop/pass.
+      DOORS_OPEN   doors finish opening; passengers alight then board;
+                   a DOORS_CLOSE is scheduled after a dwell period.
+      DOORS_CLOSE  doors begin closing.
+      DOORS_CLOSED doors are shut; controller picks the next move.
+  • Controller: collective control (SCAN). The car keeps its direction
+    while requests remain ahead, then reverses; idles when no calls exist.
+  • All rendering is a pure function of simulation state, so pausing,
+    stepping, and speed changes never desynchronize the animation.
+
+  Traffic model: floor 1 is the lobby. 40% of passengers originate there;
+  passengers on upper floors travel to the lobby half the time.
+
+  The RNG is seeded (mulberry32), so a given seed always reproduces the
+  exact same event trace.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* machine-room cabinet */
+    --cabinet:   #221e19;   /* warm dark graphite */
+    --panel:     #2b2620;
+    --panel-edge:#3a342b;
+    --ink:       #e9e3d4;
+    --ink-dim:   #9a917e;
+    /* indicator lamps */
+    --lamp:      #ffb000;   /* amber */
+    --lamp-glow: rgba(255,176,0,.35);
+    --lamp-dim:  #574828;
+    --go:        #6fc47e;   /* in-service green */
+    --steel:     #8fb2c4;   /* movement / telemetry blue */
+    /* building cross-section */
+    --concrete:  #d9d4c7;
+    --slab:      #b5ae9e;
+    --shaft:     #16130f;
+    --car-skin:  #cfd2d4;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:var(--cabinet);
+    color:var(--ink);
+    font-family:'Archivo', system-ui, sans-serif;
+    font-size:14px;
+    line-height:1.45;
+  }
+  .mono{ font-family:'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace; }
+
+  /* ── header bar ─────────────────────────────────────────── */
+  header{
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    padding:14px 20px;
+    border-bottom:1px solid var(--panel-edge);
+  }
+  .brand{ font-weight:800; letter-spacing:.14em; font-size:15px; }
+  .brand small{
+    display:block; font-weight:500; letter-spacing:.08em;
+    color:var(--ink-dim); font-size:11px; text-transform:uppercase;
+  }
+  .brand .slash{ color:var(--lamp); }
+  #clock{
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+    font-size:22px; font-weight:600; color:var(--lamp);
+    background:#191510;
+    border:1px solid var(--panel-edge); border-radius:6px;
+    padding:4px 14px;
+    text-shadow:0 0 12px var(--lamp-glow);
+    min-width:128px; text-align:center;
+  }
+  .spacer{ flex:1; }
+  button{
+    font-family:'Archivo', system-ui, sans-serif;
+    font-weight:700; font-size:13px; letter-spacing:.06em;
+    color:var(--ink);
+    background:var(--panel);
+    border:1px solid var(--panel-edge); border-radius:6px;
+    padding:8px 18px; cursor:pointer;
+  }
+  button:hover{ border-color:var(--ink-dim); }
+  button:focus-visible{ outline:2px solid var(--lamp); outline-offset:2px; }
+  button.primary{ background:var(--lamp); border-color:var(--lamp); color:#221a08; }
+  button.primary:hover{ background:#ffc23d; }
+
+  /* ── layout ─────────────────────────────────────────────── */
+  main{
+    display:grid;
+    grid-template-columns:minmax(340px, 460px) minmax(320px, 1fr);
+    gap:20px;
+    padding:20px;
+    max-width:1180px;
+    margin:0 auto;
+  }
+  @media (max-width:760px){
+    main{ grid-template-columns:1fr; }
+  }
+
+  /* ── building cross-section ─────────────────────────────── */
+  .site{
+    background:var(--concrete);
+    border:1px solid #4a4337;
+    border-radius:8px;
+    padding:18px 16px 14px;
+    position:relative;
+  }
+  .site h2{
+    font-size:11px; font-weight:700; letter-spacing:.18em;
+    text-transform:uppercase; color:#6d6555; margin-bottom:12px;
+  }
+  .building{
+    position:relative;
+    display:grid;
+    grid-template-columns:1fr 118px;
+    gap:0 10px;
+  }
+  .floor{
+    height:104px;
+    border-bottom:6px solid var(--slab);
+    position:relative;
+    display:flex; align-items:flex-end; align-content:flex-end;
+    padding:8px 6px 10px 8px;
+    gap:6px; flex-wrap:wrap;
+    overflow:hidden;
+  }
+  .floor:first-child{ border-top:6px solid var(--slab); }
+  .floor .ghost{
+    position:absolute; top:2px; right:8px;
+    font-size:64px; font-weight:800; line-height:1;
+    color:rgba(0,0,0,.07);
+    pointer-events:none; user-select:none;
+  }
+  .floor .lamps{
+    position:absolute; top:10px; left:8px;
+    display:flex; flex-direction:column; gap:4px;
+    font-size:10px; line-height:1;
+  }
+  .lamp-tri{ color:#aaa395; transition:color .15s, text-shadow .15s; }
+  .lamp-tri.lit{ color:var(--lamp); text-shadow:0 0 8px var(--lamp-glow); }
+
+  .pax{
+    width:26px; height:26px; border-radius:50%;
+    background:#f4f1e8;
+    border:2px solid #8b8270;
+    color:#4d4636;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; font-weight:600;
+    display:flex; align-items:center; justify-content:center;
+    flex:0 0 auto;
+  }
+  .pax.more{ background:none; border-style:dashed; font-size:10px; }
+
+  /* shaft + car */
+  .shaft{
+    grid-row:1 / span 4;
+    grid-column:2;
+    background:var(--shaft);
+    border-radius:4px;
+    position:relative;
+    overflow:hidden;
+    border:1px solid #000;
+  }
+  .shaft .guide{ position:absolute; top:0; bottom:0; width:2px; background:#2c2620; }
+  .shaft .guide.l{ left:7px; } .shaft .guide.r{ right:7px; }
+  #car{
+    position:absolute; left:12px; right:12px;
+    height:88px;
+    background:var(--car-skin);
+    border-radius:3px;
+    box-shadow:0 3px 10px rgba(0,0,0,.6);
+  }
+  #carCab{
+    position:absolute; inset:5px;
+    background:#3a342b;
+    border-radius:2px;
+    overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    flex-wrap:wrap; gap:3px; padding:3px;
+  }
+  #carCab.lit{ background:#7a6a45; }
+  #carCab .pax{ width:20px; height:20px; font-size:10px; border-width:1.5px; }
+  .door{
+    position:absolute; top:5px; bottom:5px; width:calc(50% - 5px);
+    background:linear-gradient(90deg,#b9bcbe,#d7dadc);
+    z-index:2;
+  }
+  .door.l{ left:5px; border-right:1px solid #888; }
+  .door.r{ right:5px; border-left:1px solid #888; }
+
+  /* segment-style position indicator above shaft */
+  .indicator{
+    grid-column:2;
+    margin-top:8px;
+    background:#191510;
+    border:1px solid #4a4337;
+    border-radius:5px;
+    padding:5px 0;
+    text-align:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:15px; font-weight:600;
+    color:var(--lamp);
+    text-shadow:0 0 10px var(--lamp-glow);
+  }
+  .legend{
+    grid-column:1; margin-top:8px;
+    font-size:11px; color:#6d6555;
+    align-self:center;
+  }
+
+  /* ── right panel ────────────────────────────────────────── */
+  .panelcol{ display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--panel-edge);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .card h2{
+    font-size:11px; font-weight:700; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--ink-dim);
+    margin-bottom:10px;
+  }
+
+  /* scheduled events board — the DES annunciator */
+  #board{ display:flex; flex-direction:column; gap:5px; }
+  .brow{
+    display:flex; align-items:baseline; gap:12px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px;
+    padding:5px 8px;
+    border-radius:4px;
+    background:#241f19;
+    color:var(--ink-dim);
+  }
+  .brow .bt{ color:var(--steel); min-width:74px; }
+  .brow .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--lamp-dim); flex:0 0 auto; align-self:center;
+  }
+  .brow.next{ color:var(--ink); background:#2e2820; }
+  .brow.next .dot{ background:var(--lamp); box-shadow:0 0 8px var(--lamp-glow); }
+  .brow .empty{ color:var(--ink-dim); }
+
+  /* stats */
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(118px,1fr));
+    gap:10px 14px;
+  }
+  .stat .v{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:20px; font-weight:600; color:var(--ink);
+  }
+  .stat .v.amber{ color:var(--lamp); }
+  .stat .v.green{ color:var(--go); }
+  .stat .k{ font-size:11px; color:var(--ink-dim); letter-spacing:.04em; }
+
+  /* controls */
+  .ctl{ display:flex; flex-direction:column; gap:12px; }
+  .ctl label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:12px; color:var(--ink-dim); letter-spacing:.04em;
+  }
+  .ctl label output{
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--ink); font-size:13px;
+  }
+  input[type=range]{ width:100%; accent-color:var(--lamp); }
+  input[type=range]:focus-visible{ outline:2px solid var(--lamp); outline-offset:2px; }
+  .seedrow{ display:flex; gap:8px; align-items:center; font-size:12px; color:var(--ink-dim); }
+  .seedrow input{
+    font-family:'IBM Plex Mono', monospace;
+    background:#191510; color:var(--ink);
+    border:1px solid var(--panel-edge); border-radius:5px;
+    padding:5px 8px; width:110px; font-size:13px;
+  }
+  .seedrow input:focus-visible{ outline:2px solid var(--lamp); outline-offset:1px; }
+  .hint{ font-size:11px; color:var(--ink-dim); }
+
+  /* event log */
+  #log{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; line-height:1.55;
+    max-height:240px; overflow-y:auto;
+    display:flex; flex-direction:column;
+  }
+  #log .row{ display:flex; gap:10px; white-space:nowrap; }
+  #log .t{ color:var(--steel); flex:0 0 auto; }
+  #log .m{ overflow:hidden; text-overflow:ellipsis; }
+  #log .arr  .m{ color:var(--lamp); }
+  #log .move .m{ color:var(--steel); }
+  #log .xfer .m{ color:var(--go); }
+  #log .sys  .m{ color:var(--ink-dim); }
+
+  @media (prefers-reduced-motion: reduce){
+    .lamp-tri{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">ELEVATOR<span class="slash"> /</span> DES
+    <small>Four floors · one car · collective control</small>
+  </div>
+  <div id="clock">0:00.0</div>
+  <div class="spacer"></div>
+  <button id="btnRun" class="primary">Run</button>
+  <button id="btnStep">Step</button>
+  <button id="btnReset">Reset</button>
+</header>
+
+<main>
+  <!-- building cross-section -->
+  <section class="site">
+    <h2>Building section</h2>
+    <div class="building" id="building">
+      <!-- floors injected top (4) to bottom (1) -->
+      <div class="shaft" id="shaft">
+        <div class="guide l"></div><div class="guide r"></div>
+        <div id="car">
+          <div id="carCab"></div>
+          <div class="door l" id="doorL"></div>
+          <div class="door r" id="doorR"></div>
+        </div>
+      </div>
+      <div class="legend">Chips show each passenger’s destination floor. Lamps are hall calls.</div>
+      <div class="indicator" id="posInd">F1&nbsp;&nbsp;·</div>
+    </div>
+  </section>
+
+  <!-- control panel -->
+  <div class="panelcol">
+
+    <section class="card">
+      <h2>Scheduled events — next in queue</h2>
+      <div id="board"></div>
+    </section>
+
+    <section class="card">
+      <h2>Statistics</h2>
+      <div class="stats">
+        <div class="stat"><div class="v green" id="sServed">0</div><div class="k">Served</div></div>
+        <div class="stat"><div class="v" id="sWait">—</div><div class="k">Avg wait</div></div>
+        <div class="stat"><div class="v" id="sRide">—</div><div class="k">Avg ride</div></div>
+        <div class="stat"><div class="v amber" id="sWaiting">0</div><div class="k">Waiting now</div></div>
+        <div class="stat"><div class="v" id="sInCar">0 / 6</div><div class="k">In car</div></div>
+        <div class="stat"><div class="v" id="sUtil">0%</div><div class="k">Car utilization</div></div>
+        <div class="stat"><div class="v" id="sEvents">0</div><div class="k">Events processed</div></div>
+      </div>
+    </section>
+
+    <section class="card ctl">
+      <h2>Controls</h2>
+      <div>
+        <label>Simulation speed <output id="oSpeed">2×</output></label>
+        <input type="range" id="rSpeed" min="0" max="7" step="1" value="3"
+               aria-label="Simulation speed">
+      </div>
+      <div>
+        <label>Mean arrival interval <output id="oRate">10 s</output></label>
+        <input type="range" id="rRate" min="3" max="20" step="1" value="10"
+               aria-label="Mean passenger arrival interval in seconds">
+      </div>
+      <div class="seedrow">
+        <span>Seed</span>
+        <input type="number" id="iSeed" value="1234" aria-label="Random seed">
+        <span class="hint">Reset replays the exact trace for a given seed.</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Event log</h2>
+      <div id="log" aria-live="off"></div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+'use strict';
+
+/* ════════════════════════════ utilities ═══════════════════════════ */
+
+/** Seeded PRNG — mulberry32. Same seed ⇒ same event trace. */
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Exponential variate with the given mean (Poisson interarrival). */
+const expSample = (rng, mean) => -Math.log(1 - rng()) * mean;
+
+const fmtT = t => {
+  const m = Math.floor(t / 60);
+  const s = (t - m * 60).toFixed(1).padStart(4, '0');
+  return `${m}:${s}`;
+};
+const dirName  = d => d > 0 ? 'up' : 'down';
+const dirArrow = d => d > 0 ? '▲' : d < 0 ? '▼' : '·';
+
+/* ═══════════════════════ event queue (min-heap) ════════════════════ */
+
+class EventQueue {
+  constructor(){ this.h = []; this.seq = 0; }
+  push(time, type, data = {}){
+    this.h.push({ time, seq: this.seq++, type, data });
+    let i = this.h.length - 1;
+    while (i > 0){
+      const p = (i - 1) >> 1;
+      if (this.less(i, p)) { this.swap(i, p); i = p; } else break;
+    }
+  }
+  pop(){
+    const top = this.h[0], last = this.h.pop();
+    if (this.h.length){ this.h[0] = last; this.sink(0); }
+    return top;
+  }
+  sink(i){
+    const n = this.h.length;
+    for(;;){
+      const l = 2*i+1, r = l+1; let s = i;
+      if (l < n && this.less(l, s)) s = l;
+      if (r < n && this.less(r, s)) s = r;
+      if (s === i) break;
+      this.swap(i, s); i = s;
+    }
+  }
+  less(a, b){
+    const A = this.h[a], B = this.h[b];
+    return A.time === B.time ? A.seq < B.seq : A.time < B.time;
+  }
+  swap(a, b){ [this.h[a], this.h[b]] = [this.h[b], this.h[a]]; }
+  peek(){ return this.h[0] ?? null; }
+  get size(){ return this.h.length; }
+  snapshot(n){
+    return [...this.h]
+      .sort((A, B) => A.time === B.time ? A.seq - B.seq : A.time - B.time)
+      .slice(0, n);
+  }
+}
+
+/* ═══════════════════════════ parameters ════════════════════════════ */
+
+const P = {
+  floors: 4,
+  travelTime: 2.5,        // s per floor, constant speed
+  doorTime: 1.0,          // s to open or to close
+  dwellBase: 1.2,         // s doors stay open, plus…
+  dwellPerPax: 0.4,       // …per passenger moved through them
+  capacity: 6,
+  meanInterarrival: 10,   // s (slider-adjustable; sampled per arrival)
+  lobbyShare: 0.4,        // P(origin = floor 1)
+  toLobbyShare: 0.5,      // P(dest = 1 | origin > 1)
+};
+
+/* ═══════════════════════════ sim state ═════════════════════════════ */
+
+let S;            // whole simulation state — rebuilt by reset()
+let rng;
+let running = false;
+let lastFrame = null;
+let speed = 2;
+
+function freshState(seed){
+  rng = mulberry32(seed);
+  const waiting = {}, hall = {};
+  for (let f = 1; f <= P.floors; f++){
+    waiting[f] = [];
+    hall[f] = { up:false, down:false };
+  }
+  return {
+    now: 0,
+    q: new EventQueue(),
+    waiting, hall,
+    carCalls: new Set(),
+    elev: {
+      floor: 1, pos: 1, dir: 0,
+      moving: false, moveFrom: 1, moveTo: 1, moveStart: 0, moveEnd: 0,
+      doors: 'closed', doorsAt: 0,   // closed|opening|open|closing
+      pax: [],
+      busySince: null, busyTotal: 0,
+    },
+    nextPid: 1,
+    stats: { served: 0, waitSum: 0, rideSum: 0, events: 0 },
+    log: [],
+  };
+}
+
+/* ═══════════════════════ traffic generation ════════════════════════ */
+
+function samplePassenger(t){
+  let origin;
+  if (rng() < P.lobbyShare) origin = 1;
+  else origin = 2 + Math.floor(rng() * (P.floors - 1));     // 2..4
+  let dest;
+  if (origin === 1){
+    dest = 2 + Math.floor(rng() * (P.floors - 1));
+  } else if (rng() < P.toLobbyShare){
+    dest = 1;
+  } else {
+    const others = [];
+    for (let f = 2; f <= P.floors; f++) if (f !== origin) others.push(f);
+    dest = others[Math.floor(rng() * others.length)];
+  }
+  return { id: S.nextPid++, origin, dest, tArrive: t, tBoard: null };
+}
+
+function scheduleNextArrival(from){
+  S.q.push(from + expSample(rng, P.meanInterarrival), 'ARRIVAL');
+}
+
+/* ═════════════════════ controller helpers (SCAN) ═══════════════════ */
+
+const E = () => S.elev;
+
+function hallAnywhere(){
+  for (let f = 1; f <= P.floors; f++)
+    if (S.hall[f].up || S.hall[f].down) return true;
+  return false;
+}
+function hasBeyond(f, d){
+  if (d === 0) return false;
+  for (let g = f + d; g >= 1 && g <= P.floors; g += d)
+    if (S.carCalls.has(g) || S.hall[g].up || S.hall[g].down) return true;
+  return false;
+}
+function nearestCallDir(f){
+  let best = 0, dist = Infinity;
+  for (let g = 1; g <= P.floors; g++){
+    if (g === f) continue;
+    if (S.carCalls.has(g) || S.hall[g].up || S.hall[g].down){
+      const d = Math.abs(g - f);
+      if (d < dist){ dist = d; best = Math.sign(g - f); }
+    }
+  }
+  return best;
+}
+
+function setBusy(on){
+  const e = E();
+  if (on && e.busySince === null) e.busySince = S.now;
+  if (!on && e.busySince !== null){
+    e.busyTotal += S.now - e.busySince;
+    e.busySince = null;
+  }
+}
+
+function startMove(){
+  const e = E();
+  e.moving = true;
+  e.moveFrom = e.floor;
+  e.moveTo = e.floor + e.dir;
+  e.moveStart = S.now;
+  e.moveEnd = S.now + P.travelTime;
+  setBusy(true);
+  S.q.push(e.moveEnd, 'CAR_ARRIVE', { floor: e.moveTo });
+}
+
+function openDoors(){
+  const e = E();
+  e.doors = 'opening'; e.doorsAt = S.now;
+  setBusy(true);
+  S.q.push(S.now + P.doorTime, 'DOORS_OPEN');
+  logLine(`doors opening at F${e.floor}`, 'move');
+}
+
+/** Pick the next action when the car is stationary with doors closed. */
+function decideNext(){
+  const e = E(), f = e.floor;
+  if (!S.carCalls.size && !hallAnywhere()){
+    e.dir = 0;
+    setBusy(false);
+    logLine('car idle — no calls', 'sys');
+    return;
+  }
+  const space = e.pax.length < P.capacity;
+  const order = e.dir !== 0
+    ? [e.dir, -e.dir]
+    : (() => { const d = nearestCallDir(f); return d ? [d, -d] : [1, -1]; })();
+
+  for (const d of order){
+    if (space && S.hall[f][dirName(d)]){   // serve a call at this floor
+      e.dir = d;
+      openDoors();
+      return;
+    }
+    if (hasBeyond(f, d)){
+      e.dir = d;
+      logLine(`car departs F${f} ${dirName(d)}`, 'move');
+      startMove();
+      return;
+    }
+  }
+  // Calls exist only at this floor but the car is full and no one here
+  // can alight — cannot happen: a full car implies car calls elsewhere.
+  e.dir = 0;
+  setBusy(false);
+}
+
+/* ═══════════════════════ event handlers ════════════════════════════ */
+
+function handleArrival(){
+  const p = samplePassenger(S.now);
+  S.waiting[p.origin].push(p);
+  const d = Math.sign(p.dest - p.origin);
+  S.hall[p.origin][dirName(d)] = true;
+  logLine(`P${p.id} arrives F${p.origin} → F${p.dest}`, 'arr');
+  scheduleNextArrival(S.now);
+
+  const e = E();
+  if (e.dir === 0 && !e.moving && e.doors === 'closed') decideNext();
+}
+
+function handleCarArrive(ev){
+  const e = E(), f = ev.data.floor;
+  e.floor = f; e.pos = f; e.moving = false;
+
+  const space = e.pax.length < P.capacity;
+  const carHere = S.carCalls.has(f);
+  const hallOurs = space && S.hall[f][dirName(e.dir)];
+  const beyond = hasBeyond(f, e.dir);
+
+  if (carHere || hallOurs){
+    if (!beyond && !hallOurs && space && S.hall[f][dirName(-e.dir)]) e.dir = -e.dir;
+    openDoors();
+  } else if (!beyond){
+    if (space && S.hall[f][dirName(-e.dir)]){     // end of sweep: reverse and serve
+      e.dir = -e.dir;
+      openDoors();
+    } else {
+      decideNext();
+    }
+  } else {
+    logLine(`car passes F${f}`, 'move');
+    startMove();
+  }
+}
+
+function handleDoorsOpen(){
+  const e = E(), f = e.floor;
+  e.doors = 'open'; e.doorsAt = S.now;
+
+  // alight
+  const out = e.pax.filter(p => p.dest === f);
+  e.pax = e.pax.filter(p => p.dest !== f);
+  for (const p of out){
+    S.stats.served++;
+    S.stats.rideSum += S.now - p.tBoard;
+  }
+  S.carCalls.delete(f);
+
+  // board — passengers travelling in the service direction, FIFO
+  if (e.dir === 0 && S.waiting[f].length)
+    e.dir = Math.sign(S.waiting[f][0].dest - f);
+  const stay = [], on = [];
+  for (const p of S.waiting[f]){
+    const pd = Math.sign(p.dest - f);
+    if (pd === e.dir && e.pax.length + on.length < P.capacity) on.push(p);
+    else stay.push(p);
+  }
+  S.waiting[f] = stay;
+  for (const p of on){
+    p.tBoard = S.now;
+    S.stats.waitSum += S.now - p.tArrive;
+    e.pax.push(p);
+    S.carCalls.add(p.dest);
+  }
+
+  // hall lamps reflect who is still waiting (re-press if left behind)
+  S.hall[f].up   = stay.some(p => p.dest > f);
+  S.hall[f].down = stay.some(p => p.dest < f);
+
+  if (out.length || on.length)
+    logLine(`F${f}: ${out.length} alight, ${on.length} board`, 'xfer');
+  else
+    logLine(`F${f}: no transfer`, 'sys');
+
+  const dwell = P.dwellBase + P.dwellPerPax * (out.length + on.length);
+  S.q.push(S.now + dwell, 'DOORS_CLOSE');
+}
+
+function handleDoorsClose(){
+  const e = E();
+  e.doors = 'closing'; e.doorsAt = S.now;
+  S.q.push(S.now + P.doorTime, 'DOORS_CLOSED');
+}
+
+function handleDoorsClosed(){
+  const e = E();
+  e.doors = 'closed'; e.doorsAt = S.now;
+  decideNext();
+}
+
+const HANDLERS = {
+  ARRIVAL:      handleArrival,
+  CAR_ARRIVE:   handleCarArrive,
+  DOORS_OPEN:   handleDoorsOpen,
+  DOORS_CLOSE:  handleDoorsClose,
+  DOORS_CLOSED: handleDoorsClosed,
+};
+
+function processEvent(ev){
+  S.now = ev.time;
+  S.stats.events++;
+  HANDLERS[ev.type](ev);
+}
+
+/* ═══════════════════════════ logging ═══════════════════════════════ */
+
+const logEl = document.getElementById('log');
+
+function logLine(msg, cls){
+  S.log.push({ t: S.now, msg, cls });
+  const row = document.createElement('div');
+  row.className = `row ${cls}`;
+  row.innerHTML = `<span class="t">${fmtT(S.now)}</span><span class="m"></span>`;
+  row.querySelector('.m').textContent = msg;
+  logEl.prepend(row);
+  while (logEl.children.length > 150) logEl.lastChild.remove();
+}
+
+/* ═══════════════════════════ rendering ═════════════════════════════ */
+
+const FLOOR_H = 110;            // .floor height 104 + 6px slab border
+const els = {
+  clock: document.getElementById('clock'),
+  car: document.getElementById('car'),
+  carCab: document.getElementById('carCab'),
+  doorL: document.getElementById('doorL'),
+  doorR: document.getElementById('doorR'),
+  posInd: document.getElementById('posInd'),
+  board: document.getElementById('board'),
+  sServed: document.getElementById('sServed'),
+  sWait: document.getElementById('sWait'),
+  sRide: document.getElementById('sRide'),
+  sWaiting: document.getElementById('sWaiting'),
+  sInCar: document.getElementById('sInCar'),
+  sUtil: document.getElementById('sUtil'),
+  sEvents: document.getElementById('sEvents'),
+};
+const floorEls = {};   // f → { landing, up, down }
+
+function buildFloors(){
+  const building = document.getElementById('building');
+  for (let f = P.floors; f >= 1; f--){
+    const div = document.createElement('div');
+    div.className = 'floor';
+    div.style.gridColumn = '1';
+    div.innerHTML = `
+      <div class="ghost">${f}</div>
+      <div class="lamps">
+        ${f < P.floors ? '<span class="lamp-tri up">▲</span>' : ''}
+        ${f > 1        ? '<span class="lamp-tri dn">▼</span>' : ''}
+      </div>`;
+    building.insertBefore(div, document.getElementById('shaft'));
+    floorEls[f] = {
+      landing: div,
+      up: div.querySelector('.up'),
+      down: div.querySelector('.dn'),
+    };
+  }
+  document.getElementById('shaft').style.height = (P.floors * FLOOR_H) + 'px';
+}
+
+function paxChip(p, title){
+  const c = document.createElement('div');
+  c.className = 'pax';
+  c.textContent = p.dest;
+  c.title = title;
+  return c;
+}
+
+function render(){
+  const e = E();
+
+  // elevator visual position is a pure function of sim state
+  if (e.moving){
+    const k = Math.min(1, (S.now - e.moveStart) / (e.moveEnd - e.moveStart));
+    e.pos = e.moveFrom + (e.moveTo - e.moveFrom) * k;
+  } else {
+    e.pos = e.floor;
+  }
+  els.car.style.bottom = ((e.pos - 1) * FLOOR_H + 8) + 'px';
+
+  // doors, also derived from sim clock — pausing freezes them mid-motion
+  let dp = 0;
+  if (e.doors === 'open') dp = 1;
+  else if (e.doors === 'opening')
+    dp = Math.min(1, (S.now - e.doorsAt) / P.doorTime);
+  else if (e.doors === 'closing')
+    dp = 1 - Math.min(1, (S.now - e.doorsAt) / P.doorTime);
+  els.doorL.style.transform = `translateX(${-dp * 100}%)`;
+  els.doorR.style.transform = `translateX(${dp * 100}%)`;
+  els.carCab.classList.toggle('lit', e.doors !== 'closed');
+
+  // position indicator
+  const shown = e.moving ? (e.dir > 0 ? Math.floor(e.pos) : Math.ceil(e.pos)) : e.floor;
+  els.posInd.innerHTML = `F${shown}&nbsp;&nbsp;${dirArrow(e.dir)}`;
+
+  // car occupants
+  els.carCab.replaceChildren(
+    ...e.pax.map(p => paxChip(p, `P${p.id} → F${p.dest}`)));
+
+  // landings: waiting passengers + hall lamps
+  let waitingTotal = 0;
+  for (let f = 1; f <= P.floors; f++){
+    const fe = floorEls[f];
+    const w = S.waiting[f];
+    waitingTotal += w.length;
+    const chips = w.slice(0, 7).map(p =>
+      paxChip(p, `P${p.id} waiting → F${p.dest}`));
+    if (w.length > 7){
+      const more = document.createElement('div');
+      more.className = 'pax more';
+      more.textContent = `+${w.length - 7}`;
+      chips.push(more);
+    }
+    fe.landing.querySelectorAll('.pax').forEach(n => n.remove());
+    fe.landing.append(...chips);
+    if (fe.up)   fe.up.classList.toggle('lit', S.hall[f].up);
+    if (fe.down) fe.down.classList.toggle('lit', S.hall[f].down);
+  }
+
+  // clock + stats
+  els.clock.textContent = fmtT(S.now);
+  els.sServed.textContent = S.stats.served;
+  els.sWait.textContent = S.stats.served
+    ? (S.stats.waitSum / S.stats.served).toFixed(1) + ' s' : '—';
+  els.sRide.textContent = S.stats.served
+    ? (S.stats.rideSum / S.stats.served).toFixed(1) + ' s' : '—';
+  els.sWaiting.textContent = waitingTotal;
+  els.sInCar.textContent = `${e.pax.length} / ${P.capacity}`;
+  const busy = e.busyTotal + (e.busySince !== null ? S.now - e.busySince : 0);
+  els.sUtil.textContent = S.now > 0 ? Math.round(100 * busy / S.now) + '%' : '0%';
+  els.sEvents.textContent = S.stats.events;
+
+  // scheduled-events board
+  const LABEL = {
+    CAR_ARRIVE:   ev => `car arrives F${ev.data.floor}`,
+    DOORS_OPEN:   ()  => `doors open F${e.floor}`,
+    DOORS_CLOSE:  ()  => `doors begin closing F${e.floor}`,
+    DOORS_CLOSED: ()  => `doors closed F${e.floor}`,
+  };
+  const rows = S.q.snapshot(6).map((ev, i) => {
+    const label = ev.type === 'ARRIVAL'
+      ? 'next passenger arrival'        // floor is sampled on arrival, not before
+      : LABEL[ev.type](ev);
+    return `<div class="brow${i === 0 ? ' next' : ''}">
+      <span class="dot"></span>
+      <span class="bt">${fmtT(ev.time)}</span>
+      <span>${label}</span></div>`;
+  });
+  els.board.innerHTML = rows.length
+    ? rows.join('')
+    : '<div class="brow"><span class="empty">queue empty</span></div>';
+}
+
+/* ════════════════════════ run loop & wiring ════════════════════════ */
+
+function frame(ts){
+  if (running){
+    if (lastFrame !== null){
+      const dt = Math.min(0.1, (ts - lastFrame) / 1000);
+      const target = S.now + dt * speed;
+      let guard = 0;
+      while (S.q.peek() && S.q.peek().time <= target && guard++ < 500)
+        processEvent(S.q.pop());
+      S.now = target;
+    }
+    lastFrame = ts;
+  } else {
+    lastFrame = null;
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+
+function step(){
+  if (running) toggleRun();
+  const ev = S.q.pop();
+  if (ev) processEvent(ev);
+  render();
+}
+
+function toggleRun(){
+  running = !running;
+  const b = document.getElementById('btnRun');
+  b.textContent = running ? 'Pause' : 'Run';
+  b.classList.toggle('primary', !running);
+}
+
+function reset(){
+  if (running) toggleRun();
+  const seed = parseInt(document.getElementById('iSeed').value, 10) || 1;
+  logEl.replaceChildren();
+  S = freshState(seed);
+  scheduleNextArrival(0);
+  logLine(`reset · seed ${seed} · car at F1, idle`, 'sys');
+  render();
+}
+
+document.getElementById('btnRun').addEventListener('click', toggleRun);
+document.getElementById('btnStep').addEventListener('click', step);
+document.getElementById('btnReset').addEventListener('click', reset);
+
+document.getElementById('rSpeed').addEventListener('input', ev => {
+  speed = Math.pow(2, ev.target.value - 2);          // 0.25× … 32×
+  document.getElementById('oSpeed').textContent =
+    (speed < 1 ? speed.toFixed(2).replace(/0$/, '') : speed) + '×';
+});
+document.getElementById('rRate').addEventListener('input', ev => {
+  P.meanInterarrival = +ev.target.value;             // affects future samples
+  document.getElementById('oRate').textContent = ev.target.value + ' s';
+});
+
+/* boot */
+buildFloors();
+speed = 2;
+reset();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
