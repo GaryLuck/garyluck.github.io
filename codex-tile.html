@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Classic 15-Tile Puzzle</title>
+  <style>
+    :root {
+      --bg: #111827;
+      --panel: #1f2937;
+      --tile: #f8fafc;
+      --tile-text: #111827;
+      --accent: #38bdf8;
+      --empty: #0f172a;
+      --good: #22c55e;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #334155 0%, var(--bg) 55%);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: white;
+      padding: 18px;
+      touch-action: manipulation;
+    }
+
+    .app {
+      width: min(94vw, 430px);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(1.7rem, 6vw, 2.5rem);
+      letter-spacing: 0.02em;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat {
+      background: rgba(31, 41, 55, 0.88);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 10px;
+      font-size: 0.95rem;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.35rem;
+      margin-top: 2px;
+    }
+
+    #board {
+      width: min(94vw, 430px);
+      height: min(94vw, 430px);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.92);
+      border: 8px solid rgba(255,255,255,0.12);
+      border-radius: 22px;
+      padding: 8px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.35);
+      user-select: none;
+    }
+
+    .tile, .empty {
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: clamp(1.6rem, 9vw, 3rem);
+    }
+
+    .tile {
+      border: 0;
+      background: linear-gradient(145deg, #ffffff, #cbd5e1);
+      color: var(--tile-text);
+      box-shadow: 0 7px 0 #94a3b8, 0 10px 18px rgba(0,0,0,0.25);
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.2s ease;
+    }
+
+    .tile:active {
+      transform: translateY(4px);
+      box-shadow: 0 3px 0 #94a3b8, 0 5px 10px rgba(0,0,0,0.25);
+    }
+
+    .movable {
+      outline: 3px solid rgba(56, 189, 248, 0.45);
+    }
+
+    .empty {
+      background: var(--empty);
+      box-shadow: inset 0 0 22px rgba(0,0,0,0.45);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button.control {
+      appearance: none;
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 12px;
+      background: var(--accent);
+      color: #082f49;
+      font-size: 1rem;
+      font-weight: 800;
+      box-shadow: 0 6px 0 #0284c7;
+      cursor: pointer;
+    }
+
+    button.control:active {
+      transform: translateY(3px);
+      box-shadow: 0 3px 0 #0284c7;
+    }
+
+    #message {
+      min-height: 28px;
+      margin-top: 14px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--good);
+    }
+
+    .hint {
+      margin-top: 8px;
+      color: #cbd5e1;
+      font-size: 0.92rem;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>15-Tile Puzzle</h1>
+
+    <section class="stats" aria-label="Game stats">
+      <div class="stat">Moves<strong id="moves">0</strong></div>
+      <div class="stat">Time<strong id="timer">0:00</strong></div>
+    </section>
+
+    <section id="board" aria-label="15 tile puzzle board"></section>
+
+    <section class="controls">
+      <button class="control" id="shuffleBtn">Shuffle</button>
+      <button class="control" id="solveBtn">Reset</button>
+    </section>
+
+    <div id="message"></div>
+    <div class="hint">Tap a tile next to the empty space. Arrange the numbers from 1 to 15.</div>
+  </main>
+
+  <script>
+    const board = document.getElementById('board');
+    const movesEl = document.getElementById('moves');
+    const timerEl = document.getElementById('timer');
+    const messageEl = document.getElementById('message');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const solveBtn = document.getElementById('solveBtn');
+
+    const SIZE = 4;
+    const SOLVED = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
+
+    let tiles = [...SOLVED];
+    let moves = 0;
+    let seconds = 0;
+    let timer = null;
+    let gameStarted = false;
+
+    function render() {
+      board.innerHTML = '';
+      const emptyIndex = tiles.indexOf(0);
+
+      tiles.forEach((value, index) => {
+        const cell = document.createElement(value === 0 ? 'div' : 'button');
+        cell.className = value === 0 ? 'empty' : 'tile';
+        cell.setAttribute('aria-label', value === 0 ? 'Empty space' : `Tile ${value}`);
+
+        if (value !== 0) {
+          cell.textContent = value;
+          cell.disabled = false;
+          if (isAdjacent(index, emptyIndex)) cell.classList.add('movable');
+          cell.addEventListener('click', () => moveTile(index));
+        }
+
+        board.appendChild(cell);
+      });
+    }
+
+    function isAdjacent(a, b) {
+      const ar = Math.floor(a / SIZE), ac = a % SIZE;
+      const br = Math.floor(b / SIZE), bc = b % SIZE;
+      return Math.abs(ar - br) + Math.abs(ac - bc) === 1;
+    }
+
+    function moveTile(index) {
+      const emptyIndex = tiles.indexOf(0);
+      if (!isAdjacent(index, emptyIndex)) return;
+
+      if (!gameStarted) startTimer();
+
+      [tiles[index], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[index]];
+      moves++;
+      movesEl.textContent = moves;
+      messageEl.textContent = '';
+      render();
+
+      if (isSolved()) {
+        stopTimer();
+        messageEl.textContent = `Solved in ${moves} moves!`;
+        gameStarted = false;
+      }
+    }
+
+    function isSolved() {
+      return tiles.every((value, index) => value === SOLVED[index]);
+    }
+
+    function startTimer() {
+      gameStarted = true;
+      if (timer) return;
+      timer = setInterval(() => {
+        seconds++;
+        const mins = Math.floor(seconds / 60);
+        const secs = String(seconds % 60).padStart(2, '0');
+        timerEl.textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timer);
+      timer = null;
+    }
+
+    function resetStats() {
+      stopTimer();
+      gameStarted = false;
+      moves = 0;
+      seconds = 0;
+      movesEl.textContent = '0';
+      timerEl.textContent = '0:00';
+      messageEl.textContent = '';
+    }
+
+    function shuffle() {
+      resetStats();
+
+      // Make a guaranteed-solvable puzzle by performing many legal random moves
+      // from the solved board, then avoid landing back on the solved state.
+      tiles = [...SOLVED];
+      let previousEmpty = -1;
+
+      for (let i = 0; i < 350; i++) {
+        const emptyIndex = tiles.indexOf(0);
+        const choices = getMovableIndices(emptyIndex).filter(i => i !== previousEmpty);
+        const choice = choices[Math.floor(Math.random() * choices.length)];
+        previousEmpty = emptyIndex;
+        [tiles[choice], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[choice]];
+      }
+
+      if (isSolved()) shuffle();
+      else render();
+    }
+
+    function getMovableIndices(emptyIndex) {
+      const indices = [];
+      for (let i = 0; i < tiles.length; i++) {
+        if (isAdjacent(i, emptyIndex)) indices.push(i);
+      }
+      return indices;
+    }
+
+    function resetBoard() {
+      tiles = [...SOLVED];
+      resetStats();
+      render();
+    }
+
+    // Optional keyboard controls for desktop testing.
+    document.addEventListener('keydown', (event) => {
+      const empty = tiles.indexOf(0);
+      const row = Math.floor(empty / SIZE);
+      const col = empty % SIZE;
+      let target = null;
+
+      if (event.key === 'ArrowUp' && row < SIZE - 1) target = empty + SIZE;
+      if (event.key === 'ArrowDown' && row > 0) target = empty - SIZE;
+      if (event.key === 'ArrowLeft' && col < SIZE - 1) target = empty + 1;
+      if (event.key === 'ArrowRight' && col > 0) target = empty - 1;
+
+      if (target !== null) moveTile(target);
+    });
+
+    shuffleBtn.addEventListener('click', shuffle);
+    solveBtn.addEventListener('click', resetBoard);
+
+    shuffle();
+  </script>
+</body>
+</html>
