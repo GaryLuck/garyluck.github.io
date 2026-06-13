@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>15-Tile Puzzle</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #111827, #1f2937);
+      color: #e5e7eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: min(92vw, 430px);
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 24px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
+      padding: 18px;
+    }
+
+    h1 {
+      margin: 4px 0 8px;
+      text-align: center;
+      font-size: 1.6rem;
+      letter-spacing: 0.04em;
+    }
+
+    p {
+      margin: 0 0 14px;
+      text-align: center;
+      color: #cbd5e1;
+      font-size: 0.96rem;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      background: #111827;
+      border-radius: 18px;
+      padding: 8px;
+      aspect-ratio: 1;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .tile {
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: linear-gradient(145deg, #38bdf8, #2563eb);
+      color: #eff6ff;
+      font-size: clamp(1.1rem, 5vw, 1.6rem);
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.08s ease, opacity 0.15s ease;
+      box-shadow: inset 0 -2px 0 rgba(255,255,255,0.18), 0 4px 12px rgba(37, 99, 235, 0.25);
+    }
+
+    .tile:hover { transform: translateY(-1px); }
+
+    .tile.empty {
+      background: rgba(148, 163, 184, 0.08);
+      cursor: default;
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      flex: 1;
+      border: none;
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #111827;
+      background: #f8fafc;
+      transition: transform 0.08s ease, opacity 0.15s ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+
+    button.secondary {
+      background: #1f2937;
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .status {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 0.95rem;
+      color: #bfdbfe;
+      min-height: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>15-Tile Puzzle</h1>
+    <p>Click tiles next to the empty space to slide them into place.</p>
+    <section id="board" class="board" aria-label="15 tile puzzle board"></section>
+    <div class="controls">
+      <button id="shuffleBtn" type="button">Shuffle</button>
+      <button id="resetBtn" class="secondary" type="button">Reset</button>
+    </div>
+    <div id="status" class="status">Ready to play.</div>
+  </main>
+
+  <script>
+    const board = document.getElementById('board');
+    const status = document.getElementById('status');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const size = 4;
+    const solved = Array.from({ length: size * size }, (_, i) => (i === size * size - 1 ? 0 : i + 1));
+
+    let tiles = [...solved];
+
+    function render() {
+      board.innerHTML = '';
+      tiles.forEach((value, index) => {
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = value === 0 ? 'tile empty' : 'tile';
+        tile.textContent = value === 0 ? '' : value;
+        tile.setAttribute('aria-label', value === 0 ? 'Empty space' : `Tile ${value}`);
+        tile.disabled = value === 0;
+
+        tile.addEventListener('click', () => moveTile(index));
+        board.appendChild(tile);
+      });
+    }
+
+    function getBlankIndex() {
+      return tiles.indexOf(0);
+    }
+
+    function isAdjacent(indexA, indexB) {
+      const rowA = Math.floor(indexA / size);
+      const colA = indexA % size;
+      const rowB = Math.floor(indexB / size);
+      const colB = indexB % size;
+      return Math.abs(rowA - rowB) + Math.abs(colA - colB) === 1;
+    }
+
+    function moveTile(index) {
+      const blank = getBlankIndex();
+      if (!isAdjacent(index, blank)) return;
+
+      [tiles[index], tiles[blank]] = [tiles[blank], tiles[index]];
+      render();
+      checkSolved();
+    }
+
+    function getNeighbors(index) {
+      const row = Math.floor(index / size);
+      const col = index % size;
+      const neighbors = [];
+
+      if (row > 0) neighbors.push(index - size);
+      if (row < size - 1) neighbors.push(index + size);
+      if (col > 0) neighbors.push(index - 1);
+      if (col < size - 1) neighbors.push(index + 1);
+
+      return neighbors;
+    }
+
+    function shuffle() {
+      tiles = [...solved];
+
+      let blank = getBlankIndex();
+      let moves = 0;
+      let lastMove = null;
+
+      while (moves < 200) {
+        const neighbors = getNeighbors(blank).filter((tile) => tile !== lastMove);
+
+        if (neighbors.length === 0) break;
+
+        const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+        [tiles[blank], tiles[next]] = [tiles[next], tiles[blank]];
+
+        lastMove = blank;
+        blank = next;
+        moves += 1;
+      }
+
+      if (isSolved()) {
+        const fallback = getNeighbors(getBlankIndex());
+        const next = fallback[Math.floor(Math.random() * fallback.length)];
+        [tiles[getBlankIndex()], tiles[next]] = [tiles[next], tiles[getBlankIndex()]];
+      }
+
+      render();
+      status.textContent = 'Shuffled — solve the puzzle!';
+    }
+
+    function isSolved() {
+      return tiles.every((value, index) => value === solved[index]);
+    }
+
+    function checkSolved() {
+      if (isSolved()) {
+        status.textContent = 'You solved it!';
+      } else {
+        status.textContent = 'Keep going...';
+      }
+    }
+
+    function reset() {
+      tiles = [...solved];
+      render();
+      status.textContent = 'Puzzle reset.';
+    }
+
+    shuffleBtn.addEventListener('click', shuffle);
+    resetBtn.addEventListener('click', reset);
+
+    render();
+    checkSolved();
+  </script>
+</body>
+</html>
