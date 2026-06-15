@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>15-Tile Puzzle Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .info {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+
+        .stat {
+            color: #555;
+        }
+
+        .stat-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            width: 320px;
+            height: 320px;
+            background: #ddd;
+            padding: 8px;
+            border-radius: 10px;
+            margin: 30px auto;
+        }
+
+        .tile {
+            background: #667eea;
+            border: none;
+            border-radius: 8px;
+            font-size: 2em;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+
+        .tile:hover:not(.empty) {
+            background: #5568d3;
+            transform: scale(0.95);
+        }
+
+        .tile.empty {
+            background: #ddd;
+            cursor: default;
+        }
+
+        .tile.winning {
+            background: #4caf50;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-shuffle {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-shuffle:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-reset {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn-reset:hover {
+            background: #ff5252;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .message {
+            margin-top: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+            min-height: 30px;
+            color: #4caf50;
+        }
+
+        .moves-counter {
+            background: #f0f0f0;
+            padding: 8px 16px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧩 15-Tile Puzzle</h1>
+        <p class="info">Arrange the tiles in order from 1 to 15!</p>
+        
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-label">Moves:</span>
+                <span id="moves">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Time:</span>
+                <span id="time">0:00</span>
+            </div>
+        </div>
+
+        <div class="puzzle-board" id="puzzleBoard"></div>
+
+        <div class="message" id="message"></div>
+
+        <div class="buttons">
+            <button class="btn-shuffle" onclick="shuffleTiles()">Shuffle</button>
+            <button class="btn-reset" onclick="resetGame()">Reset</button>
+        </div>
+    </div>
+
+    <script>
+        const BOARD_SIZE = 4;
+        const TILE_COUNT = 15;
+        let tiles = [];
+        let moves = 0;
+        let seconds = 0;
+        let isGameWon = false;
+        let isShuffled = false;
+        let timerInterval = null;
+
+        function initGame() {
+            tiles = Array.from({ length: TILE_COUNT }, (_, i) => i + 1);
+            tiles.push(0); // 0 represents the empty space
+            moves = 0;
+            seconds = 0;
+            isGameWon = false;
+            isShuffled = false;
+            clearInterval(timerInterval);
+            document.getElementById('moves').textContent = '0';
+            document.getElementById('time').textContent = '0:00';
+            document.getElementById('message').textContent = '';
+            renderBoard();
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('puzzleBoard');
+            board.innerHTML = '';
+
+            tiles.forEach((tile, index) => {
+                const tileEl = document.createElement('button');
+                tileEl.className = 'tile';
+                
+                if (tile === 0) {
+                    tileEl.classList.add('empty');
+                } else {
+                    tileEl.textContent = tile;
+                    tileEl.onclick = () => moveTile(index);
+                    if (isGameWon) {
+                        tileEl.classList.add('winning');
+                    }
+                }
+                
+                board.appendChild(tileEl);
+            });
+        }
+
+        function getEmptyIndex() {
+            return tiles.indexOf(0);
+        }
+
+        function canMoveTile(index) {
+            const emptyIndex = getEmptyIndex();
+            const emptyRow = Math.floor(emptyIndex / BOARD_SIZE);
+            const emptyCol = emptyIndex % BOARD_SIZE;
+            const tileRow = Math.floor(index / BOARD_SIZE);
+            const tileCol = index % BOARD_SIZE;
+
+            return (
+                (emptyRow === tileRow && Math.abs(emptyCol - tileCol) === 1) ||
+                (emptyCol === tileCol && Math.abs(emptyRow - tileRow) === 1)
+            );
+        }
+
+        function moveTile(index) {
+            if (!isShuffled || isGameWon || !canMoveTile(index)) return;
+
+            const emptyIndex = getEmptyIndex();
+            [tiles[index], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[index]];
+            moves++;
+            document.getElementById('moves').textContent = moves;
+            renderBoard();
+            checkWin();
+        }
+
+        function checkWin() {
+            for (let i = 0; i < TILE_COUNT; i++) {
+                if (tiles[i] !== i + 1) return;
+            }
+
+            if (tiles[TILE_COUNT] !== 0) return;
+
+            isGameWon = true;
+            clearInterval(timerInterval);
+            document.getElementById('message').textContent = `🎉 You Won! Solved in ${moves} moves and ${formatTime(seconds)}!`;
+            renderBoard();
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                seconds++;
+                document.getElementById('time').textContent = formatTime(seconds);
+            }, 1000);
+        }
+
+        function shuffleTiles() {
+            if (isShuffled) return;
+
+            // Use a solvable shuffle algorithm
+            for (let i = 0; i < 1000; i++) {
+                const emptyIndex = getEmptyIndex();
+                const adjacentIndices = [];
+
+                // Top
+                if (emptyIndex >= BOARD_SIZE) adjacentIndices.push(emptyIndex - BOARD_SIZE);
+                // Bottom
+                if (emptyIndex < BOARD_SIZE * (BOARD_SIZE - 1)) adjacentIndices.push(emptyIndex + BOARD_SIZE);
+                // Left
+                if (emptyIndex % BOARD_SIZE !== 0) adjacentIndices.push(emptyIndex - 1);
+                // Right
+                if (emptyIndex % BOARD_SIZE !== BOARD_SIZE - 1) adjacentIndices.push(emptyIndex + 1);
+
+                const randomIndex = adjacentIndices[Math.floor(Math.random() * adjacentIndices.length)];
+                [tiles[randomIndex], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[randomIndex]];
+            }
+
+            isShuffled = true;
+            moves = 0;
+            seconds = 0;
+            document.getElementById('moves').textContent = '0';
+            document.getElementById('time').textContent = '0:00';
+            document.getElementById('message').textContent = '';
+            startTimer();
+            renderBoard();
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Initialize on load
+        initGame();
+    </script>
+</body>
+</html>
