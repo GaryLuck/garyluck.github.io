@@ -18,34 +18,37 @@
             align-items: center;
             min-height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 10px;
         }
 
         .container {
             text-align: center;
             background: white;
-            padding: 40px;
+            padding: 20px;
             border-radius: 15px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
         }
 
         h1 {
             color: #333;
             margin-bottom: 10px;
-            font-size: 2.5em;
+            font-size: clamp(1.5em, 5vw, 2.5em);
         }
 
         .info {
             color: #666;
             margin-bottom: 20px;
-            font-size: 1.1em;
+            font-size: clamp(0.9em, 4vw, 1.1em);
         }
 
         .stats {
             display: flex;
             justify-content: center;
-            gap: 40px;
+            gap: clamp(20px, 5vw, 40px);
             margin-bottom: 20px;
-            font-size: 1.1em;
+            font-size: clamp(0.9em, 4vw, 1.1em);
         }
 
         .stat {
@@ -60,20 +63,20 @@
         .puzzle-board {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            width: 320px;
-            height: 320px;
+            gap: clamp(4px, 2vw, 8px);
+            width: clamp(200px, 80vw, 320px);
+            height: clamp(200px, 80vw, 320px);
             background: #ddd;
-            padding: 8px;
+            padding: clamp(4px, 2vw, 8px);
             border-radius: 10px;
-            margin: 30px auto;
+            margin: 20px auto;
         }
 
         .tile {
             background: #667eea;
             border: none;
             border-radius: 8px;
-            font-size: 2em;
+            font-size: clamp(1em, 4vw, 2em);
             font-weight: bold;
             color: white;
             cursor: pointer;
@@ -82,6 +85,7 @@
             align-items: center;
             justify-content: center;
             user-select: none;
+            min-height: 40px;
         }
 
         .tile:hover:not(.empty) {
@@ -100,14 +104,14 @@
 
         .buttons {
             display: flex;
-            gap: 15px;
+            gap: clamp(10px, 3vw, 15px);
             justify-content: center;
             flex-wrap: wrap;
         }
 
         button {
-            padding: 12px 30px;
-            font-size: 1em;
+            padding: clamp(10px, 3vw, 12px) clamp(20px, 5vw, 30px);
+            font-size: clamp(0.85em, 3vw, 1em);
             border: none;
             border-radius: 8px;
             cursor: pointer;
@@ -141,17 +145,29 @@
 
         .message {
             margin-top: 20px;
-            font-size: 1.2em;
+            font-size: clamp(1em, 3vw, 1.2em);
             font-weight: bold;
             min-height: 30px;
             color: #4caf50;
         }
 
-        .moves-counter {
-            background: #f0f0f0;
-            padding: 8px 16px;
-            border-radius: 5px;
-            display: inline-block;
+        @media (max-width: 480px) {
+            .container {
+                padding: 15px;
+                border-radius: 10px;
+            }
+
+            h1 {
+                margin-bottom: 8px;
+            }
+
+            .stats {
+                margin-bottom: 15px;
+            }
+
+            .puzzle-board {
+                margin: 15px auto;
+            }
         }
     </style>
 </head>
