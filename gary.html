@@ -13,6 +13,7 @@
       --text-primary: #ffffff;
       --text-secondary: #fda4af;
       --board-bg: rgba(30, 41, 59, 0.4);
+      --tile-size: 22.5%; /* 4 tiles * 22.5% = 90%. Remaining 10% is split into 5 gaps of 2% each */
     }
 
     body.theme-sunset {
@@ -180,8 +181,8 @@
 
     .tile {
       position: absolute;
-      width: 22.5%;
-      height: 22.5%;
+      width: var(--tile-size);
+      height: var(--tile-size);
       background: var(--tile-gradient);
       color: white;
       font-size: clamp(20px, 6vw, 26px);
@@ -440,7 +441,7 @@
       </button>
       <button id="sound-btn" class="btn">
         <span id="sound-icon">🔊</span>
-        Sound: On
+        <span id="sound-text">Sound: On</span>
       </button>
     </div>
 
@@ -486,6 +487,13 @@
   </div>
 
   <script>
+    // --- Constants ---
+    const SHUFFLE_MOVE_COUNT = 240;
+    const CONFETTI_PARTICLE_COUNT = 140;
+    const SPAWN_OFFSET = 30; // Max distance below bottom edge where confetti particles spawn
+    const TILE_PADDING_PERCENT = 2; // Grid border margin/gap in percentage
+    const TILE_STEP_PERCENT = 24.5; // Offset per step (width 22.5% + gap 2% = 24.5%)
+
     // --- State and Variables ---
     let board = [];
     let moves = 0;
@@ -508,6 +516,7 @@
     const restartBtn = document.getElementById('restart-btn');
     const soundBtn = document.getElementById('sound-btn');
     const soundIcon = document.getElementById('sound-icon');
+    const soundText = document.getElementById('sound-text');
     const victoryModal = document.getElementById('victory-modal');
     const playAgainBtn = document.getElementById('play-again-btn');
     const themeDots = document.querySelectorAll('.theme-dot');
@@ -556,6 +565,9 @@
       if (!soundEnabled) return;
       initAudio();
       try {
+        // Play a triumphant C Major arpeggio (C4 -> E4 -> G4 -> C5)
+        // This harmonic chord progression provides immediate positive reinforcement
+        // and a bright, retro-arcade style sense of accomplishment upon solving the puzzle.
         const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
         notes.forEach((freq, index) => {
           setTimeout(() => {
@@ -590,7 +602,8 @@
     class ConfettiParticle {
       constructor() {
         this.x = Math.random() * canvas.width;
-        this.y = canvas.height + Math.random() * 50; // Spawn off-screen bottom
+        // Spawn right at the bottom edge and slightly below to make the confetti rise immediately
+        this.y = canvas.height + Math.random() * SPAWN_OFFSET;
         this.size = Math.random() * 8 + 6;
         this.color = `hsl(${Math.random() * 360}, 100%, 60%)`;
         this.vx = Math.random() * 6 - 3;
@@ -620,7 +633,7 @@
     function startConfetti() {
       resizeCanvas();
       confettiParticles = [];
-      for (let i = 0; i < 140; i++) {
+      for (let i = 0; i < CONFETTI_PARTICLE_COUNT; i++) {
         confettiParticles.push(new ConfettiParticle());
       }
       if (confettiAnimationId) cancelAnimationFrame(confettiAnimationId);
@@ -641,7 +654,8 @@
       confettiParticles.forEach((p) => {
         p.update();
         p.draw();
-        if (p.y < canvas.height + 50) {
+        // Stop animation once particles fall below visible area to optimize CPU usage
+        if (p.y < canvas.height) {
           active = true;
         }
       });
@@ -736,41 +750,44 @@
     }
 
     function shuffle() {
-      board = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
-      let emptyIdx = 15;
-      let movesCount = 0;
-      let previousIdx = -1;
+      // Loop to guarantee we shuffle until a non-solved state is achieved.
+      // This loop replaces recursion to prevent potential stack overflow/depth issues.
+      do {
+        board = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
+        let emptyIdx = 15;
+        let shuffleSteps = 0;
+        let previousIdx = -1;
 
-      // 240 random walk slides guarantees 100% solvable layout
-      while (movesCount < 240) {
-        const r = Math.floor(emptyIdx / 4);
-        const c = emptyIdx % 4;
+        // Performing SHUFFLE_MOVE_COUNT random adjacent slides.
+        // Doing random walk steps from the solved layout guarantees the final board is mathematically solvable.
+        while (shuffleSteps < SHUFFLE_MOVE_COUNT) {
+          const r = Math.floor(emptyIdx / 4);
+          const c = emptyIdx % 4;
 
-        const candidates = [];
-        if (r > 0) candidates.push(emptyIdx - 4); // Top
-        if (r < 3) candidates.push(emptyIdx + 4); // Bottom
-        if (c > 0) candidates.push(emptyIdx - 1); // Left
-        if (c < 3) candidates.push(emptyIdx + 1); // Right
+          const candidates = [];
+          if (r > 0) candidates.push(emptyIdx - 4); // Top
+          if (r < 3) candidates.push(emptyIdx + 4); // Bottom
+          if (c > 0) candidates.push(emptyIdx - 1); // Left
+          if (c < 3) candidates.push(emptyIdx + 1); // Right
 
-        // Avoid backtracking immediately to diversify shuffle
-        let choices = candidates.filter(idx => idx !== previousIdx);
-        if (choices.length === 0) choices = candidates;
+          // ANTI-BACKTRACKING LOGIC:
+          // Filter out the tile that was just moved in the previous step. This ensures the random walk
+          // continues moving forward rather than bouncing back and forth between the same two layouts,
+          // which significantly increases effective randomization and avoids trivial loops.
+          let choices = candidates.filter(idx => idx !== previousIdx);
+          if (choices.length === 0) choices = candidates;
 
-        const nextIdx = choices[Math.floor(Math.random() * choices.length)];
+          const nextIdx = choices[Math.floor(Math.random() * choices.length)];
 
-        // Swap empty space
-        board[emptyIdx] = board[nextIdx];
-        board[nextIdx] = 0;
+          // Swap empty space
+          board[emptyIdx] = board[nextIdx];
+          board[nextIdx] = 0;
 
-        previousIdx = emptyIdx;
-        emptyIdx = nextIdx;
-        movesCount++;
-      }
-
-      // Ensure we didn't land exactly back on solved state
-      if (checkWin()) {
-        shuffle();
-      }
+          previousIdx = emptyIdx;
+          emptyIdx = nextIdx;
+          shuffleSteps++;
+        }
+      } while (checkWin());
     }
 
     function updateBoardUI() {
@@ -781,9 +798,9 @@
           if (tile) {
             const r = Math.floor(idx / 4);
             const c = idx % 4;
-            // Coordinate math with 2% padding and 22.5% dimensions
-            tile.style.left = `${2 + c * 24.5}%`;
-            tile.style.top = `${2 + r * 24.5}%`;
+            // Positioning coordinates based on layout constants
+            tile.style.left = `${TILE_PADDING_PERCENT + c * TILE_STEP_PERCENT}%`;
+            tile.style.top = `${TILE_PADDING_PERCENT + r * TILE_STEP_PERCENT}%`;
           }
         }
       }
@@ -798,7 +815,13 @@
       const er = Math.floor(emptyIdx / 4);
       const ec = emptyIdx % 4;
 
-      const isAdjacent = (r === er && Math.abs(c - ec) === 1) || (c === ec && Math.abs(r - er) === 1);
+      // Extract clear boolean checks for tile adjacency
+      const isSameRow = (r === er);
+      const isSameCol = (c === ec);
+      const isAdjacentCol = (Math.abs(c - ec) === 1);
+      const isAdjacentRow = (Math.abs(r - er) === 1);
+      const isAdjacent = (isSameRow && isAdjacentCol) || (isSameCol && isAdjacentRow);
+
       return isAdjacent ? { idx, emptyIdx } : null;
     }
 
@@ -896,11 +919,11 @@
     function updateSoundUI() {
       if (soundEnabled) {
         soundIcon.textContent = '🔊';
-        soundBtn.textContent = 'Sound: On';
+        soundText.textContent = 'Sound: On';
         soundBtn.style.opacity = '1';
       } else {
         soundIcon.textContent = '🔇';
-        soundBtn.textContent = 'Sound: Off';
+        soundText.textContent = 'Sound: Off';
         soundBtn.style.opacity = '0.65';
       }
     }
