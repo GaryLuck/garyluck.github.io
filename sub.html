@@ -42,6 +42,12 @@ window.addEventListener("resize", resize);
 let audioCtx  = null;
 let pingBuffer = null; // pre-computed PCM; built once after first unlock
 
+// On-screen diagnostic so audio behaviour can be read on the actual device.
+// Toggle off by setting SHOW_AUDIO_DEBUG = false.
+const SHOW_AUDIO_DEBUG = true;
+let audioDebug = "audio: tap to start";
+let pingCount  = 0;
+
 // Synthesise the ping as raw PCM samples so playback needs only an
 // AudioBufferSourceNode — no OscillatorNode, no automation curves.
 // OscillatorNode + automation has a known silent-fail on iOS Safari when
@@ -81,19 +87,29 @@ function unlockAudio() {
     }
     // Build the reusable ping buffer the first time we have a live context
     if (!pingBuffer) pingBuffer = buildPingBuffer(audioCtx);
-  } catch(e) {}
+    audioDebug = `unlock: state=${audioCtx.state} sr=${audioCtx.sampleRate} buf=${pingBuffer?'y':'n'}`;
+  } catch(e) {
+    audioDebug = `unlock ERROR: ${e.name} ${e.message}`;
+  }
 }
 
 // Play the pre-computed ping. AudioBufferSourceNode works reliably on every
 // platform; we only need the context to be running.
 function playCollectSound() {
-  if (!audioCtx || audioCtx.state !== 'running' || !pingBuffer) return;
+  if (!audioCtx || audioCtx.state !== 'running' || !pingBuffer) {
+    audioDebug = `ping BLOCKED: state=${audioCtx ? audioCtx.state : 'none'} buf=${pingBuffer?'y':'n'}`;
+    return;
+  }
   try {
     const src = audioCtx.createBufferSource();
     src.buffer = pingBuffer;
     src.connect(audioCtx.destination);
     src.start(0);
-  } catch(_) {}
+    pingCount++;
+    audioDebug = `ping PLAYED #${pingCount}: state=${audioCtx.state}`;
+  } catch(e) {
+    audioDebug = `ping ERROR: ${e.name} ${e.message}`;
+  }
 }
 
 // ─── Game State ───────────────────────────────────────────────────────────────
@@ -787,6 +803,20 @@ function drawHUD() {
     ctx.fillText("TAP & HOLD anywhere to swim up! 🐠", canvas.width / 2, canvas.height - 90);
     ctx.restore();
   }
+
+  // Audio diagnostic readout (top-left). Remove by setting SHOW_AUDIO_DEBUG=false.
+  if (SHOW_AUDIO_DEBUG) {
+    ctx.save();
+    ctx.font        = "bold 15px monospace";
+    ctx.textAlign   = "left";
+    ctx.textBaseline = "top";
+    const tw2 = ctx.measureText(audioDebug).width;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(8, canvas.height - 30, tw2 + 16, 24);
+    ctx.fillStyle = "#7CFC00";
+    ctx.fillText(audioDebug, 16, canvas.height - 26);
+    ctx.restore();
+  }
 }
 
 // Large round touch button drawn at bottom-right corner
@@ -864,33 +894,3 @@ function loop(ts) {
   draw();
   requestAnimationFrame(loop);
 }
-
-// ─── Input Handling ───────────────────────────────────────────────────────────
-
-// Keyboard
-window.addEventListener("keydown", e => {
-  if (e.code === "Space" || e.code === "ArrowUp" || e.key === " ") {
-    e.preventDefault();
-    input.active = true;
-    unlockAudio();
-  }
-});
-window.addEventListener("keyup", e => {
-  if (e.code === "Space" || e.code === "ArrowUp" || e.key === " ") {
-    input.active = false;
-  }
-});
-
-// Touch / mouse
-canvas.addEventListener("mousedown",  () => { input.active = true;  unlockAudio(); });
-canvas.addEventListener("mouseup",    () => { input.active = false; });
-canvas.addEventListener("touchstart",  e => { e.preventDefault(); input.active = true;  unlockAudio(); }, { passive: false });
-canvas.addEventListener("touchend",    e => { e.preventDefault(); input.active = false; }, { passive: false });
-canvas.addEventListener("touchcancel", e => { e.preventDefault(); input.active = false; }, { passive: false });
-
-// ─── Boot ─────────────────────────────────────────────────────────────────────
-init();
-requestAnimationFrame(loop);
-</script>
-</body>
-</html>
