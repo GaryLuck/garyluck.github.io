@@ -43,6 +43,9 @@ window.addEventListener("resize", resize);
 let audioCtx = null;
 function getAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // iOS Safari creates AudioContext in 'suspended' state; resume() inside a
+  // user-gesture handler is the only way to unlock audio on that platform.
+  if (audioCtx.state === "suspended") audioCtx.resume();
   return audioCtx;
 }
 
