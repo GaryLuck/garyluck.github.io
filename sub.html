@@ -39,55 +39,61 @@ resize();
 window.addEventListener("resize", resize);
 
 // ─── Web Audio API ────────────────────────────────────────────────────────────
-let audioCtx = null;
+let audioCtx  = null;
+let pingBuffer = null; // pre-computed PCM; built once after first unlock
 
-function getAudio() {
-  if (!audioCtx) {
-    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+// Synthesise the ping as raw PCM samples so playback needs only an
+// AudioBufferSourceNode — no OscillatorNode, no automation curves.
+// OscillatorNode + automation has a known silent-fail on iOS Safari when
+// created outside a user-gesture handler, even when the context is running.
+function buildPingBuffer(ac) {
+  const sr  = ac.sampleRate;
+  const len = Math.ceil(sr * 0.5);
+  const buf = ac.createBuffer(1, len, sr);
+  const d   = buf.getChannelData(0);
+  let phase = 0;
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    // frequency glides 523 → 784 → 1047 Hz
+    const freq = t < 0.12 ? 523 + (784  - 523)  * (t        / 0.12)
+               : t < 0.22 ? 784 + (1047 - 784)  * ((t-0.12) / 0.10)
+               : 1047;
+    phase += (2 * Math.PI * freq) / sr;
+    d[i] = Math.sin(phase) * 0.45 * Math.max(0, 1 - t / 0.45);
   }
-  return audioCtx;
+  return buf;
 }
 
-// Call this inside EVERY user-gesture handler (touchstart / mousedown / keydown).
-// iOS Safari starts AudioContext in 'suspended' and only allows resume() during a
-// gesture. We also fire a silent buffer synchronously — required on older iOS to
-// truly unlock before resume() resolves. Calling on every touch handles
-// re-suspension after phone calls or app switches.
+// Must be called from every user-gesture handler (touchstart/mousedown/keydown).
+// iOS Safari requires resume() be called inside a synchronous gesture handler.
+// Calling on every touch also re-unlocks after interruptions (calls, app switch).
 function unlockAudio() {
-  const ac = getAudio();
-  if (!ac || ac.state === 'running') return;
-  // Silent 1-frame buffer — must start() synchronously inside the gesture handler
   try {
-    const buf = ac.createBuffer(1, 1, ac.sampleRate);
-    const src = ac.createBufferSource();
-    src.buffer = buf;
-    src.connect(ac.destination);
-    src.start(0);
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state !== 'running') {
+      // Silent 1-frame buffer — must fire synchronously inside the gesture
+      const silent = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+      const sNode  = audioCtx.createBufferSource();
+      sNode.buffer = silent;
+      sNode.connect(audioCtx.destination);
+      sNode.start(0);
+      audioCtx.resume().catch(() => {});
+    }
+    // Build the reusable ping buffer the first time we have a live context
+    if (!pingBuffer) pingBuffer = buildPingBuffer(audioCtx);
   } catch(e) {}
-  ac.resume().catch(() => {});
 }
 
-// Plays a short cheerful ping on treasure collection.
-// Guards on ac.state === 'running' — the only reliable signal that iOS Safari
-// has finished resuming and audio will actually be heard.
+// Play the pre-computed ping. AudioBufferSourceNode works reliably on every
+// platform; we only need the context to be running.
 function playCollectSound() {
-  const ac = audioCtx;
-  if (!ac || ac.state !== 'running') return;
+  if (!audioCtx || audioCtx.state !== 'running' || !pingBuffer) return;
   try {
-    const osc  = ac.createOscillator();
-    const gain = ac.createGain();
-    osc.connect(gain);
-    gain.connect(ac.destination);
-    osc.type = 'sine';
-    const now = ac.currentTime;
-    osc.frequency.setValueAtTime(523, now);
-    osc.frequency.exponentialRampToValueAtTime(784, now + 0.12);
-    osc.frequency.exponentialRampToValueAtTime(1047, now + 0.22);
-    gain.gain.setValueAtTime(0.45, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-    osc.start(now);
-    osc.stop(now + 0.45);
-  } catch (_) {}
+    const src = audioCtx.createBufferSource();
+    src.buffer = pingBuffer;
+    src.connect(audioCtx.destination);
+    src.start(0);
+  } catch(_) {}
 }
 
 // ─── Game State ───────────────────────────────────────────────────────────────
