@@ -40,52 +40,54 @@ window.addEventListener("resize", resize);
 
 // ─── Web Audio API ────────────────────────────────────────────────────────────
 let audioCtx = null;
-let audioUnlocked = false;
 
 function getAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
   return audioCtx;
 }
 
-// iOS Safari requires TWO things inside a synchronous user-gesture handler:
-//   1. audioCtx.resume()  — lifts the browser's autoplay suspension
-//   2. A silent buffer played immediately — the classic iOS "touch-to-unlock" trick
-// Without both, oscillators created later (outside the gesture) play silently.
+// Call this inside EVERY user-gesture handler (touchstart / mousedown / keydown).
+// iOS Safari starts AudioContext in 'suspended' and only allows resume() during a
+// gesture. We also fire a silent buffer synchronously — required on older iOS to
+// truly unlock before resume() resolves. Calling on every touch handles
+// re-suspension after phone calls or app switches.
 function unlockAudio() {
-  if (audioUnlocked) return;
   const ac = getAudio();
-  ac.resume();
-  const buf = ac.createBuffer(1, 1, ac.sampleRate);
-  const src = ac.createBufferSource();
-  src.buffer = buf;
-  src.connect(ac.destination);
-  src.start(0);
-  audioUnlocked = true;
+  if (!ac || ac.state === 'running') return;
+  // Silent 1-frame buffer — must start() synchronously inside the gesture handler
+  try {
+    const buf = ac.createBuffer(1, 1, ac.sampleRate);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.connect(ac.destination);
+    src.start(0);
+  } catch(e) {}
+  ac.resume().catch(() => {});
 }
 
-// Plays a short cheerful "bloop / ping" sound on treasure collection.
+// Plays a short cheerful ping on treasure collection.
+// Guards on ac.state === 'running' — the only reliable signal that iOS Safari
+// has finished resuming and audio will actually be heard.
 function playCollectSound() {
-  if (!audioUnlocked) return; // not yet unlocked by a user gesture — skip silently
+  const ac = audioCtx;
+  if (!ac || ac.state !== 'running') return;
   try {
-    const ac  = getAudio();
-    const osc = ac.createOscillator();
+    const osc  = ac.createOscillator();
     const gain = ac.createGain();
     osc.connect(gain);
     gain.connect(ac.destination);
-
-    // Rising two-note sparkle: C5 → G5
-    osc.type = "sine";
+    osc.type = 'sine';
     const now = ac.currentTime;
-    osc.frequency.setValueAtTime(523, now);           // C5
-    osc.frequency.exponentialRampToValueAtTime(784, now + 0.12); // G5
-    osc.frequency.exponentialRampToValueAtTime(1047, now + 0.22); // C6
-
+    osc.frequency.setValueAtTime(523, now);
+    osc.frequency.exponentialRampToValueAtTime(784, now + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(1047, now + 0.22);
     gain.gain.setValueAtTime(0.45, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-
     osc.start(now);
     osc.stop(now + 0.45);
-  } catch (_) { /* audio may be blocked; silently continue */ }
+  } catch (_) {}
 }
 
 // ─── Game State ───────────────────────────────────────────────────────────────
