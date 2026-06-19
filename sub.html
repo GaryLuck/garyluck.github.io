@@ -39,18 +39,33 @@ resize();
 window.addEventListener("resize", resize);
 
 // ─── Web Audio API ────────────────────────────────────────────────────────────
-// Lazy-create AudioContext on first user interaction so browsers allow it.
 let audioCtx = null;
+let audioUnlocked = false;
+
 function getAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  // iOS Safari creates AudioContext in 'suspended' state; resume() inside a
-  // user-gesture handler is the only way to unlock audio on that platform.
-  if (audioCtx.state === "suspended") audioCtx.resume();
   return audioCtx;
+}
+
+// iOS Safari requires TWO things inside a synchronous user-gesture handler:
+//   1. audioCtx.resume()  — lifts the browser's autoplay suspension
+//   2. A silent buffer played immediately — the classic iOS "touch-to-unlock" trick
+// Without both, oscillators created later (outside the gesture) play silently.
+function unlockAudio() {
+  if (audioUnlocked) return;
+  const ac = getAudio();
+  ac.resume();
+  const buf = ac.createBuffer(1, 1, ac.sampleRate);
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  src.connect(ac.destination);
+  src.start(0);
+  audioUnlocked = true;
 }
 
 // Plays a short cheerful "bloop / ping" sound on treasure collection.
 function playCollectSound() {
+  if (!audioUnlocked) return; // not yet unlocked by a user gesture — skip silently
   try {
     const ac  = getAudio();
     const osc = ac.createOscillator();
@@ -849,7 +864,7 @@ window.addEventListener("keydown", e => {
   if (e.code === "Space" || e.code === "ArrowUp" || e.key === " ") {
     e.preventDefault();
     input.active = true;
-    getAudio(); // unlock audio on first key press
+    unlockAudio();
   }
 });
 window.addEventListener("keyup", e => {
@@ -859,9 +874,9 @@ window.addEventListener("keyup", e => {
 });
 
 // Touch / mouse
-canvas.addEventListener("mousedown",  () => { input.active = true;  getAudio(); });
+canvas.addEventListener("mousedown",  () => { input.active = true;  unlockAudio(); });
 canvas.addEventListener("mouseup",    () => { input.active = false; });
-canvas.addEventListener("touchstart",  e => { e.preventDefault(); input.active = true;  getAudio(); }, { passive: false });
+canvas.addEventListener("touchstart",  e => { e.preventDefault(); input.active = true;  unlockAudio(); }, { passive: false });
 canvas.addEventListener("touchend",    e => { e.preventDefault(); input.active = false; }, { passive: false });
 canvas.addEventListener("touchcancel", e => { e.preventDefault(); input.active = false; }, { passive: false });
 
