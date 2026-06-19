@@ -894,3 +894,33 @@ function loop(ts) {
   draw();
   requestAnimationFrame(loop);
 }
+
+// ─── Input Handling ───────────────────────────────────────────────────────────
+
+// Keyboard
+window.addEventListener("keydown", e => {
+  if (e.code === "Space" || e.code === "ArrowUp" || e.key === " ") {
+    e.preventDefault();
+    input.active = true;
+    unlockAudio();
+  }
+});
+window.addEventListener("keyup", e => {
+  if (e.code === "Space" || e.code === "ArrowUp" || e.key === " ") {
+    input.active = false;
+  }
+});
+
+// Touch / mouse
+canvas.addEventListener("mousedown",  () => { input.active = true;  unlockAudio(); });
+canvas.addEventListener("mouseup",    () => { input.active = false; });
+canvas.addEventListener("touchstart",  e => { e.preventDefault(); input.active = true;  unlockAudio(); }, { passive: false });
+canvas.addEventListener("touchend",    e => { e.preventDefault(); input.active = false; }, { passive: false });
+canvas.addEventListener("touchcancel", e => { e.preventDefault(); input.active = false; }, { passive: false });
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
