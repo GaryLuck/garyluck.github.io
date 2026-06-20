@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Deep Sea Explorer</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+            font-size: 48px;
+            color: white;
+            text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">Treasures Found: <span id="score">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+
+        // Game State
+        let score = 0;
+        let isThrusting = false;
+        let gameSpeed = 3; // Speed at which the ocean scrolls left
+        let audioCtx; // Audio Context
+
+        // Environment State
+        const bubbles = [];
+        const fishes = [];
+        const treasures = [];
+        const particles = [];
+
+        const FISH_COLORS = ['#ff5733', '#33ff57', '#3357ff', '#ff33f6', '#f6ff33'];
+
+        // Audio Context (Initialize on first user interaction)
+        function playBloopSound() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            osc.type = 'sine';
+            // Start at a lower frequency and slide up quickly for a "bloop"
+            osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
+
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        // Particle System for Treasure Collection
+        function spawnParticles(x, y) {
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    radius: Math.random() * 5 + 2,
+                    color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+                    speedX: (Math.random() - 0.5) * 10,
+                    speedY: (Math.random() - 0.5) * 10,
+                    life: 1.0,
+                    decay: Math.random() * 0.02 + 0.02
+                });
+            }
+        }
+
+        function updateAndDrawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.speedX;
+                p.y += p.speedY;
+                p.life -= p.decay;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.save();
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+
+        // Collision Detection
+        function checkCollisions() {
+            for (let i = treasures.length - 1; i >= 0; i--) {
+                let t = treasures[i];
+
+                // Simple AABB vs Circle collision check
+                // Submarine AABB
+                const subLeft = player.x - player.width / 2;
+                const subRight = player.x + player.width / 2;
+                const subTop = player.y - player.height / 2;
+                const subBottom = player.y + player.height / 2;
+
+                // Find closest point on AABB to the circle center
+                let closestX = Math.max(subLeft, Math.min(t.x, subRight));
+                let closestY = Math.max(subTop, Math.min(t.y, subBottom));
+
+                // Calculate distance between circle center and closest point
+                let distanceX = t.x - closestX;
+                let distanceY = t.y - closestY;
+                let distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+
+                if (distanceSquared < (t.radius * t.radius)) {
+                    // Collision!
+                    treasures.splice(i, 1);
+                    score++;
+                    scoreElement.innerText = score;
+                    spawnParticles(t.x, t.y);
+                    playBloopSound();
+                }
+            }
+        }
+
+        // Player (Submarine)
+        const player = {
+            x: 150, // Fixed X position
+            y: 0,   // Initialized in resizeCanvas
+            width: 80,
+            height: 50,
+            velocityY: 0,
+            gravity: 0.2,
+            thrust: -0.5,
+            maxSpeedDown: 5,
+            maxSpeedUp: -6,
+            bounce: 0.6
+        };
+
+        // Resize Canvas to Window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (player.y === 0) {
+                player.y = canvas.height / 2;
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Input Listeners
+        function handleInputStart(e) {
+            e.preventDefault();
+            isThrusting = true;
+            // Initialize/resume audio context on first user interaction
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            } else if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        function handleInputEnd(e) {
+            e.preventDefault();
+            isThrusting = false;
+        }
+
+        window.addEventListener('mousedown', handleInputStart);
+        window.addEventListener('touchstart', handleInputStart, { passive: false });
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                isThrusting = true;
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                } else if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', handleInputEnd);
+        window.addEventListener('touchend', handleInputEnd);
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') isThrusting = false;
+        });
+
+
+        // Update Player Physics
+        function updatePlayer() {
+            // Apply forces
+            if (isThrusting) {
+                player.velocityY += player.thrust;
+            } else {
+                player.velocityY += player.gravity;
+            }
+
+            // Cap speeds
+            if (player.velocityY > player.maxSpeedDown) player.velocityY = player.maxSpeedDown;
+            if (player.velocityY < player.maxSpeedUp) player.velocityY = player.maxSpeedUp;
+
+            // Update position
+            player.y += player.velocityY;
+
+            // Boundaries (Gentle bounce)
+            // Top boundary
+            if (player.y < player.height / 2) {
+                player.y = player.height / 2;
+                player.velocityY = Math.abs(player.velocityY) * player.bounce;
+            }
+            // Bottom boundary
+            if (player.y > canvas.height - player.height / 2) {
+                player.y = canvas.height - player.height / 2;
+                player.velocityY = -Math.abs(player.velocityY) * player.bounce;
+            }
+        }
+
+        // --- Environment Generators and Updaters ---
+
+        function spawnBubble() {
+            if (Math.random() < 0.1) { // 10% chance per frame to spawn a bubble
+                bubbles.push({
+                    x: Math.random() * canvas.width,
+                    y: canvas.height + 20,
+                    radius: Math.random() * 10 + 5,
+                    speedY: -(Math.random() * 2 + 1),
+                    speedX: -gameSpeed // Move left with the ocean
+                });
+            }
+        }
+
+        function spawnFish() {
+            if (Math.random() < 0.02) { // 2% chance per frame
+                fishes.push({
+                    x: canvas.width + 50,
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    width: 40,
+                    height: 20,
+                    color: FISH_COLORS[Math.floor(Math.random() * FISH_COLORS.length)],
+                    speedX: -(Math.random() * 2 + 1) - gameSpeed, // Swim left faster than the ocean
+                    tailAngle: 0,
+                    tailSpeed: Math.random() * 0.2 + 0.1
+                });
+            }
+        }
+
+        function spawnTreasure() {
+            if (Math.random() < 0.01) { // 1% chance per frame
+                treasures.push({
+                    x: canvas.width + 50,
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    radius: 15,
+                    speedX: -gameSpeed,
+                    glowAngle: 0
+                });
+            }
+        }
+
+        function updateEnvironment() {
+            spawnBubble();
+            spawnFish();
+            spawnTreasure();
+
+            // Update Bubbles
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                let b = bubbles[i];
+                b.x += b.speedX;
+                b.y += b.speedY;
+                if (b.y < -50 || b.x < -50) bubbles.splice(i, 1);
+            }
+
+            // Update Fishes
+            for (let i = fishes.length - 1; i >= 0; i--) {
+                let f = fishes[i];
+                f.x += f.speedX;
+                f.tailAngle += f.tailSpeed;
+                if (f.x < -100) fishes.splice(i, 1);
+            }
+
+            // Update Treasures
+            for (let i = treasures.length - 1; i >= 0; i--) {
+                let t = treasures[i];
+                t.x += t.speedX;
+                t.glowAngle += 0.05;
+                if (t.x < -50) treasures.splice(i, 1);
+            }
+        }
+
+        function drawEnvironment() {
+            // Draw Bubbles
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 1;
+            for (let b of bubbles) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Bubble highlight
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(b.x - b.radius * 0.3, b.y - b.radius * 0.3, b.radius * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; // Reset
+            }
+
+            // Draw Fishes
+            for (let f of fishes) {
+                ctx.save();
+                ctx.translate(f.x, f.y);
+
+                // Body
+                ctx.fillStyle = f.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, f.width / 2, f.height / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Tail
+                ctx.save();
+                ctx.translate(f.width / 2, 0);
+                ctx.rotate(Math.sin(f.tailAngle) * 0.5); // Wag tail
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(15, -10);
+                ctx.lineTo(15, 10);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+
+                // Eye
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(-10, -3, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(-11, -3, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // Draw Treasures (Glowing Gold Coin)
+            for (let t of treasures) {
+                ctx.save();
+                ctx.translate(t.x, t.y);
+
+                // Glow effect
+                const glowScale = 1 + Math.sin(t.glowAngle) * 0.2;
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, t.radius * 2 * glowScale);
+                gradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)');
+                gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, t.radius * 2 * glowScale, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Coin
+                ctx.fillStyle = '#ffd700'; // Gold
+                ctx.strokeStyle = '#b8860b'; // Dark Goldenrod
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, t.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Coin inner circle
+                ctx.beginPath();
+                ctx.arc(0, 0, t.radius * 0.6, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        // Draw Player (Submarine)
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+
+            // Submarine Body (Yellow Ellipse-like using rect with rounded corners)
+            ctx.fillStyle = '#ffcc00'; // Yellow
+            ctx.beginPath();
+            ctx.roundRect(-player.width / 2, -player.height / 2, player.width, player.height, 25);
+            ctx.fill();
+
+            // Top Periscope/Tower
+            ctx.fillStyle = '#e6b800'; // Darker yellow
+            ctx.fillRect(-10, -player.height/2 - 15, 20, 15);
+            ctx.fillRect(0, -player.height/2 - 15, 15, 5); // Periscope lens
+
+            // Portholes
+            ctx.fillStyle = '#e6ffff'; // Light cyan glass
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 3;
+
+            ctx.beginPath();
+            ctx.arc(-15, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(15, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Propeller
+            ctx.fillStyle = '#999';
+            // Simple spinning effect using date
+            const time = Date.now();
+            const angle = time * 0.01; // Spin speed
+
+            ctx.translate(-player.width / 2 - 5, 0);
+            ctx.rotate(isThrusting ? angle * 3 : angle); // Spin faster when thrusting
+
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 5, 15, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // Drawing: Background
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#0a4275');   // Light deep blue
+            gradient.addColorStop(1, '#020d1a');   // Very dark blue
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Main Loop
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Clear & Draw BG
+            drawBackground();
+
+            // Update & Draw Environment
+            updateEnvironment();
+            drawEnvironment();
+
+            // Update & Draw Player
+            updatePlayer();
+            drawPlayer();
+
+            // Collisions & Particles
+            checkCollisions();
+            updateAndDrawParticles();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start Loop
+        requestAnimationFrame(gameLoop);
+
+    </script>
+</body>
+</html>

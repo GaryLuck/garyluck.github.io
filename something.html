@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Antigravity Robot — a fun math game for first graders to practice addition and subtraction while building a robot!">
+  <title>Antigravity Robot — Math Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <!-- Animated star background -->
+  <div id="stars-container" aria-hidden="true"></div>
+
+  <!-- Confetti canvas -->
+  <canvas id="confetti-canvas" aria-hidden="true"></canvas>
+
+  <main>
+    <header>
+      <h1>🚀 Antigravity Robot 🤖</h1>
+      <p class="subtitle">Answer math problems to build your robot!</p>
+    </header>
+
+    <!-- Robot Display -->
+    <section id="robot-stage" aria-label="Robot being built">
+      <svg id="robot-svg" viewBox="0 0 300 420" xmlns="http://www.w3.org/2000/svg">
+        <!-- Part 1: Left Foot -->
+        <g id="robot-part-0" class="robot-part" aria-label="Left foot">
+          <rect x="80" y="385" width="50" height="25" rx="8" fill="#5B7FFF" stroke="#3D5ACE" stroke-width="2"/>
+          <rect x="65" y="395" width="30" height="15" rx="6" fill="#5B7FFF" stroke="#3D5ACE" stroke-width="2"/>
+        </g>
+
+        <!-- Part 2: Right Foot -->
+        <g id="robot-part-1" class="robot-part" aria-label="Right foot">
+          <rect x="170" y="385" width="50" height="25" rx="8" fill="#5B7FFF" stroke="#3D5ACE" stroke-width="2"/>
+          <rect x="205" y="395" width="30" height="15" rx="6" fill="#5B7FFF" stroke="#3D5ACE" stroke-width="2"/>
+        </g>
+
+        <!-- Part 3: Left Leg -->
+        <g id="robot-part-2" class="robot-part" aria-label="Left leg">
+          <rect x="90" y="320" width="30" height="70" rx="6" fill="#8B9FE8" stroke="#5B7FFF" stroke-width="2"/>
+          <circle cx="105" cy="345" r="5" fill="#FFD93D"/>
+        </g>
+
+        <!-- Part 4: Right Leg -->
+        <g id="robot-part-3" class="robot-part" aria-label="Right leg">
+          <rect x="180" y="320" width="30" height="70" rx="6" fill="#8B9FE8" stroke="#5B7FFF" stroke-width="2"/>
+          <circle cx="195" cy="345" r="5" fill="#FFD93D"/>
+        </g>
+
+        <!-- Part 5: Body -->
+        <g id="robot-part-4" class="robot-part" aria-label="Body">
+          <rect x="80" y="180" width="140" height="145" rx="16" fill="#C0CFFF" stroke="#5B7FFF" stroke-width="3"/>
+          <!-- Chest panel -->
+          <rect x="110" y="205" width="80" height="50" rx="8" fill="#1a1040" stroke="#5B7FFF" stroke-width="2"/>
+          <!-- Panel lights -->
+          <circle cx="130" cy="220" r="6" fill="#FF6B6B">
+            <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="150" cy="220" r="6" fill="#FFD93D">
+            <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="170" cy="220" r="6" fill="#51E898">
+            <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Belly button -->
+          <circle cx="150" cy="280" r="12" fill="#5B7FFF" stroke="#3D5ACE" stroke-width="2"/>
+          <circle cx="150" cy="280" r="5" fill="#FFD93D"/>
+        </g>
+
+        <!-- Part 6: Left Arm -->
+        <g id="robot-part-5" class="robot-part" aria-label="Left arm">
+          <rect x="40" y="200" width="40" height="20" rx="8" fill="#8B9FE8" stroke="#5B7FFF" stroke-width="2"/>
+          <rect x="30" y="215" width="25" height="70" rx="8" fill="#C0CFFF" stroke="#5B7FFF" stroke-width="2"/>
+        </g>
+
+        <!-- Part 7: Right Arm -->
+        <g id="robot-part-6" class="robot-part" aria-label="Right arm">
+          <rect x="220" y="200" width="40" height="20" rx="8" fill="#8B9FE8" stroke="#5B7FFF" stroke-width="2"/>
+          <rect x="245" y="215" width="25" height="70" rx="8" fill="#C0CFFF" stroke="#5B7FFF" stroke-width="2"/>
+        </g>
+
+        <!-- Part 8: Left Hand -->
+        <g id="robot-part-7" class="robot-part" aria-label="Left hand">
+          <circle cx="42" cy="295" r="14" fill="#FFD93D" stroke="#E8B800" stroke-width="2"/>
+          <rect x="28" y="295" width="8" height="14" rx="3" fill="#FFD93D" stroke="#E8B800" stroke-width="1" transform="rotate(-20 32 302)"/>
+          <rect x="40" y="298" width="8" height="14" rx="3" fill="#FFD93D" stroke="#E8B800" stroke-width="1" transform="rotate(10 44 305)"/>
+        </g>
+
+        <!-- Part 9: Right Hand -->
+        <g id="robot-part-8" class="robot-part" aria-label="Right hand">
+          <circle cx="258" cy="295" r="14" fill="#FFD93D" stroke="#E8B800" stroke-width="2"/>
+          <rect x="264" y="295" width="8" height="14" rx="3" fill="#FFD93D" stroke="#E8B800" stroke-width="1" transform="rotate(20 268 302)"/>
+          <rect x="252" y="298" width="8" height="14" rx="3" fill="#FFD93D" stroke="#E8B800" stroke-width="1" transform="rotate(-10 256 305)"/>
+        </g>
+
+        <!-- Part 10: Head -->
+        <g id="robot-part-9" class="robot-part" aria-label="Head">
+          <!-- Antenna -->
+          <line x1="150" y1="70" x2="150" y2="100" stroke="#5B7FFF" stroke-width="3"/>
+          <circle cx="150" cy="65" r="8" fill="#FF6B6B">
+            <animate attributeName="r" values="8;10;8" dur="1s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="1;0.6;1" dur="1s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Head shape -->
+          <rect x="100" y="100" width="100" height="80" rx="20" fill="#C0CFFF" stroke="#5B7FFF" stroke-width="3"/>
+          <!-- Eyes -->
+          <ellipse cx="128" cy="132" rx="14" ry="16" fill="white" stroke="#5B7FFF" stroke-width="2"/>
+          <ellipse cx="172" cy="132" rx="14" ry="16" fill="white" stroke="#5B7FFF" stroke-width="2"/>
+          <circle cx="130" cy="134" r="7" fill="#1a1040">
+            <animate attributeName="cx" values="130;126;130;134;130" dur="4s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="174" cy="134" r="7" fill="#1a1040">
+            <animate attributeName="cx" values="174;170;174;178;174" dur="4s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Eye shine -->
+          <circle cx="133" cy="130" r="2.5" fill="white"/>
+          <circle cx="177" cy="130" r="2.5" fill="white"/>
+          <!-- Mouth -->
+          <path d="M130 155 Q150 170 170 155" stroke="#5B7FFF" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <!-- Ear bolts -->
+          <circle cx="100" cy="140" r="6" fill="#FFD93D" stroke="#E8B800" stroke-width="2"/>
+          <circle cx="200" cy="140" r="6" fill="#FFD93D" stroke="#E8B800" stroke-width="2"/>
+        </g>
+      </svg>
+
+      <!-- Progress bar -->
+      <div id="progress-container">
+        <div id="progress-bar"></div>
+        <span id="progress-text">0 / 10 parts</span>
+      </div>
+    </section>
+
+    <!-- Math Problem Area -->
+    <section id="problem-area" aria-label="Math problem">
+      <div id="feedback" aria-live="polite"></div>
+      <div id="problem-display">
+        <span id="num1" class="problem-number">?</span>
+        <span id="operator" class="problem-operator">+</span>
+        <span id="num2" class="problem-number">?</span>
+        <span class="problem-equals">=</span>
+        <span id="answer-display" class="problem-answer">?</span>
+      </div>
+
+      <!-- Number pad -->
+      <div id="number-pad" aria-label="Number pad">
+        <!-- Buttons 0-18 generated by JS -->
+      </div>
+    </section>
+
+    <footer>
+      <p id="stats">Problems answered: <span id="total-count">0</span></p>
+    </footer>
+  </main>
+
+  <script src="index.js"></script>
+</body>
+</html>
