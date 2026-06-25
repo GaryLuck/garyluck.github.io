@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic 15 Puzzle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --board-bg: rgba(255, 255, 255, 0.03);
+            --board-border: rgba(255, 255, 255, 0.08);
+            --tile-bg: linear-gradient(145deg, #3b82f6, #2563eb);
+            --tile-hover: linear-gradient(145deg, #60a5fa, #3b82f6);
+            --tile-correct: linear-gradient(145deg, #10b981, #059669);
+            --tile-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            --text-color: #f8fafc;
+            --accent: #38bdf8;
+            --tile-size: 80px;
+            --gap: 10px;
+            --board-padding: 10px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
+        }
+
+        .header-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 0 10px;
+        }
+
+        .stats {
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: #cbd5e1;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .stats span {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        button {
+            background: var(--tile-bg);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--tile-shadow);
+        }
+
+        button:hover {
+            background: var(--tile-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .board {
+            position: relative;
+            width: calc(var(--tile-size) * 4 + var(--gap) * 3 + var(--board-padding) * 2);
+            height: calc(var(--tile-size) * 4 + var(--gap) * 3 + var(--board-padding) * 2);
+            background: var(--board-bg);
+            border: 1px solid var(--board-border);
+            border-radius: 20px;
+            padding: var(--board-padding);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+        }
+
+        .tile {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: var(--tile-size);
+            height: var(--tile-size);
+            background: var(--tile-bg);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 700;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), 
+                        background 0.3s ease, 
+                        box-shadow 0.3s ease;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3), var(--tile-shadow);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tile:hover {
+            background: var(--tile-hover);
+            z-index: 5;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 8px 25px rgba(59, 130, 246, 0.4);
+        }
+
+        .tile.correct {
+            background: var(--tile-correct);
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3), 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        
+        .tile.correct:hover {
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Background ambient glow */
+        .ambient-light {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Victory message */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .victory-text {
+            font-size: 4rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #10b981, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+            transform: translateY(20px);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-shadow: 0 0 40px rgba(16, 185, 129, 0.4);
+        }
+
+        .overlay.active .victory-text {
+            transform: translateY(0);
+        }
+
+        .victory-stats {
+            font-size: 1.5rem;
+            margin-bottom: 30px;
+            color: #f8fafc;
+            transform: translateY(20px);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s;
+        }
+
+        .overlay.active .victory-stats {
+            transform: translateY(0);
+        }
+
+        .overlay button {
+            transform: translateY(20px);
+            transition: all 0.3s ease, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s;
+        }
+
+        .overlay.active button {
+            transform: translateY(0);
+        }
+        
+        .overlay.active button:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 500px) {
+            :root {
+                --tile-size: 65px;
+                --gap: 8px;
+                --board-padding: 8px;
+            }
+            h1 {
+                font-size: 2.2rem;
+            }
+            .header-panel {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-light"></div>
+    <div class="container">
+        <h1>15 Puzzle</h1>
+        
+        <div class="header-panel">
+            <div class="stats">Moves: <span id="moves">0</span></div>
+            <button id="shuffle-btn">Shuffle Board</button>
+        </div>
+
+        <div class="board" id="board">
+            <!-- Tiles will be generated here by JS -->
+        </div>
+    </div>
+
+    <div class="overlay" id="victory-overlay">
+        <div class="victory-text">You Win!</div>
+        <div class="victory-stats">Solved in <span id="final-moves" style="color: var(--accent); font-weight: 700;">0</span> moves</div>
+        <button id="play-again-btn">Play Again</button>
+    </div>
+
+    <script>
+        const boardEl = document.getElementById('board');
+        const movesEl = document.getElementById('moves');
+        const shuffleBtn = document.getElementById('shuffle-btn');
+        const overlayEl = document.getElementById('victory-overlay');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const finalMovesEl = document.getElementById('final-moves');
+
+        // Config
+        const SIZE = 4;
+        const TOTAL_TILES = SIZE * SIZE;
+        let tileSize, gap, padding;
+        
+        // State
+        let tiles = []; // Array of length 16. Value 0 means empty. Index represents position on board.
+        let moves = 0;
+        let isAnimating = false;
+        let tileElements = {}; // Map value -> DOM element
+
+        function updateMetrics() {
+            const rootStyle = getComputedStyle(document.documentElement);
+            const rawTileSize = rootStyle.getPropertyValue('--tile-size').trim();
+            const rawGap = rootStyle.getPropertyValue('--gap').trim();
+            const rawPadding = rootStyle.getPropertyValue('--board-padding').trim();
+            
+            tileSize = parseInt(rawTileSize);
+            gap = parseInt(rawGap);
+            padding = parseInt(rawPadding);
+
+            // Fallbacks if CSS parsing fails
+            if (isNaN(tileSize)) tileSize = window.innerWidth <= 500 ? 65 : 80;
+            if (isNaN(gap)) gap = window.innerWidth <= 500 ? 8 : 10;
+            if (isNaN(padding)) padding = window.innerWidth <= 500 ? 8 : 10;
+        }
+
+        // Initialize puzzle
+        function init() {
+            updateMetrics();
+            
+            // Initialize to solved state
+            for (let i = 0; i < TOTAL_TILES - 1; i++) {
+                tiles[i] = i + 1;
+            }
+            tiles[TOTAL_TILES - 1] = 0; // Empty tile at the end
+            
+            renderBoard();
+            shuffle(false); // Initial shuffle, no animation/delay
+        }
+
+        // Render board for the first time
+        function renderBoard() {
+            boardEl.innerHTML = '';
+            tileElements = {};
+
+            for (let i = 0; i < TOTAL_TILES; i++) {
+                const val = tiles[i];
+                if (val === 0) continue;
+
+                const tile = document.createElement('div');
+                tile.classList.add('tile');
+                tile.textContent = val;
+                tile.dataset.value = val;
+                
+                // Click handler
+                tile.addEventListener('click', () => handleTileClick(val));
+                
+                boardEl.appendChild(tile);
+                tileElements[val] = tile;
+            }
+            
+            updateTilePositions();
+            checkCorrectPositions();
+        }
+
+        // Update physical positions based on logical array
+        function updateTilePositions() {
+            for (let i = 0; i < TOTAL_TILES; i++) {
+                const val = tiles[i];
+                if (val === 0) continue;
+                
+                const row = Math.floor(i / SIZE);
+                const col = i % SIZE;
+                
+                const tile = tileElements[val];
+                if (!tile) continue;
+                
+                const x = padding + col * (tileSize + gap);
+                const y = padding + row * (tileSize + gap);
+                
+                tile.style.transform = `translate(${x}px, ${y}px)`;
+            }
+        }
+
+        // Check which tiles are in correct position and add CSS class
+        function checkCorrectPositions() {
+            for (let i = 0; i < TOTAL_TILES; i++) {
+                const val = tiles[i];
+                if (val === 0) continue;
+                
+                const tile = tileElements[val];
+                if (!tile) continue;
+                if (val === i + 1) {
+                    tile.classList.add('correct');
+                } else {
+                    tile.classList.remove('correct');
+                }
+            }
+        }
+
+        // Handle user click
+        function handleTileClick(val) {
+            if (isAnimating) return;
+            
+            const pos = tiles.indexOf(val);
+            const emptyPos = tiles.indexOf(0);
+            
+            if (isAdjacent(pos, emptyPos)) {
+                moveTile(pos, emptyPos);
+                moves++;
+                updateMovesDisplay();
+                checkWin();
+            }
+        }
+
+        // Check if two positions are adjacent
+        function isAdjacent(pos1, pos2) {
+            const r1 = Math.floor(pos1 / SIZE);
+            const c1 = pos1 % SIZE;
+            const r2 = Math.floor(pos2 / SIZE);
+            const c2 = pos2 % SIZE;
+            
+            return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+        }
+
+        // Perform move (logical + visual)
+        function moveTile(pos, emptyPos) {
+            // Swap logic
+            const temp = tiles[pos];
+            tiles[pos] = tiles[emptyPos];
+            tiles[emptyPos] = temp;
+            
+            // Update visuals
+            updateTilePositions();
+            checkCorrectPositions();
+        }
+
+        // Update move counter
+        function updateMovesDisplay() {
+            movesEl.textContent = moves;
+        }
+
+        // Shuffle board
+        function shuffle(animate = true) {
+            if (animate) isAnimating = true;
+            moves = 0;
+            updateMovesDisplay();
+            overlayEl.classList.remove('active');
+            
+            // Set to solved state
+            for (let i = 0; i < TOTAL_TILES - 1; i++) tiles[i] = i + 1;
+            tiles[TOTAL_TILES - 1] = 0;
+            
+            let emptyPos = TOTAL_TILES - 1;
+            const numMoves = 150; // number of random moves to shuffle
+            
+            const getValidMoves = (pos) => {
+                const moves = [];
+                const row = Math.floor(pos / SIZE);
+                const col = pos % SIZE;
+                if (row > 0) moves.push(pos - SIZE); // up
+                if (row < SIZE - 1) moves.push(pos + SIZE); // down
+                if (col > 0) moves.push(pos - 1); // left
+                if (col < SIZE - 1) moves.push(pos + 1); // right
+                return moves;
+            };
+
+            let lastEmptyPos = -1;
+            for (let i = 0; i < numMoves; i++) {
+                const validMoves = getValidMoves(emptyPos);
+                const filteredMoves = validMoves.filter(m => m !== lastEmptyPos);
+                const movesToPick = filteredMoves.length > 0 ? filteredMoves : validMoves;
+                const randomMove = movesToPick[Math.floor(Math.random() * movesToPick.length)];
+                
+                // Swap
+                tiles[emptyPos] = tiles[randomMove];
+                tiles[randomMove] = 0;
+                
+                lastEmptyPos = emptyPos;
+                emptyPos = randomMove;
+            }
+            
+            if (animate) {
+                // Disable transitions temporarily
+                Object.values(tileElements).forEach(el => { if(el) el.style.transition = 'none'; });
+                updateTilePositions();
+                checkCorrectPositions();
+                
+                // Re-enable transitions
+                setTimeout(() => {
+                    Object.values(tileElements).forEach(el => { if(el) el.style.transition = ''; });
+                    isAnimating = false;
+                }, 50);
+            } else {
+                updateTilePositions();
+                checkCorrectPositions();
+            }
+        }
+
+        // Check if won
+        function checkWin() {
+            for (let i = 0; i < TOTAL_TILES - 1; i++) {
+                if (tiles[i] !== i + 1) return false;
+            }
+            
+            // Win!
+            setTimeout(() => {
+                finalMovesEl.textContent = moves;
+                overlayEl.classList.add('active');
+            }, 300);
+        }
+
+        // Resize handling to update variables and reposition
+        window.addEventListener('resize', () => {
+            updateMetrics();
+            updateTilePositions();
+        });
+
+        // Event Listeners
+        shuffleBtn.addEventListener('click', () => shuffle(true));
+        playAgainBtn.addEventListener('click', () => shuffle(true));
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
