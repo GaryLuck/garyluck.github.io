@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIFTEEN — A Classic Sliding Puzzle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0a08;
+    --bg-2: #1a1310;
+    --surface: #1c1612;
+    --surface-2: #251c17;
+    --border: #3a2a1f;
+    --border-light: #4a3829;
+    --text: #f4e4c1;
+    --text-dim: #a08b6f;
+    --muted: #6b5d4f;
+    --accent: #ff8c42;
+    --accent-2: #ffb347;
+    --accent-deep: #c54a1a;
+    --accent-glow: rgba(255, 140, 66, 0.4);
+    --empty-bg: #0a0706;
+    --success: #84cc16;
+  }
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    min-height: 100vh;
+  }
+  
+  body {
+    background-image: 
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 140, 66, 0.12), transparent 70%),
+      radial-gradient(ellipse 60% 50% at 100% 100%, rgba(197, 74, 26, 0.08), transparent 70%),
+      radial-gradient(ellipse 40% 40% at 0% 60%, rgba(255, 179, 71, 0.05), transparent 70%);
+    background-attachment: fixed;
+    overflow-x: hidden;
+  }
+  
+  /* Subtle film grain */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.85 0 0 0 0 0.65 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+    z-index: 1;
+    mix-blend-mode: overlay;
+    opacity: 0.5;
+  }
+  
+  .app {
+    position: relative;
+    z-index: 2;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 40px 28px 28px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+    padding: 6px 16px 6px 6px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    background: rgba(28, 22, 18, 0.6);
+    backdrop-filter: blur(8px);
+  }
+  
+  .brand-icon {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px;
+    padding: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  
+  .brand-icon span {
+    background: var(--bg);
+    border-radius: 1px;
+  }
+  
+  .brand-icon span:nth-child(4) {
+    background: transparent;
+  }
+  
+  .brand-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(56px, 10vw, 112px);
+    font-weight: 700;
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    background: linear-gradient(180deg, #fff5e1 0%, var(--accent-2) 50%, var(--accent-deep) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 14px;
+  }
+  
+  .tagline {
+    font-size: 19px;
+    color: var(--text-dim);
+    font-style: italic;
+    font-weight: 300;
+    letter-spacing: 0.02em;
+  }
+  
+  /* Main game layout */
+  .game {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    gap: 56px;
+    align-items: start;
+    flex: 1;
+  }
+  
+  @media (max-width: 920px) {
+    .game {
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+    .panel { order: 2; }
+    .board-wrap { order: 1; }
+  }
+  
+  /* Panel */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  
+  .stat {
+    background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%);
+    border: 1px solid var(--border);
+    padding: 18px 20px;
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  
+  /* Controls */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .btn {
+    padding: 16px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+  }
+  
+  .btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,140,66,0.18), transparent);
+    transition: left 0.55s ease;
+  }
+  
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+  }
+  
+  .btn:hover::before {
+    left: 100%;
+  }
+  
+  .btn:active {
+    transform: translateY(0);
+  }
+  
+  .btn-primary {
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);
+    border-color: var(--accent);
+    color: #1a0d05;
+    font-weight: 700;
+  }
+  
+  .btn-primary:hover {
+    color: #1a0d05;
+    box-shadow: 0 8px 24px var(--accent-glow);
+    transform: translateY(-2px);
+  }
+  
+  /* Instructions */
+  .instructions {
+    background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 22px;
+  }
+  
+  .instructions h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .instructions h3::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+  }
+  
+  .instructions ul {
+    list-style: none;
+    font-size: 15px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  
+  .instructions li {
+    padding-left: 18px;
+    position: relative;
+    margin-bottom: 8px;
+  }
+  
+  .instructions li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 8px;
+    height: 1px;
+    background: var(--accent);
+  }
+  
+  .instructions kbd {
+    display: inline-block;
+    padding: 1px 7px;
+    background: var(--bg);
+    border: 1px solid var(--border-light);
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent-2);
+    margin: 0 1px;
+  }
+  
+  /* Board */
+  .board-wrap {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    max-width: 580px;
+    margin: 0 auto;
+  }
+  
+  .board {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--empty-bg);
+    border: 1px solid var(--border-light);
+    border-radius: 14px;
+    padding: 8px;
+    box-shadow: 
+      0 30px 80px rgba(0, 0, 0, 0.6),
+      0 0 100px rgba(255, 140, 66, 0.06),
+      inset 0 1px 0 rgba(255, 220, 180, 0.05),
+      inset 0 0 80px rgba(0, 0, 0, 0.7);
+  }
+  
+  .board::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    background-image: 
+      linear-gradient(rgba(255,140,66,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,140,66,0.03) 1px, transparent 1px);
+    background-size: 25% 25%;
+    pointer-events: none;
+    border-radius: 6px;
+  }
+  
+  .board::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.4) 100%);
+  }
+  
+  .board-grid {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .tile {
+    position: absolute;
+    width: 25%;
+    height: 25%;
+    padding: 4px;
+    box-sizing: border-box;
+    transition: transform 0.28s cubic-bezier(0.34, 1.4, 0.5, 1);
+    cursor: default;
+    z-index: 2;
+  }
+  
+  .tile.movable {
+    cursor: pointer;
+  }
+  
+  .tile-inner {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(145deg, 
+      #f4a261 0%, 
+      #e07628 25%,
+      #b04a14 60%, 
+      #6b2c0a 100%
+    );
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(32px, 7vw, 60px);
+    font-weight: 700;
+    color: #fff5e1;
+    position: relative;
+    box-shadow: 
+      inset 0 2px 1px rgba(255, 220, 180, 0.4),
+      inset 0 -3px 4px rgba(0, 0, 0, 0.5),
+      inset 2px 0 1px rgba(255, 220, 180, 0.15),
+      inset -2px 0 1px rgba(0, 0, 0, 0.3),
+      0 6px 12px rgba(0, 0, 0, 0.5),
+      0 2px 4px rgba(255, 140, 66, 0.2);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    transition: filter 0.2s ease, box-shadow 0.3s ease, transform 0.15s ease;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  
+  .tile-inner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    background: linear-gradient(135deg, 
+      rgba(255,255,255,0.18) 0%, 
+      transparent 30%, 
+      transparent 70%, 
+      rgba(0,0,0,0.18) 100%
+    );
+    pointer-events: none;
+  }
+  
+  .tile.movable:hover .tile-inner {
+    filter: brightness(1.18);
+    box-shadow: 
+      inset 0 2px 1px rgba(255, 220, 180, 0.5),
+      inset 0 -3px 4px rgba(0, 0, 0, 0.5),
+      inset 2px 0 1px rgba(255, 220, 180, 0.2),
+      inset -2px 0 1px rgba(0, 0, 0, 0.3),
+      0 10px 22px rgba(255, 140, 66, 0.45),
+      0 2px 4px rgba(255, 140, 66, 0.3);
+  }
+  
+  .tile.movable:active .tile-inner {
+    filter: brightness(1.05);
+    transform: scale(0.96);
+  }
+  
+  /* Correct position indicator */
+  .tile.correct .tile-inner::after {
+    content: '';
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 10px var(--accent-2), 0 0 2px rgba(0,0,0,0.4);
+  }
+  
+  /* Win state — staggered pulse wave */
+  .board.won .tile-inner {
+    animation: tilePulse 1.2s ease-in-out;
+  }
+  
+  .board.won .tile:nth-child(1) .tile-inner { animation-delay: 0s; }
+  .board.won .tile:nth-child(2) .tile-inner { animation-delay: 0.05s; }
+  .board.won .tile:nth-child(3) .tile-inner { animation-delay: 0.1s; }
+  .board.won .tile:nth-child(4) .tile-inner { animation-delay: 0.15s; }
+  .board.won .tile:nth-child(5) .tile-inner { animation-delay: 0.2s; }
+  .board.won .tile:nth-child(6) .tile-inner { animation-delay: 0.25s; }
+  .board.won .tile:nth-child(7) .tile-inner { animation-delay: 0.3s; }
+  .board.won .tile:nth-child(8) .tile-inner { animation-delay: 0.35s; }
+  .board.won .tile:nth-child(9) .tile-inner { animation-delay: 0.4s; }
+  .board.won .tile:nth-child(10) .tile-inner { animation-delay: 0.45s; }
+  .board.won .tile:nth-child(11) .tile-inner { animation-delay: 0.5s; }
+  .board.won .tile:nth-child(12) .tile-inner { animation-delay: 0.55s; }
+  .board.won .tile:nth-child(13) .tile-inner { animation-delay: 0.6s; }
+  .board.won .tile:nth-child(14) .tile-inner { animation-delay: 0.65s; }
+  .board.won .tile:nth-child(15) .tile-inner { animation-delay: 0.7s; }
+  
+  @keyframes tilePulse {
+    0%, 100% { 
+      filter: brightness(1);
+    }
+    50% { 
+      filter: brightness(1.55) saturate(1.2);
+      box-shadow: 
+        inset 0 2px 1px rgba(255, 220, 180, 0.6),
+        inset 0 -3px 4px rgba(0, 0, 0, 0.5),
+        0 6px 30px rgba(255, 140, 66, 0.85),
+        0 0 50px rgba(255, 179, 71, 0.5);
+    }
+  }
+  
+  /* Particles */
+  .particle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    pointer-events: none;
+    border-radius: 2px;
+    z-index: 5;
+    top: 50%;
+    left: 50%;
+    animation: particleFly 1.6s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+  }
+  
+  @keyframes particleFly {
+    0% {
+      transform: translate(-50%, -50%) scale(0) rotate(0);
+      opacity: 1;
+    }
+    20% {
+      transform: translate(-50%, -50%) scale(1.3) rotate(45deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.3) rotate(var(--rot));
+      opacity: 0;
+    }
+  }
+  
+  /* Win overlay */
+  .status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(13, 10, 8, 0.92);
+    backdrop-filter: blur(10px);
+    border-radius: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    z-index: 10;
+  }
+  
+  .status.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  .status-content {
+    text-align: center;
+    padding: 32px;
+  }
+  
+  .status-content .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  
+  .status-content h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(48px, 8vw, 80px);
+    font-weight: 700;
+    background: linear-gradient(180deg, #fff5e1 0%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 16px;
+    line-height: 1;
+  }
+  
+  .status-content .stats-line {
+    color: var(--text-dim);
+    font-size: 18px;
+    margin-bottom: 28px;
+    font-style: italic;
+  }
+  
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 14px 24px;
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 100;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  
+  /* Footer */
+  footer {
+    text-align: center;
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  
+  footer span {
+    color: var(--accent);
+  }
+  
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .tile, .tile-inner, .btn, .toast, .status, .particle {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <span class="brand-name">Sliding Puzzle · est. 1880</span>
+      </div>
+      <h1>FIFTEEN</h1>
+      <p class="tagline">Order the tiles. One slide at a time.</p>
+    </header>
+    
+    <main class="game">
+      <aside class="panel">
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">Moves</div>
+            <div class="stat-value" id="moves">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Time</div>
+            <div class="stat-value" id="time">0:00</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Best Time</div>
+            <div class="stat-value" id="best">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Fewest Moves</div>
+            <div class="stat-value" id="best-moves">—</div>
+          </div>
+        </div>
+        
+        <div class="controls">
+          <button class="btn btn-primary" id="shuffle">Shuffle Tiles</button>
+          <button class="btn" id="reset">Reset to Solved</button>
+        </div>
+        
+        <div class="instructions">
+          <h3>How to Play</h3>
+          <ul>
+            <li>Click any tile in line with the empty cell to slide it — tiles in between will follow along</li>
+            <li>Use <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> to slide a single tile into the empty space</li>
+            <li>Arrange tiles 1 through 15 in order, with the empty cell at the bottom-right</li>
+            <li>The dot on a tile marks it as correctly placed</li>
+          </ul>
+        </div>
+      </aside>
+      
+      <section class="board-wrap">
+        <div class="board" id="board">
+          <div class="board-grid" id="board-grid"></div>
+        </div>
+        <div class="status" id="status">
+          <div class="status-content">
+            <div class="label">Puzzle Complete</div>
+            <h2>Solved</h2>
+            <p class="stats-line" id="win-stats">Excellent work</p>
+            <button class="btn btn-primary" id="play-again">Play Again</button>
+          </div>
+        </div>
+      </section>
+    </main>
+    
+    <footer>
+      A classic puzzle · reborn for the web · <span>FIFTEEN</span>
+    </footer>
+  </div>
+  
+  <div class="toast" id="toast"></div>
+  
+  <script>
+    // ===== Constants & State =====
+    const SIZE = 4;
+    const TOTAL = SIZE * SIZE;
+    
+    let state = [];           // 16 cells: 1..15 or 0 (empty)
+    let moves = 0;
+    let startTime = null;
+    let timerInterval = null;
+    let isWon = true;         // starts in solved state
+    let isShuffling = false;
+    
+    // ===== DOM refs =====
+    const board = document.getElementById('board');
+    const boardGrid = document.getElementById('board-grid');
+    const movesEl = document.getElementById('moves');
+    const timeEl = document.getElementById('time');
+    const bestEl = document.getElementById('best');
+    const bestMovesEl = document.getElementById('best-moves');
+    const statusEl = document.getElementById('status');
+    const winStatsEl = document.getElementById('win-stats');
+    const toastEl = document.getElementById('toast');
+    
+    const tiles = {};  // number -> element
+    
+    // ===== Helpers =====
+    function resetState() {
+      state = [];
+      for (let i = 1; i < TOTAL; i++) state.push(i);
+      state.push(0);
+    }
+    
+    function indexToXY(index) {
+      return { x: index % SIZE, y: Math.floor(index / SIZE) };
+    }
+    
+    function xyToIndex(x, y) {
+      return y * SIZE + x;
+    }
+    
+    function isInLineWithEmpty(idx, emptyIdx) {
+      if (idx === emptyIdx) return false;
+      const a = indexToXY(idx);
+      const b = indexToXY(emptyIdx);
+      return a.x === b.x || a.y === b.y;
+    }
+    
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+    
+    // ===== Tile creation & rendering =====
+    function createTiles() {
+      boardGrid.innerHTML = '';
+      for (let n = 1; n < TOTAL; n++) {
+        const t = document.createElement('div');
+        t.className = 'tile';
+        t.dataset.num = n;
+        t.setAttribute('role', 'button');
+        t.setAttribute('aria-label', `Tile ${n}`);
+        const inner = document.createElement('div');
+        inner.className = 'tile-inner';
+        inner.textContent = n;
+        t.appendChild(inner);
+        t.addEventListener('click', () => tryMoveTile(n));
+        boardGrid.appendChild(t);
+        tiles[n] = t;
+      }
+    }
+    
+    function positionTile(num, index) {
+      const { x, y } = indexToXY(index);
+      tiles[num].style.transform = `translate(${x * 100}%, ${y * 100}%)`;
+    }
+    
+    function render() {
+      const emptyIdx = state.indexOf(0);
+      for (let i = 0; i < TOTAL; i++) {
+        const num = state[i];
+        if (num === 0) continue;
+        positionTile(num, i);
+        const tile = tiles[num];
+        const movable = isInLineWithEmpty(i, emptyIdx) && !isWon && !isShuffling;
+        tile.classList.toggle('movable', movable);
+        tile.classList.toggle('correct', num === i + 1 && !isWon);
+      }
+    }
+    
+    // ===== Move logic =====
+    function tryMoveTile(num) {
+      if (isWon || isShuffling) return;
+      const idx = state.indexOf(num);
+      const emptyIdx = state.indexOf(0);
+      if (!isInLineWithEmpty(idx, emptyIdx)) return;
+      
+      const a = indexToXY(idx);
+      const b = indexToXY(emptyIdx);
+      let movesMade = 0;
+      
+      if (a.x === b.x) {
+        // Vertical slide
+        const dir = b.y > a.y ? 1 : -1;
+        let curY = b.y;
+        while (curY !== a.y) {
+          const fromY = curY - dir;
+          const fromIdx = xyToIndex(a.x, fromY);
+          const toIdx = xyToIndex(a.x, curY);
+          state[toIdx] = state[fromIdx];
+          state[fromIdx] = 0;
+          curY = fromY;
+          movesMade++;
+        }
+      } else {
+        // Horizontal slide
+        const dir = b.x > a.x ? 1 : -1;
+        let curX = b.x;
+        while (curX !== a.x) {
+          const fromX = curX - dir;
+          const fromIdx = xyToIndex(fromX, a.y);
+          const toIdx = xyToIndex(curX, a.y);
+          state[toIdx] = state[fromIdx];
+          state[fromIdx] = 0;
+          curX = fromX;
+          movesMade++;
+        }
+      }
+      
+      moves += movesMade;
+      movesEl.textContent = moves;
+      
+      if (!startTime) startTimer();
+      
+      render();
+      checkWin();
+    }
+    
+    // ===== Timer =====
+    function startTimer() {
+      startTime = Date.now();
+      timerInterval = setInterval(updateTime, 100);
+    }
+    
+    function updateTime() {
+      if (!startTime) return;
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      timeEl.textContent = formatTime(elapsed);
+    }
+    
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+    
+    // ===== Win detection =====
+    function checkWin() {
+      for (let i = 0; i < TOTAL - 1; i++) {
+        if (state[i] !== i + 1) return;
+      }
+      
+      isWon = true;
+      stopTimer();
+      const elapsed = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+      
+      // Persist bests
+      const bestTime = parseInt(localStorage.getItem('fifteen-best-time') || '0');
+      const bestMoves = parseInt(localStorage.getItem('fifteen-best-moves') || '0');
+      let newRecord = false;
+      if (bestTime === 0 || elapsed < bestTime) {
+        localStorage.setItem('fifteen-best-time', elapsed);
+        newRecord = true;
+      }
+      if (bestMoves === 0 || moves < bestMoves) {
+        localStorage.setItem('fifteen-best-moves', moves);
+        newRecord = true;
+      }
+      loadBest();
+      
+      render(); // refresh classes (no movable, no correct dots)
+      
+      board.classList.add('won');
+      setTimeout(() => spawnParticles(), 200);
+      
+      winStatsEl.textContent = `${moves} moves · ${formatTime(elapsed)}${newRecord ? ' · new record' : ''}`;
+      setTimeout(() => statusEl.classList.add('show'), 1200);
+    }
+    
+    function spawnParticles() {
+      const colors = ['#ff8c42', '#ffb347', '#fff5e1', '#f4a261', '#84cc16'];
+      const count = 56;
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+        const dist = 120 + Math.random() * 220;
+        p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+        p.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+        p.style.animationDelay = (Math.random() * 0.2) + 's';
+        board.appendChild(p);
+        setTimeout(() => p.remove(), 2000);
+      }
+    }
+    
+    // ===== Best scores =====
+    function loadBest() {
+      const bestTime = parseInt(localStorage.getItem('fifteen-best-time') || '0');
+      const bestMoves = parseInt(localStorage.getItem('fifteen-best-moves') || '0');
+      bestEl.textContent = bestTime > 0 ? formatTime(bestTime) : '—';
+      bestMovesEl.textContent = bestMoves > 0 ? bestMoves : '—';
+    }
+    
+    // ===== Shuffle & reset =====
+    function shuffle() {
+      if (isShuffling) return;
+      
+      isWon = false;
+      moves = 0;
+      movesEl.textContent = '0';
+      timeEl.textContent = '0:00';
+      startTime = null;
+      stopTimer();
+      statusEl.classList.remove('show');
+      board.classList.remove('won');
+      board.querySelectorAll('.particle').forEach(p => p.remove());
+      
+      isShuffling = true;
+      let lastEmpty = -1;
+      const numShuffles = 240;
+      
+      for (let i = 0; i < numShuffles; i++) {
+        const emptyIdx = state.indexOf(0);
+        const { x, y } = indexToXY(emptyIdx);
+        const neighbors = [];
+        if (x > 0) neighbors.push(xyToIndex(x - 1, y));
+        if (x < SIZE - 1) neighbors.push(xyToIndex(x + 1, y));
+        if (y > 0) neighbors.push(xyToIndex(x, y - 1));
+        if (y < SIZE - 1) neighbors.push(xyToIndex(x, y + 1));
+        
+        // Avoid undoing the previous move for a deeper scramble
+        const valid = neighbors.filter(n => n !== lastEmpty);
+        const pick = valid[Math.floor(Math.random() * valid.length)];
+        
+        state[emptyIdx] = state[pick];
+        state[pick] = 0;
+        lastEmpty = emptyIdx;
+      }
+      
+      isShuffling = false;
+      render();
+      showToast('Tiles shuffled — make your move');
+    }
+    
+    function resetToSolved() {
+      isWon = true;
+      moves = 0;
+      movesEl.textContent = '0';
+      timeEl.textContent = '0:00';
+      startTime = null;
+      stopTimer();
+      statusEl.classList.remove('show');
+      board.classList.remove('won');
+      board.querySelectorAll('.particle').forEach(p => p.remove());
+      resetState();
+      render();
+      showToast('Board reset to solved state');
+    }
+    
+    // ===== Toast =====
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toastEl.classList.remove('show'), 2500);
+    }
+    
+    // ===== Keyboard =====
+    document.addEventListener('keydown', (e) => {
+      if (isWon || isShuffling) return;
+      const emptyIdx = state.indexOf(0);
+      const { x, y } = indexToXY(emptyIdx);
+      let targetIdx = -1;
+      
+      // Arrow direction = direction the tile slides into the empty cell
+      if (e.key === 'ArrowUp' && y < SIZE - 1) {
+        targetIdx = xyToIndex(x, y + 1);
+      } else if (e.key === 'ArrowDown' && y > 0) {
+        targetIdx = xyToIndex(x, y - 1);
+      } else if (e.key === 'ArrowLeft' && x < SIZE - 1) {
+        targetIdx = xyToIndex(x + 1, y);
+      } else if (e.key === 'ArrowRight' && x > 0) {
+        targetIdx = xyToIndex(x - 1, y);
+      }
+      
+      if (targetIdx !== -1) {
+        e.preventDefault();
+        tryMoveTile(state[targetIdx]);
+      }
+    });
+    
+    // ===== Wire up buttons =====
+    document.getElementById('shuffle').addEventListener('click', shuffle);
+    document.getElementById('reset').addEventListener('click', resetToSolved);
+    document.getElementById('play-again').addEventListener('click', shuffle);
+    
+    // ===== Init =====
+    resetState();
+    createTiles();
+    render();
+    loadBest();
+    
+    // Auto-shuffle after a brief moment so the user sees the goal first
+    setTimeout(() => shuffle(), 700);
+  </script>
+</body>
+</html>
