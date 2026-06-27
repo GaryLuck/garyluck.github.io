@@ -16,7 +16,6 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none; /* Prevents default zooming and scrolling on mobile/iPad */
         }
         
         body, html {
@@ -45,6 +44,11 @@
             width: 100%;
             height: 100%;
             box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            touch-action: none; /* Restrict gesture blocking to the canvas only */
         }
 
         /* Glassmorphism UI Elements */
@@ -68,9 +72,7 @@
         }
 
         .hidden {
-            opacity: 0;
-            pointer-events: none;
-            transform: scale(0.9) translateY(20px);
+            display: none !important;
         }
 
         /* Titles & typography */
@@ -138,6 +140,8 @@
             border: 3px solid rgba(255, 255, 255, 0.2);
             transition: all 0.2s ease;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            outline: none;
+            padding: 0;
         }
 
         .color-dot.active {
@@ -328,13 +332,13 @@
             
             <p style="margin-bottom: 10px; font-weight: 600; color: #fff;">Choose Robo's Paint Color:</p>
             <div class="color-selector">
-                <div class="color-dot active" style="background-color: #00f2fe; --glow-color: #00f2fe;" onclick="setRobotColor('#00f2fe', 0)"></div>
-                <div class="color-dot" style="background-color: #ff007f; --glow-color: #ff007f;" onclick="setRobotColor('#ff007f', 1)"></div>
-                <div class="color-dot" style="background-color: #39ff14; --glow-color: #39ff14;" onclick="setRobotColor('#39ff14', 2)"></div>
-                <div class="color-dot" style="background-color: #ffea00; --glow-color: #ffea00;" onclick="setRobotColor('#ffea00', 3)"></div>
+                <button class="color-dot active" style="background-color: #00f2fe; --glow-color: #00f2fe;" aria-label="Cyan color"></button>
+                <button class="color-dot" style="background-color: #ff007f; --glow-color: #ff007f;" aria-label="Pink color"></button>
+                <button class="color-dot" style="background-color: #39ff14; --glow-color: #39ff14;" aria-label="Green color"></button>
+                <button class="color-dot" style="background-color: #ffea00; --glow-color: #ffea00;" aria-label="Yellow color"></button>
             </div>
 
-            <button class="btn" onclick="startGame()">Start Game</button>
+            <button class="btn">Start Game</button>
         </div>
 
         <!-- Celebration Milestone Overlay -->
@@ -343,7 +347,7 @@
                 <div id="badge" class="badge-icon">🏆</div>
                 <h2 id="milestone-title">Awesome!</h2>
                 <p id="milestone-desc">You collected 50 items! Robo is super happy!</p>
-                <button class="btn" onclick="closeCelebration()">Keep Rolling!</button>
+                <button class="btn">Keep Rolling!</button>
             </div>
         </div>
 
@@ -352,16 +356,42 @@
     </div>
 
     <script>
+        // Global error logging for on-screen debugging
+        window.addEventListener('error', function(e) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.position = 'fixed';
+            errorDiv.style.bottom = '10px';
+            errorDiv.style.left = '10px';
+            errorDiv.style.right = '10px';
+            errorDiv.style.background = 'rgba(255, 0, 0, 0.9)';
+            errorDiv.style.color = 'white';
+            errorDiv.style.padding = '15px';
+            errorDiv.style.borderRadius = '8px';
+            errorDiv.style.fontFamily = 'monospace';
+            errorDiv.style.fontSize = '12px';
+            errorDiv.style.zIndex = '99999';
+            errorDiv.style.whiteSpace = 'pre-wrap';
+            errorDiv.innerText = 'Error: ' + e.message + '\nSource: ' + e.filename + ':' + e.lineno + '\nStack: ' + (e.error ? e.error.stack : 'N/A');
+            document.body.appendChild(errorDiv);
+        });
+
         // --- Web Audio API Synthesizer ---
         let audioEnabled = true;
         let audioCtx = null;
 
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
+            try {
+                if (!audioCtx) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContextClass) {
+                        audioCtx = new AudioContextClass();
+                    }
+                }
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            } catch (e) {
+                console.warn("Web Audio API failed to initialize:", e);
             }
         }
 
@@ -381,64 +411,83 @@
             initAudio();
             if (!audioCtx) return;
 
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
 
-            const now = audioCtx.currentTime;
+                const now = audioCtx.currentTime;
 
-            if (type === 'gear') {
-                // Happy little high-pitched chime
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(523.25, now); // C5
-                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
-                gain.gain.setValueAtTime(0.15, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
-                osc.start(now);
-                osc.stop(now + 0.15);
-            } else if (type === 'battery') {
-                // Electric charging synth wave
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(220, now);
-                osc.frequency.linearRampToValueAtTime(440, now + 0.3);
-                gain.gain.setValueAtTime(0.1, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
-                osc.start(now);
-                osc.stop(now + 0.3);
-            } else if (type === 'chip') {
-                // Twinkly double-chime
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(783.99, now); // G5
-                osc.frequency.setValueAtTime(1046.50, now + 0.08); // C6
-                gain.gain.setValueAtTime(0.15, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
-                osc.start(now);
-                osc.stop(now + 0.25);
-            } else if (type === 'dizzy') {
-                // Funny sliding down siren whistle
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(400, now);
-                osc.frequency.linearRampToValueAtTime(100, now + 0.6);
-                gain.gain.setValueAtTime(0.15, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
-                osc.start(now);
-                osc.stop(now + 0.6);
-            } else if (type === 'magnet-start') {
-                // Epic power up wave
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(150, now);
-                osc.frequency.exponentialRampToValueAtTime(600, now + 0.5);
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
-                osc.start(now);
-                osc.stop(now + 0.5);
+                if (type === 'gear') {
+                    // Happy little high-pitched chime
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'battery') {
+                    // Electric charging synth wave
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.linearRampToValueAtTime(440, now + 0.3);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'chip') {
+                    // Twinkly double-chime
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(783.99, now); // G5
+                    osc.frequency.setValueAtTime(1046.50, now + 0.08); // C6
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'dizzy') {
+                    // Funny sliding down siren whistle
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.linearRampToValueAtTime(100, now + 0.6);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
+                    osc.start(now);
+                    osc.stop(now + 0.6);
+                } else if (type === 'magnet-start') {
+                    // Epic power up wave
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.5);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                }
+            } catch (err) {
+                console.warn("Sound playback failed:", err);
             }
         }
 
         // --- Game Setup & Loop ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+
+        // Helper function for drawing rounded rectangles (highly compatible)
+        function drawRoundedRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
         
         let score = 0;
         let magnetPower = 0; // 0 to 100
@@ -451,6 +500,7 @@
         
         function setRobotColor(hex, index) {
             robotColor = hex;
+            robot.color = hex; // Update current robot model color immediately
             playSound('gear');
             
             // UI Dot Activation
@@ -462,6 +512,15 @@
                     dot.classList.remove('active');
                 }
             });
+
+            // Update Start Game button styles immediately to match chosen color
+            const startBtn = document.querySelector('#main-menu .btn');
+            if (startBtn) {
+                startBtn.style.background = `linear-gradient(135deg, ${hex} 0%, #050510 100%)`;
+                startBtn.style.color = '#ffffff';
+                startBtn.style.boxShadow = `0 0 25px ${hex}`;
+                startBtn.style.border = `2px solid ${hex}`;
+            }
         }
 
         // Handle canvas sizing
@@ -1101,14 +1160,14 @@
                 ctx.stroke();
             }
             
-            // Wheel Spokes/mechanical plate
-            ctx.fillStyle = '#2d2b42';
+            // Wheel Spokes/mechanical plate (matches chosen paint color!)
+            ctx.fillStyle = '#1c1b2b';
             ctx.beginPath();
             ctx.arc(0, 0, robot.radius - 12, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.strokeStyle = '#4e4c6b';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = robot.color + '88'; // glowing spoke lines
+            ctx.lineWidth = 3;
             for (let i = 0; i < 4; i++) {
                 ctx.rotate(Math.PI / 2);
                 ctx.beginPath();
@@ -1119,20 +1178,23 @@
             ctx.restore();
 
             // Inner Face Screen (remains upright while wheel rotates!)
-            ctx.fillStyle = '#0f0f1c';
-            ctx.strokeStyle = '#4e4c6b';
-            ctx.lineWidth = 4;
+            ctx.fillStyle = '#0a0a14';
+            ctx.strokeStyle = robot.color + '55';
+            ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.arc(0, 0, robot.radius - 16, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
 
-            // Glowing neon screen border
+            // Glowing neon screen border (fully colored glow)
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = robot.color;
             ctx.strokeStyle = robot.color;
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(0, 0, robot.radius - 18, 0, Math.PI * 2);
             ctx.stroke();
+            ctx.shadowBlur = 0; // Reset shadow for eyes and mouth
 
             // Robot Eyes / Emotions
             ctx.fillStyle = robot.color;
@@ -1209,7 +1271,7 @@
             ctx.stroke();
 
             // Magnet shape at top
-            ctx.fillStyle = magnetActive ? '#ff00ff' : '#4facfe';
+            ctx.fillStyle = magnetActive ? '#ff00ff' : robot.color;
             ctx.shadowBlur = magnetActive ? 15 : 0;
             ctx.shadowColor = '#ff00ff';
             ctx.beginPath();
@@ -1267,9 +1329,8 @@
                     ctx.strokeStyle = item.color;
                     ctx.fillStyle = 'rgba(57, 255, 20, 0.15)';
                     
-                    // Main body rect
-                    ctx.beginPath();
-                    ctx.roundRect(-10, -18, 20, 32, 4);
+                    // Main body rect (using highly compatible helper)
+                    drawRoundedRect(ctx, -10, -18, 20, 32, 4);
                     ctx.fill();
                     ctx.stroke();
 
@@ -1295,8 +1356,8 @@
                     ctx.strokeStyle = item.color;
                     ctx.fillStyle = 'rgba(0, 242, 254, 0.2)';
                     
-                    ctx.beginPath();
-                    ctx.roundRect(-14, -14, 28, 28, 5);
+                    // (using highly compatible helper)
+                    drawRoundedRect(ctx, -14, -14, 28, 28, 5);
                     ctx.fill();
                     ctx.stroke();
 
@@ -1433,6 +1494,36 @@
         // Initialize Background Layout on Load
         initBackground();
         requestAnimationFrame(loop);
+
+        // Safe programmatic event bindings
+        function bindEvents() {
+            const colorsList = ['#00f2fe', '#ff007f', '#39ff14', '#ffea00'];
+            const dotsList = document.querySelectorAll('.color-dot');
+            dotsList.forEach((dot, index) => {
+                dot.addEventListener('click', () => {
+                    setRobotColor(colorsList[index], index);
+                });
+            });
+
+            // Start Game button binding
+            const startBtn = document.querySelector('#main-menu .btn');
+            if (startBtn) {
+                startBtn.addEventListener('click', startGame);
+            }
+
+            // Keep Rolling button binding
+            const keepRollingBtn = document.querySelector('#celebration-screen .btn');
+            if (keepRollingBtn) {
+                keepRollingBtn.addEventListener('click', closeCelebration);
+            }
+        }
+
+        // Run bindings once DOM is fully loaded to guarantee element availability
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindEvents);
+        } else {
+            bindEvents();
+        }
 
     </script>
 </body>
