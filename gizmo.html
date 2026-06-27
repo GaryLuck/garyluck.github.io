@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Robo Roll - Junkyard Collector</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800;900&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* CSS resets & custom styles */
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* Prevents default zooming and scrolling on mobile/iPad */
+        }
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #05050f;
+            font-family: 'Outfit', sans-serif;
+            color: #ffffff;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #0f0c24 0%, #050510 100%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Glassmorphism UI Elements */
+        .overlay-panel {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 12, 36, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-width: 500px;
+            width: 90%;
+            z-index: 10;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.9) translateY(20px);
+        }
+
+        /* Titles & typography */
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3.5rem;
+            margin: 0 0 10px 0;
+            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+            letter-spacing: 2px;
+            font-weight: 900;
+        }
+
+        h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            margin: 0 0 20px 0;
+            color: #ff007f;
+            text-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #a0a0d0;
+            margin: 0 0 25px 0;
+        }
+
+        /* Buttons & customization */
+        .btn {
+            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            color: #050510;
+            border: none;
+            border-radius: 50px;
+            padding: 16px 40px;
+            font-size: 1.3rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.5);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .btn:hover, .btn:active {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.8);
+        }
+
+        .color-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        .color-dot {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .color-dot.active {
+            border-color: #ffffff;
+            transform: scale(1.2);
+            box-shadow: 0 0 15px var(--glow-color);
+        }
+
+        /* Top HUD elements */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .hud-item {
+            background: rgba(15, 12, 36, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 10px 20px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .score-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #00f2fe;
+            text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+            transition: transform 0.1s ease;
+        }
+
+        .hud-icon {
+            font-size: 1.5rem;
+        }
+
+        /* Turbo magnet progress bar */
+        #magnet-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 200px;
+        }
+
+        #magnet-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: 'Orbitron', sans-serif;
+            color: #ff007f;
+            display: flex;
+            justify-content: space-between;
+            font-weight: 800;
+        }
+
+        #magnet-bar-outer {
+            width: 100%;
+            height: 14px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+
+        #magnet-bar-inner {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ff007f, #ff00ff);
+            box-shadow: 0 0 10px rgba(255, 0, 127, 0.8);
+            transition: width 0.2s ease;
+        }
+
+        /* Sound toggle button */
+        #audio-toggle {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(15, 12, 36, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 5;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            font-size: 1.4rem;
+            transition: transform 0.2s ease;
+        }
+
+        #audio-toggle:active {
+            transform: scale(0.9);
+        }
+
+        /* Direct helper message */
+        #drag-helper {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            text-align: center;
+            z-index: 4;
+            animation: breathe 2s infinite ease-in-out;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Celebration Screen styles */
+        #celebration-screen {
+            pointer-events: none; /* Let clicks pass through if it overlaps */
+        }
+        
+        #celebration-content {
+            background: rgba(15, 12, 36, 0.85);
+            border: 3px solid #00f2fe;
+            box-shadow: 0 0 50px rgba(0, 242, 254, 0.6);
+            pointer-events: auto;
+        }
+
+        /* Ribbon / Badge styling */
+        .badge-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+            animation: bounce 1.5s infinite ease-in-out;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- HUD -->
+        <div id="hud">
+            <div class="hud-item" id="score-box">
+                <span class="hud-icon">⚙️</span>
+                <span id="score" class="score-val">0</span>
+            </div>
+            
+            <div class="hud-item" id="magnet-container">
+                <div id="magnet-label">
+                    <span>⚡ Magnet Power</span>
+                    <span id="magnet-percent">0%</span>
+                </div>
+                <div id="magnet-bar-outer">
+                    <div id="magnet-bar-inner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Drag Helper Instruction -->
+        <div id="drag-helper">👈 Drag or Tap to Roll Robo! 👉</div>
+
+        <!-- Audio Sound On/Off Button -->
+        <div id="audio-toggle" onclick="toggleAudio()">🔊</div>
+
+        <!-- Main Menu -->
+        <div id="main-menu" class="overlay-panel">
+            <h1>ROBO ROLL</h1>
+            <p>Roll through space, collect items, and activate your power-up! Touch anywhere to guide your friendly robot.</p>
+            
+            <p style="margin-bottom: 10px; font-weight: 600; color: #fff;">Choose Robo's Paint Color:</p>
+            <div class="color-selector">
+                <div class="color-dot active" style="background-color: #00f2fe; --glow-color: #00f2fe;" onclick="setRobotColor('#00f2fe', 0)"></div>
+                <div class="color-dot" style="background-color: #ff007f; --glow-color: #ff007f;" onclick="setRobotColor('#ff007f', 1)"></div>
+                <div class="color-dot" style="background-color: #39ff14; --glow-color: #39ff14;" onclick="setRobotColor('#39ff14', 2)"></div>
+                <div class="color-dot" style="background-color: #ffea00; --glow-color: #ffea00;" onclick="setRobotColor('#ffea00', 3)"></div>
+            </div>
+
+            <button class="btn" onclick="startGame()">Start Game</button>
+        </div>
+
+        <!-- Celebration Milestone Overlay -->
+        <div id="celebration-screen" class="overlay-panel hidden">
+            <div id="celebration-content" style="padding: 20px; border-radius: 16px; width: 100%;">
+                <div id="badge" class="badge-icon">🏆</div>
+                <h2 id="milestone-title">Awesome!</h2>
+                <p id="milestone-desc">You collected 50 items! Robo is super happy!</p>
+                <button class="btn" onclick="closeCelebration()">Keep Rolling!</button>
+            </div>
+        </div>
+
+        <!-- The Canvas Game screen -->
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // --- Web Audio API Synthesizer ---
+        let audioEnabled = true;
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audio-toggle');
+            if (audioEnabled) {
+                btn.textContent = '🔊';
+                initAudio();
+            } else {
+                btn.textContent = '🔇';
+            }
+        }
+
+        function playSound(type) {
+            if (!audioEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'gear') {
+                // Happy little high-pitched chime
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'battery') {
+                // Electric charging synth wave
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.linearRampToValueAtTime(440, now + 0.3);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'chip') {
+                // Twinkly double-chime
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(783.99, now); // G5
+                osc.frequency.setValueAtTime(1046.50, now + 0.08); // C6
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'dizzy') {
+                // Funny sliding down siren whistle
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.linearRampToValueAtTime(100, now + 0.6);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
+                osc.start(now);
+                osc.stop(now + 0.6);
+            } else if (type === 'magnet-start') {
+                // Epic power up wave
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.5);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            }
+        }
+
+        // --- Game Setup & Loop ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let score = 0;
+        let magnetPower = 0; // 0 to 100
+        let magnetActive = false;
+        let magnetTimer = 0; // Magnet duration
+        let nextMilestone = 50;
+
+        // Robot Configuration
+        let robotColor = '#00f2fe';
+        
+        function setRobotColor(hex, index) {
+            robotColor = hex;
+            playSound('gear');
+            
+            // UI Dot Activation
+            const dots = document.querySelectorAll('.color-dot');
+            dots.forEach((dot, idx) => {
+                if (idx === index) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+        }
+
+        // Handle canvas sizing
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            groundY = height - 100;
+            robot.y = groundY - robot.radius;
+        });
+
+        let groundY = height - 100;
+        let isPlaying = false;
+
+        // The Robot Object
+        const robot = {
+            x: width / 2,
+            y: groundY - 40,
+            radius: 40,
+            targetX: width / 2,
+            speed: 0,
+            angle: 0,
+            color: '#00f2fe',
+            isDizzy: false,
+            dizzyTime: 0,
+            faceAnimFrame: 0,
+            blinkTimer: 120,
+            isBlinking: false,
+            glowIntensity: 0
+        };
+
+        // Arrays for Game Entities
+        const items = [];
+        const obstacles = [];
+        const particles = [];
+        const backgroundStars = [];
+        const backgroundJunk = [];
+
+        // Initialize Background Stars & Space Junk silhouettes
+        function initBackground() {
+            backgroundStars.length = 0;
+            backgroundJunk.length = 0;
+            
+            // Distant small stars
+            for (let i = 0; i < 80; i++) {
+                backgroundStars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height * 0.7,
+                    size: Math.random() * 2 + 1,
+                    speedFactor: Math.random() * 0.05 + 0.02,
+                    brightness: Math.random()
+                });
+            }
+
+            // Space Junkyard outlines/debris silhouette in midground
+            for (let i = 0; i < 6; i++) {
+                backgroundJunk.push({
+                    x: Math.random() * width,
+                    y: groundY - 120 - Math.random() * 100,
+                    size: Math.random() * 80 + 40,
+                    type: Math.floor(Math.random() * 3), // different shapes
+                    speedFactor: 0.15 + Math.random() * 0.1
+                });
+            }
+        }
+
+        // --- Touch/Mouse Interaction Handlers ---
+        let isPointerDown = false;
+
+        function updatePointer(e) {
+            if (!isPlaying) return;
+            let clientX;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+            } else {
+                clientX = e.clientX;
+            }
+            // Clamp target position within screen bounds
+            robot.targetX = Math.max(robot.radius + 10, Math.min(width - robot.radius - 10, clientX));
+        }
+
+        window.addEventListener('mousedown', (e) => {
+            isPointerDown = true;
+            updatePointer(e);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPointerDown) updatePointer(e);
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPointerDown = false;
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            isPointerDown = true;
+            updatePointer(e);
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            updatePointer(e);
+        }, { passive: true });
+
+        window.addEventListener('touchend', () => {
+            isPointerDown = false;
+        });
+
+        // --- Spawning Logic ---
+        function spawnItem() {
+            if (!isPlaying) return;
+
+            // Spawns items at top with random x
+            const itemX = Math.random() * (width - 60) + 30;
+            const rand = Math.random();
+            let type = 'gear'; // common
+            let points = 1;
+            let color = '#ffbf00';
+
+            if (rand > 0.85) {
+                type = 'chip'; // super rare & special
+                points = 5;
+                color = '#00f2fe';
+            } else if (rand > 0.65) {
+                type = 'battery'; // medium rare
+                points = 2;
+                color = '#39ff14';
+            }
+
+            items.push({
+                x: itemX,
+                y: -30,
+                type: type,
+                points: points,
+                color: color,
+                radius: type === 'chip' ? 14 : type === 'battery' ? 16 : 18,
+                speedY: Math.random() * 2 + 2,
+                rotSpeed: (Math.random() - 0.5) * 0.05,
+                angle: 0,
+                isMagnetized: false,
+                isDropped: false, // true if dropped after collision
+                speedX: 0
+            });
+        }
+
+        function spawnObstacle() {
+            if (!isPlaying) return;
+
+            // Only spawn if not dizzy right now
+            if (robot.isDizzy) return;
+
+            const obsX = Math.random() * (width - 80) + 40;
+            
+            // Random space junkyard scrap shapes
+            const types = ['tire', 'gear-metal', 'scrap-beam'];
+            const chosenType = types[Math.floor(Math.random() * types.length)];
+
+            obstacles.push({
+                x: obsX,
+                y: -50,
+                radius: Math.random() * 15 + 20,
+                speedY: Math.random() * 3 + 2.5,
+                angle: 0,
+                rotSpeed: (Math.random() - 0.5) * 0.08,
+                type: chosenType,
+                shadowColor: 'rgba(255, 77, 77, 0.4)'
+            });
+        }
+
+        // Create colorful dust and sparkle particles
+        function createExplosion(x, y, color, count = 12) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 2;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: Math.random() * 5 + 3,
+                    color: color,
+                    alpha: 1,
+                    decay: Math.random() * 0.02 + 0.02
+                });
+            }
+        }
+
+        // Start Game flow
+        function startGame() {
+            // Hide main menu
+            document.getElementById('main-menu').classList.add('hidden');
+            isPlaying = true;
+            score = 0;
+            magnetPower = 0;
+            magnetActive = false;
+            nextMilestone = 50;
+            updateHUD();
+            
+            // Reset Arrays
+            items.length = 0;
+            obstacles.length = 0;
+            particles.length = 0;
+
+            initBackground();
+            initAudio();
+
+            // Set robot colors
+            robot.color = robotColor;
+
+            // Spawning Intervals
+            clearInterval(window.itemInterval);
+            clearInterval(window.obsInterval);
+            window.itemInterval = setInterval(spawnItem, 1200);
+            window.obsInterval = setInterval(spawnObstacle, 3000);
+        }
+
+        function updateHUD() {
+            const scoreEl = document.getElementById('score');
+            scoreEl.textContent = score;
+            
+            // Fancier scale pop on score increase
+            scoreEl.style.transform = 'scale(1.3)';
+            setTimeout(() => {
+                scoreEl.style.transform = 'scale(1.0)';
+            }, 100);
+
+            // Update Magnet bar
+            const barInner = document.getElementById('magnet-bar-inner');
+            const percentText = document.getElementById('magnet-percent');
+            
+            barInner.style.width = magnetPower + '%';
+            percentText.textContent = Math.round(magnetPower) + '%';
+            
+            if (magnetActive) {
+                barInner.style.background = 'linear-gradient(90deg, #00f2fe, #ff00ff)';
+                document.getElementById('magnet-label').style.color = '#00f2fe';
+            } else {
+                barInner.style.background = 'linear-gradient(90deg, #ff007f, #ff00ff)';
+                document.getElementById('magnet-label').style.color = '#ff007f';
+            }
+        }
+
+        // Triggered when milestones are reached (50, 100, etc.)
+        function triggerMilestone() {
+            const screen = document.getElementById('celebration-screen');
+            const title = document.getElementById('milestone-title');
+            const desc = document.getElementById('milestone-desc');
+            const badge = document.getElementById('badge');
+
+            // Select fun rewards titles
+            const badges = ['🏆', '👾', '🚀', '💎', '👑', '🌠'];
+            const currentBadge = badges[Math.min(Math.floor(score / 50) - 1, badges.length - 1)];
+
+            badge.textContent = currentBadge;
+            title.textContent = `LEVEL UP: ${score}!`;
+            desc.textContent = `Super job! You gathered ${score} pieces of space scrap! You are an Awesome Engineer!`;
+
+            screen.classList.remove('hidden');
+            
+            // Fire happy confetti effect
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: Math.random() * width,
+                    y: -10,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: Math.random() * 3 + 2,
+                    size: Math.random() * 8 + 4,
+                    color: `hsl(${Math.random() * 360}, 100%, 60%)`,
+                    alpha: 1,
+                    decay: 0.005
+                });
+            }
+
+            playSound('magnet-start');
+        }
+
+        function closeCelebration() {
+            document.getElementById('celebration-screen').classList.add('hidden');
+        }
+
+        // --- Core Update Loop ---
+        function update() {
+            if (!isPlaying) return;
+
+            // 1. Update background items (stars and parallax elements relative to robot speed)
+            const speedScale = robot.speed * 0.15;
+            backgroundStars.forEach(star => {
+                star.x -= speedScale * star.speedFactor;
+                if (star.x < 0) star.x = width;
+                if (star.x > width) star.x = 0;
+            });
+
+            backgroundJunk.forEach(junk => {
+                junk.x -= speedScale * junk.speedFactor;
+                if (junk.x < -junk.size) {
+                    junk.x = width + junk.size;
+                    junk.y = groundY - 120 - Math.random() * 100;
+                }
+                if (junk.x > width + junk.size) {
+                    junk.x = -junk.size;
+                }
+            });
+
+            // 2. Robot Movement & Easing
+            const lastRobotX = robot.x;
+            
+            if (robot.isDizzy) {
+                // If dizzy, reduce steering control, drift robot gently
+                robot.x += Math.sin(robot.dizzyTime * 0.2) * 2;
+                robot.dizzyTime--;
+                if (robot.dizzyTime <= 0) {
+                    robot.isDizzy = false;
+                }
+                // robot rolling slowed down
+                robot.speed = (robot.x - lastRobotX);
+                robot.angle += robot.speed * 0.03;
+            } else {
+                // Easing movement towards tap target
+                robot.x += (robot.targetX - robot.x) * 0.12;
+                robot.speed = (robot.x - lastRobotX);
+                
+                // Roll angle relative to actual distance rolled
+                robot.angle += robot.speed * 0.05;
+            }
+
+            // Robot blinks eyes randomly
+            robot.blinkTimer--;
+            if (robot.blinkTimer <= 0) {
+                if (robot.isBlinking) {
+                    robot.isBlinking = false;
+                    robot.blinkTimer = Math.random() * 180 + 120; // frame delay
+                } else {
+                    robot.isBlinking = true;
+                    robot.blinkTimer = 8; // blink duration
+                }
+            }
+
+            // 3. Magnet Power Management
+            if (magnetActive) {
+                magnetTimer--;
+                magnetPower = (magnetTimer / 300) * 100;
+                
+                // Pulsing glow intensity during magnet power
+                robot.glowIntensity = Math.abs(Math.sin(Date.now() * 0.01)) * 15 + 5;
+
+                if (magnetTimer <= 0) {
+                    magnetActive = false;
+                    magnetPower = 0;
+                }
+                updateHUD();
+            } else {
+                robot.glowIntensity = 0;
+            }
+
+            // 4. Update items
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+
+                // Parallax drift based on robot movement
+                item.x -= speedScale * 0.3;
+
+                if (magnetActive && !item.isDropped) {
+                    // Pull item towards robot if within radius (400px)
+                    const dx = robot.x - item.x;
+                    const dy = robot.y - item.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 380) {
+                        item.isMagnetized = true;
+                        // Pull vector
+                        const pullForce = 0.18;
+                        item.speedX += (dx / dist) * pullForce;
+                        item.speedY += (dy / dist) * pullForce;
+                        
+                        // Limit maximum pull velocity
+                        const currentSpeed = Math.sqrt(item.speedX * item.speedX + item.speedY * item.speedY);
+                        if (currentSpeed > 10) {
+                            item.speedX = (item.speedX / currentSpeed) * 10;
+                            item.speedY = (item.speedY / currentSpeed) * 10;
+                        }
+                    }
+                }
+
+                // Apply velocities
+                item.x += item.speedX;
+                item.y += item.speedY;
+                item.angle += item.rotSpeed;
+
+                // Handle bouncing on floor if dropped
+                if (item.isDropped) {
+                    item.speedY += 0.2; // Gravity
+                    if (item.y + item.radius >= groundY) {
+                        item.y = groundY - item.radius;
+                        item.speedY = -item.speedY * 0.5; // Dampened bounce
+                        item.speedX *= 0.8; // Friction
+                    }
+                }
+
+                // Collision with Robot
+                const dx = robot.x - item.x;
+                const dy = robot.y - item.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < robot.radius + item.radius) {
+                    // Collect item!
+                    score += item.points;
+                    createExplosion(item.x, item.y, item.color, 10);
+                    playSound(item.type);
+
+                    // Add to Magnet energy if magnet not active
+                    if (!magnetActive && item.type !== 'chip') {
+                        magnetPower = Math.min(100, magnetPower + (item.type === 'battery' ? 25 : 8));
+                        if (magnetPower >= 100) {
+                            magnetActive = true;
+                            magnetTimer = 300; // 5 seconds at 60 FPS
+                            playSound('magnet-start');
+                        }
+                    }
+
+                    updateHUD();
+
+                    // Check milestones
+                    if (score >= nextMilestone) {
+                        triggerMilestone();
+                        nextMilestone += 50;
+                    }
+
+                    // Remove item
+                    items.splice(i, 1);
+                    continue;
+                }
+
+                // Clean up items falling past screen boundaries
+                if (item.y > height + 50 || item.x < -50 || item.x > width + 50) {
+                    items.splice(i, 1);
+                }
+            }
+
+            // 5. Update Obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.y += obs.speedY;
+                obs.angle += obs.rotSpeed;
+
+                // Parallax drift based on robot speed
+                obs.x -= speedScale * 0.3;
+
+                // Collision with Robot
+                const dx = robot.x - obs.x;
+                const dy = robot.y - obs.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < robot.radius + obs.radius) {
+                    // Trigger dizzy hit!
+                    if (!robot.isDizzy) {
+                        robot.isDizzy = true;
+                        robot.dizzyTime = 90; // 1.5 seconds dizzy state
+                        playSound('dizzy');
+
+                        // Deduct/scatter items on hit! Max 4 items scatter
+                        const scatterCount = Math.min(Math.floor(score * 0.2) + 1, 4);
+                        for (let s = 0; s < scatterCount; s++) {
+                            if (score > 0) {
+                                score--;
+                                // Spawn a physical scatter gear bouncing around
+                                items.push({
+                                    x: robot.x,
+                                    y: robot.y - robot.radius,
+                                    type: 'gear',
+                                    points: 1,
+                                    color: '#ffbf00',
+                                    radius: 18,
+                                    speedY: -(Math.random() * 5 + 4),
+                                    speedX: (Math.random() - 0.5) * 8,
+                                    rotSpeed: (Math.random() - 0.5) * 0.1,
+                                    angle: Math.random() * Math.PI,
+                                    isMagnetized: false,
+                                    isDropped: true
+                                });
+                            }
+                        }
+                        updateHUD();
+                        createExplosion(obs.x, obs.y, '#ff4d4d', 20);
+                    }
+
+                    // Explode obstacle
+                    obstacles.splice(i, 1);
+                    continue;
+                }
+
+                // Clean up fallen obstacles
+                if (obs.y > height + 50 || obs.x < -50 || obs.x > width + 50) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // 6. Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= p.decay;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // --- Render Helpers ---
+
+        // Draw background graphics (grid, stars, space station debris)
+        function drawBackground() {
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw Stars
+            ctx.fillStyle = '#ffffff';
+            backgroundStars.forEach(star => {
+                ctx.globalAlpha = star.brightness * 0.8 + 0.2;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+
+            // Space Junkyard Silhouettes (Midground)
+            ctx.fillStyle = '#09081a';
+            backgroundJunk.forEach(junk => {
+                ctx.beginPath();
+                if (junk.type === 0) {
+                    // Draw a rusty polygonal wreckage outline
+                    ctx.moveTo(junk.x, junk.y);
+                    ctx.lineTo(junk.x + junk.size * 0.6, junk.y - junk.size * 0.3);
+                    ctx.lineTo(junk.x + junk.size, junk.y);
+                    ctx.lineTo(junk.x + junk.size * 0.8, junk.y + junk.size * 0.5);
+                    ctx.lineTo(junk.x + junk.size * 0.2, junk.y + junk.size * 0.4);
+                } else if (junk.type === 1) {
+                    // Floating space satellite outline
+                    ctx.rect(junk.x, junk.y, junk.size, junk.size * 0.4);
+                    ctx.rect(junk.x + junk.size * 0.4, junk.y - junk.size * 0.3, junk.size * 0.2, junk.size * 1.0);
+                } else {
+                    // Battered space capsule
+                    ctx.arc(junk.x + junk.size * 0.5, junk.y + junk.size * 0.5, junk.size * 0.4, 0, Math.PI, true);
+                }
+                ctx.closePath();
+                ctx.fill();
+            });
+
+            // Draw Metallic ground grid/floor
+            ctx.fillStyle = '#0a0a1f';
+            ctx.fillRect(0, groundY, width, height - groundY);
+
+            // Glowing boundary floor line
+            ctx.strokeStyle = '#321f6b';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(0, groundY);
+            ctx.lineTo(width, groundY);
+            ctx.stroke();
+
+            // Neon floor grid stripes
+            ctx.strokeStyle = '#1a1440';
+            ctx.lineWidth = 2;
+            const gridSpacing = 40;
+            
+            // Scrolling perspective effect on lines
+            const scrollOffset = (robot.x * 0.15) % gridSpacing;
+            
+            for (let x = -gridSpacing; x < width + gridSpacing; x += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(x - scrollOffset, groundY);
+                // Radiating perspective lines extending downwards
+                ctx.lineTo(x - scrollOffset - 40, height);
+                ctx.stroke();
+            }
+
+            // Horizontal lines
+            for (let y = groundY; y < height; y += 30) {
+                ctx.strokeStyle = `rgba(26, 20, 64, ${1 - (y - groundY) / (height - groundY)})`;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+        }
+
+        // Draw the robot
+        function drawRobot() {
+            ctx.save();
+            ctx.translate(robot.x, robot.y);
+
+            // Magnet field shield effect (Glowing overlay)
+            if (magnetActive) {
+                ctx.shadowBlur = robot.glowIntensity;
+                ctx.shadowColor = '#00f2fe';
+                
+                ctx.strokeStyle = 'rgba(0, 242, 254, 0.3)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, robot.radius + 15, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // electric arc lines inside the bubble
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.4)';
+                ctx.lineWidth = 1;
+                for (let a = 0; a < 3; a++) {
+                    ctx.beginPath();
+                    const startAngle = Math.random() * Math.PI * 2;
+                    ctx.arc(0, 0, robot.radius + 5 + Math.random() * 8, startAngle, startAngle + 0.5);
+                    ctx.stroke();
+                }
+            }
+
+            // Draw outer rolling wheel with bolts/spokes
+            ctx.save();
+            ctx.rotate(robot.angle);
+            
+            // Outer wheel rim
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = '#4e4c6b';
+            ctx.fillStyle = '#1c1b2b';
+            ctx.beginPath();
+            ctx.arc(0, 0, robot.radius - 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Colorful wheel tyre tread accents
+            ctx.strokeStyle = robot.color;
+            ctx.lineWidth = 4;
+            for (let i = 0; i < 8; i++) {
+                ctx.rotate(Math.PI / 4);
+                ctx.beginPath();
+                ctx.moveTo(robot.radius - 8, 0);
+                ctx.lineTo(robot.radius - 2, 0);
+                ctx.stroke();
+            }
+            
+            // Wheel Spokes/mechanical plate
+            ctx.fillStyle = '#2d2b42';
+            ctx.beginPath();
+            ctx.arc(0, 0, robot.radius - 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#4e4c6b';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                ctx.rotate(Math.PI / 2);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(robot.radius - 15, 0);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // Inner Face Screen (remains upright while wheel rotates!)
+            ctx.fillStyle = '#0f0f1c';
+            ctx.strokeStyle = '#4e4c6b';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, robot.radius - 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Glowing neon screen border
+            ctx.strokeStyle = robot.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, robot.radius - 18, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Robot Eyes / Emotions
+            ctx.fillStyle = robot.color;
+            
+            // Blinking or dizzy state eyes
+            if (robot.isDizzy) {
+                // Dizzy eyes look like: "X X"
+                ctx.strokeStyle = robot.color;
+                ctx.lineWidth = 3;
+                
+                // Left X
+                ctx.beginPath();
+                ctx.moveTo(-16, -6); ctx.lineTo(-6, 4);
+                ctx.moveTo(-6, -6); ctx.lineTo(-16, 4);
+                // Right X
+                ctx.moveTo(6, -6); ctx.lineTo(16, 4);
+                ctx.moveTo(16, -6); ctx.lineTo(6, 4);
+                ctx.stroke();
+                
+            } else if (robot.isBlinking) {
+                // Closed line eyes
+                ctx.strokeStyle = robot.color;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(-18, 0);
+                ctx.lineTo(-6, 0);
+                ctx.moveTo(6, 0);
+                ctx.lineTo(18, 0);
+                ctx.stroke();
+            } else {
+                // Normal round eyes that look towards the roll direction!
+                const lookOffset = Math.max(-4, Math.min(4, robot.speed * 0.4));
+                
+                ctx.beginPath();
+                // Left Eye
+                ctx.arc(-11 + lookOffset, -1, 6, 0, Math.PI * 2);
+                // Right Eye
+                ctx.arc(11 + lookOffset, -1, 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Shiny glint in eyes
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(-9 + lookOffset, -3, 2, 0, Math.PI * 2);
+                ctx.arc(13 + lookOffset, -3, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Smiling cute mouth
+            ctx.strokeStyle = robot.color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            if (robot.isDizzy) {
+                // Squiggly mouth
+                ctx.moveTo(-10, 12);
+                ctx.bezierCurveTo(-5, 8, 0, 16, 5, 10);
+            } else {
+                // Happy smile
+                ctx.arc(0, 5, 8, 0.1 * Math.PI, 0.9 * Math.PI);
+            }
+            ctx.stroke();
+
+            // Floating Magnet Antenna (on top of robot)
+            ctx.save();
+            // Bobbing antenna effect
+            const antennaBob = Math.sin(Date.now() * 0.01) * 3 - robot.radius - 8;
+            
+            // Stem
+            ctx.strokeStyle = '#4e4c6b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, -robot.radius + 15);
+            ctx.lineTo(0, antennaBob);
+            ctx.stroke();
+
+            // Magnet shape at top
+            ctx.fillStyle = magnetActive ? '#ff00ff' : '#4facfe';
+            ctx.shadowBlur = magnetActive ? 15 : 0;
+            ctx.shadowColor = '#ff00ff';
+            ctx.beginPath();
+            ctx.arc(0, antennaBob, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        // Draw Collectible items (Gears, Batteries, Chips)
+        function drawItems() {
+            items.forEach(item => {
+                ctx.save();
+                ctx.translate(item.x, item.y);
+                ctx.rotate(item.angle);
+
+                // Add soft neon glows around microchips & batteries
+                if (item.type === 'chip') {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#00f2fe';
+                } else if (item.type === 'battery') {
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#39ff14';
+                }
+
+                ctx.fillStyle = item.color;
+                
+                if (item.type === 'gear') {
+                    // Draw a detailed gear shape
+                    const spokes = 8;
+                    const rOut = item.radius;
+                    const rIn = item.radius - 6;
+                    
+                    ctx.beginPath();
+                    for (let i = 0; i < spokes; i++) {
+                        const angle = (i * Math.PI * 2) / spokes;
+                        ctx.lineTo(Math.cos(angle) * rOut, Math.sin(angle) * rOut);
+                        ctx.lineTo(Math.cos(angle + 0.2) * rIn, Math.sin(angle + 0.2) * rIn);
+                        ctx.lineTo(Math.cos(angle + 0.4) * rIn, Math.sin(angle + 0.4) * rIn);
+                        ctx.lineTo(Math.cos(angle + 0.6) * rOut, Math.sin(angle + 0.6) * rOut);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Inner cutout hole
+                    ctx.fillStyle = '#050510';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+                    ctx.fill();
+
+                } else if (item.type === 'battery') {
+                    // Draw glowing battery container
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = item.color;
+                    ctx.fillStyle = 'rgba(57, 255, 20, 0.15)';
+                    
+                    // Main body rect
+                    ctx.beginPath();
+                    ctx.roundRect(-10, -18, 20, 32, 4);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Battery positive tip at top
+                    ctx.fillStyle = item.color;
+                    ctx.fillRect(-4, -22, 8, 4);
+
+                    // Glowing electrical lightning bolt symbol inside
+                    ctx.fillStyle = item.color;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -10);
+                    ctx.lineTo(-5, 0);
+                    ctx.lineTo(-1, 0);
+                    ctx.lineTo(-3, 10);
+                    ctx.lineTo(5, -1);
+                    ctx.lineTo(1, -1);
+                    ctx.closePath();
+                    ctx.fill();
+
+                } else if (item.type === 'chip') {
+                    // Draw glowing square microchip
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = item.color;
+                    ctx.fillStyle = 'rgba(0, 242, 254, 0.2)';
+                    
+                    ctx.beginPath();
+                    ctx.roundRect(-14, -14, 28, 28, 5);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Gold connection pins extending outwards
+                    ctx.fillStyle = '#ffea00';
+                    for (let p = -10; p <= 10; p += 8) {
+                        // Left & Right pins
+                        ctx.fillRect(-18, p - 2, 4, 4);
+                        ctx.fillRect(14, p - 2, 4, 4);
+                        // Top & Bottom pins
+                        ctx.fillRect(p - 2, -18, 4, 4);
+                        ctx.fillRect(p - 2, 14, 4, 4);
+                    }
+
+                    // Gold core circuit pattern
+                    ctx.strokeStyle = '#ffea00';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                    ctx.moveTo(-5, 0); ctx.lineTo(-10, 0);
+                    ctx.moveTo(5, 0); ctx.lineTo(10, 0);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            });
+        }
+
+        // Draw falling space metal / rock obstacles
+        function drawObstacles() {
+            obstacles.forEach(obs => {
+                ctx.save();
+                ctx.translate(obs.x, obs.y);
+                ctx.rotate(obs.angle);
+
+                // Scrap hazard red glowing shadow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ff4d4d';
+
+                if (obs.type === 'tire') {
+                    // Rusty old spacecraft tire
+                    ctx.fillStyle = '#3a3a4a';
+                    ctx.strokeStyle = '#22222b';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, obs.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // inner tire ring
+                    ctx.fillStyle = '#050510';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, obs.radius * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // wheel tire tread stripes
+                    ctx.strokeStyle = '#ff4d4d';
+                    ctx.lineWidth = 2.5;
+                    for (let i = 0; i < 6; i++) {
+                        ctx.rotate(Math.PI / 3);
+                        ctx.beginPath();
+                        ctx.moveTo(obs.radius - 6, 0);
+                        ctx.lineTo(obs.radius, 0);
+                        ctx.stroke();
+                    }
+
+                } else if (obs.type === 'gear-metal') {
+                    // Damaged heavy scrap gear
+                    ctx.fillStyle = '#5c5454';
+                    const spokes = 6;
+                    const rOut = obs.radius;
+                    const rIn = obs.radius - 8;
+                    
+                    ctx.beginPath();
+                    for (let i = 0; i < spokes; i++) {
+                        const angle = (i * Math.PI * 2) / spokes;
+                        ctx.lineTo(Math.cos(angle) * rOut, Math.sin(angle) * rOut);
+                        ctx.lineTo(Math.cos(angle + 0.3) * rIn, Math.sin(angle + 0.3) * rIn);
+                        ctx.lineTo(Math.cos(angle + 0.7) * rOut, Math.sin(angle + 0.7) * rOut);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Inner rusty center
+                    ctx.fillStyle = '#ff4d4d';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                } else {
+                    // Falling space debris beam chunk
+                    ctx.fillStyle = '#4a4343';
+                    ctx.strokeStyle = '#ff4d4d';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.rect(-obs.radius, -obs.radius * 0.4, obs.radius * 2, obs.radius * 0.8);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            });
+        }
+
+        // Draw sparkle/dust particles
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Main game frame loops
+        function loop() {
+            update();
+            
+            // Render Scene
+            ctx.clearRect(0, 0, width, height);
+            drawBackground();
+            drawItems();
+            drawObstacles();
+            drawParticles();
+            drawRobot();
+
+            requestAnimationFrame(loop);
+        }
+
+        // Initialize Background Layout on Load
+        initBackground();
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>
