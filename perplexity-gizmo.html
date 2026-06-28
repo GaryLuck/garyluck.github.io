@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Gizmo-Bot Scrap Run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0a1a; }
+  #gameCanvas {
+    display: block;
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+  }
+  /* HUD overlay */
+  #hud {
+    position: absolute; top: 0; left: 0; width: 100%; pointer-events: none;
+    padding: 12px 16px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    font-family: 'Nunito', sans-serif;
+  }
+  .hud-panel {
+    background: rgba(10,6,30,0.72);
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 14px;
+    padding: 8px 14px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums lining-nums;
+    line-height: 1.3;
+    min-width: 70px;
+    backdrop-filter: blur(8px);
+  }
+  .hud-label { font-size: 11px; font-weight: 700; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.08em; }
+  #magnetBar {
+    width: 140px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  #magnetBarFill {
+    width: 100%; height: 14px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.2);
+    overflow: hidden;
+  }
+  #magnetBarInner {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #00e5ff, #a259ff);
+    border-radius: 6px;
+    transition: width 0.15s ease;
+  }
+  #magnetLabel { font-size: 11px; font-weight: 700; color: #a0cfff; text-transform: uppercase; letter-spacing: 0.07em; }
+
+  /* Menu / overlay screens */
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 30%, #1a0836 0%, #0d0a1a 80%);
+    font-family: 'Nunito', sans-serif;
+    color: #fff;
+    z-index: 100;
+    padding: 30px 20px;
+  }
+  #overlay.hidden { display: none; }
+  .title {
+    font-family: 'Fredoka One', cursive;
+    font-size: clamp(2.4rem, 7vw, 3.6rem);
+    background: linear-gradient(135deg, #00e5ff 0%, #ff6ec7 50%, #ffe000 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    text-align: center;
+    filter: drop-shadow(0 2px 12px rgba(0,229,255,0.3));
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 16px; opacity: 0.65; margin-bottom: 24px; text-align: center; letter-spacing: 0.04em;
+  }
+  /* Color picker */
+  .color-section { margin-bottom: 28px; text-align: center; }
+  .color-section h3 { font-size: 14px; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+  .color-swatches { display: flex; gap: 14px; justify-content: center; }
+  .swatch {
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+    pointer-events: auto;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  .swatch.selected { border-color: #fff; transform: scale(1.2); }
+  /* Big button */
+  .btn {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.4rem;
+    color: #fff;
+    background: linear-gradient(135deg, #7c3aed, #00b4d8);
+    border: none;
+    border-radius: 40px;
+    padding: 16px 52px;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 4px 24px rgba(124,58,237,0.5);
+    transition: transform 0.12s, box-shadow 0.12s;
+    letter-spacing: 0.03em;
+    margin-top: 4px;
+  }
+  .btn:active { transform: scale(0.96); box-shadow: 0 2px 12px rgba(124,58,237,0.4); }
+
+  /* Robot preview on menu */
+  #menuRobotCanvas { margin-bottom: 20px; }
+
+  /* Celebration overlay */
+  #celebrationOverlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #levelBadge {
+    font-family: 'Fredoka One', cursive;
+    font-size: clamp(2rem, 8vw, 3.5rem);
+    color: #fff;
+    background: linear-gradient(135deg, #ff6ec7, #ffe000, #00e5ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 0.3s, transform 0.3s;
+    text-align: center;
+    filter: drop-shadow(0 2px 16px rgba(255,200,0,0.6));
+  }
+  #levelBadge.show {
+    opacity: 1; transform: scale(1.05);
+  }
+
+  /* Magnet active pulse */
+  #magnetGlow {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 20;
+    border-radius: 0;
+    opacity: 0;
+    background: radial-gradient(ellipse at 50% 80%, rgba(160,100,255,0.18) 0%, transparent 70%);
+    animation: none;
+  }
+  #magnetGlow.active {
+    opacity: 1;
+    animation: magnetPulse 1s infinite alternate ease-in-out;
+  }
+  @keyframes magnetPulse {
+    from { opacity: 0.5; }
+    to { opacity: 1; }
+  }
+
+  /* Confetti canvas */
+  #confettiCanvas {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 45;
+  }
+
+  /* Touch zone hint */
+  #touchHint {
+    position: absolute; bottom: 28px; left: 0; right: 0;
+    text-align: center;
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px;
+    color: rgba(255,255,255,0.4);
+    pointer-events: none;
+    z-index: 5;
+    transition: opacity 0.5s;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+<canvas id="confettiCanvas"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hud-panel">
+    <div class="hud-label">Score</div>
+    <div id="scoreDisplay">0</div>
+  </div>
+  <div class="hud-panel" id="magnetBar">
+    <div id="magnetLabel">⚡ Magnet</div>
+    <div id="magnetBarFill"><div id="magnetBarInner"></div></div>
+  </div>
+  <div class="hud-panel">
+    <div class="hud-label">Gears</div>
+    <div id="gearDisplay">0</div>
+  </div>
+</div>
+
+<div id="magnetGlow"></div>
+
+<div id="celebrationOverlay">
+  <div id="levelBadge">⭐ Level Up! ⭐</div>
+</div>
+
+<div id="overlay">
+  <div class="title">Gizmo-Bot<br>Scrap Run!</div>
+  <div class="subtitle">Collect gears, batteries &amp; microchips!</div>
+  <canvas id="menuRobotCanvas" width="120" height="120"></canvas>
+  <div class="color-section">
+    <h3>Robo's Paint Color</h3>
+    <div class="color-swatches">
+      <div class="swatch selected" data-color="cyan" style="background:#00e5ff;" title="Cyan"></div>
+      <div class="swatch" data-color="pink" style="background:#ff6ec7;" title="Pink"></div>
+      <div class="swatch" data-color="green" style="background:#39ff7c;" title="Green"></div>
+      <div class="swatch" data-color="gold" style="background:#ffe000;" title="Gold"></div>
+    </div>
+  </div>
+  <button class="btn" id="startBtn">▶ START!</button>
+</div>
+
+<div id="touchHint">Slide finger to move Robo!</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  CONSTANTS & CONFIG
+// ═══════════════════════════════════════════════════════════════════
+const COLORS = {
+  cyan:  { body:'#00e5ff', dark:'#007ea8', eye:'#fff', wheel:'#1a3a4a' },
+  pink:  { body:'#ff6ec7', dark:'#a03076', eye:'#fff', wheel:'#3a1028' },
+  green: { body:'#39ff7c', dark:'#1a7a3c', eye:'#fff', wheel:'#0a2818' },
+  gold:  { body:'#ffe000', dark:'#8a7000', eye:'#fff', wheel:'#2a2000' },
+};
+
+const COLLECTIBLE_TYPES = {
+  gear:      { color:'#b0b8c8', glow:'#8090a8', points:1, label:'⚙', radius:16 },
+  battery:   { color:'#39ff7c', glow:'#00ff60', points:2, label:'🔋', radius:14 },
+  microchip: { color:'#a259ff', glow:'#c090ff', points:5, label:'💠', radius:13 },
+};
+const HAZARD_TYPES = [
+  { w:40, h:20, color:'#555', label:'Tire' },
+  { w:70, h:14, color:'#666', label:'Beam' },
+  { w:22, h:22, color:'#777', label:'Bolt' },
+];
+
+const MAGNET_FILL_PER_BATTERY = 30;  // % per battery
+const MAGNET_DURATION = 5;           // seconds
+const MILESTONE = 50;
+
+// ═══════════════════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════════════════
+let selectedColor = 'cyan';
+let gameRunning = false;
+let score = 0;
+let gears = 0;
+let magnetPower = 0;   // 0-100
+let magnetActive = false;
+let magnetTimer = 0;
+let lastMilestone = 0;
+let touchX = null;
+let items = [];
+let confettiParticles = [];
+let spawnTimer = 0;
+let hazardTimer = 0;
+let time = 0;
+let lastTime = 0;
+let accumulator = 0;
+const TICK = 1/60;
+
+// ═══════════════════════════════════════════════════════════════════
+//  AUDIO (Web Audio API — fully synthesized, no external files)
+// ═══════════════════════════════════════════════════════════════════
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, type, duration, vol=0.18, startFreq=null, endFreq=null) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(startFreq||freq, audioCtx.currentTime);
+  if (endFreq) osc.frequency.linearRampToValueAtTime(endFreq, audioCtx.currentTime + duration);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function sfxGear() {
+  playTone(380, 'square', 0.07, 0.12);
+}
+function sfxBattery() {
+  playTone(520, 'sine', 0.12, 0.15, 320, 640);
+}
+function sfxMicrochip() {
+  // twinkly chime — arpeggio
+  [800, 1000, 1300, 1600].forEach((f, i) => {
+    setTimeout(() => playTone(f, 'sine', 0.14, 0.12), i * 55);
+  });
+}
+function sfxHit() {
+  // goofy dizzy sound
+  playTone(160, 'sawtooth', 0.25, 0.22, 200, 80);
+  setTimeout(() => playTone(90, 'sawtooth', 0.2, 0.15, 80, 200), 120);
+}
+function sfxMagnetOn() {
+  playTone(300, 'sine', 0.4, 0.2, 200, 600);
+}
+function sfxLevelUp() {
+  [440, 550, 660, 880].forEach((f, i) => {
+    setTimeout(() => playTone(f, 'sine', 0.2, 0.18), i * 80);
+  });
+}
+function sfxDrop() {
+  playTone(200, 'triangle', 0.1, 0.1, 260, 180);
+}
+
+// Simple looping background beep-bop music
+let bgmOsc = null, bgmGain = null;
+let bgmInterval = null;
+const bgmNotes = [261, 294, 329, 392, 349, 294, 261, 220, 261, 329, 392, 440, 392, 349, 329, 294];
+let bgmStep = 0;
+
+function startBGM() {
+  if (!audioCtx) return;
+  stopBGM();
+  bgmStep = 0;
+  bgmInterval = setInterval(() => {
+    const freq = bgmNotes[bgmStep % bgmNotes.length];
+    playTone(freq, 'triangle', 0.2, 0.07);
+    bgmStep++;
+  }, 280);
+}
+function stopBGM() {
+  if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const confettiCanvas = document.getElementById('confettiCanvas');
+const cctx = confettiCanvas.getContext('2d');
+const menuCanvas = document.getElementById('menuRobotCanvas');
+const mctx = menuCanvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+  if (!gameRunning) drawMenuRobot();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════════════════════════
+//  ROBOT DRAWING
+// ═══════════════════════════════════════════════════════════════════
+// All drawn with Canvas 2D primitives — no image dependencies
+
+function drawRobot(ctx, x, y, color, state, time, magnetOn) {
+  const c = COLORS[color];
+  ctx.save();
+  ctx.translate(x, y);
+
+  if (state === 'dizzy') {
+    const spin = Math.sin(time * 18) * 0.35;
+    ctx.rotate(spin);
+  }
+
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(0, 34, 28, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Wheels
+  const bounce = Math.sin(time * 10) * (state === 'dizzy' ? 0 : 2);
+  // Left wheel
+  ctx.fillStyle = c.wheel;
+  ctx.beginPath();
+  ctx.ellipse(-22, 28 + bounce, 11, 7, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Right wheel  
+  ctx.beginPath();
+  ctx.ellipse(22, 28 + bounce, 11, 7, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Body
+  if (magnetOn) {
+    // Rainbow forcefield
+    const grad = ctx.createRadialGradient(0, 0, 10, 0, 0, 50);
+    grad.addColorStop(0, 'rgba(160,100,255,0.0)');
+    grad.addColorStop(0.6, 'rgba(0,229,255,0.18)');
+    grad.addColorStop(1, 'rgba(255,110,199,0.35)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 50, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Torso (rounded rect)
+  ctx.fillStyle = c.body;
+  ctx.beginPath();
+  ctx.roundRect(-20, -18, 40, 42, 8);
+  ctx.fill();
+
+  // Body shading
+  const shade = ctx.createLinearGradient(-20, -18, 20, 24);
+  shade.addColorStop(0, 'rgba(255,255,255,0.22)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.18)');
+  ctx.fillStyle = shade;
+  ctx.beginPath();
+  ctx.roundRect(-20, -18, 40, 42, 8);
+  ctx.fill();
+
+  // Chest panel
+  ctx.fillStyle = c.dark;
+  ctx.beginPath();
+  ctx.roundRect(-13, -4, 26, 18, 5);
+  ctx.fill();
+
+  // Power light dots on chest
+  const dotColors = ['#ff4466','#ffe000','#39ff7c'];
+  dotColors.forEach((dc, i) => {
+    ctx.fillStyle = dc;
+    ctx.beginPath();
+    ctx.arc(-8 + i*8, 7, 3.5, 0, Math.PI*2);
+    ctx.fill();
+    // glow
+    ctx.fillStyle = dc;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.arc(-8 + i*8, 7, 6, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  // Head
+  ctx.fillStyle = c.body;
+  ctx.beginPath();
+  ctx.roundRect(-16, -40, 32, 26, 7);
+  ctx.fill();
+  const headShade = ctx.createLinearGradient(-16, -40, 16, -14);
+  headShade.addColorStop(0, 'rgba(255,255,255,0.22)');
+  headShade.addColorStop(1, 'rgba(0,0,0,0.12)');
+  ctx.fillStyle = headShade;
+  ctx.beginPath();
+  ctx.roundRect(-16, -40, 32, 26, 7);
+  ctx.fill();
+
+  // Eyes
+  const eyeWobble = state === 'dizzy' ? Math.sin(time * 20) * 3 : 0;
+  // Left eye
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.ellipse(-7, -28 + eyeWobble, 7, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = magnetOn ? '#a259ff' : c.body;
+  ctx.beginPath();
+  ctx.ellipse(-7, -28 + eyeWobble, 4, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.ellipse(-5, -30 + eyeWobble, 1.5, 1.5, 0, 0, Math.PI*2);
+  ctx.fill();
+  // Right eye
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.ellipse(7, -28 + eyeWobble, 7, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = magnetOn ? '#a259ff' : c.body;
+  ctx.beginPath();
+  ctx.ellipse(7, -28 + eyeWobble, 4, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.ellipse(9, -30 + eyeWobble, 1.5, 1.5, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Antenna
+  ctx.strokeStyle = c.dark;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.lineTo(0, -50);
+  ctx.stroke();
+  const antColor = magnetOn ? '#a259ff' : '#ffe000';
+  ctx.fillStyle = antColor;
+  ctx.shadowColor = antColor;
+  ctx.shadowBlur = magnetOn ? 10 : 5;
+  ctx.beginPath();
+  ctx.arc(0, -52, 5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Arms
+  const armSwing = Math.sin(time * 8) * 8;
+  ctx.strokeStyle = c.body;
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  // Left arm
+  ctx.beginPath();
+  ctx.moveTo(-20, -10);
+  ctx.lineTo(-32, -10 + armSwing);
+  ctx.stroke();
+  // Right arm
+  ctx.beginPath();
+  ctx.moveTo(20, -10);
+  ctx.lineTo(32, -10 - armSwing);
+  ctx.stroke();
+
+  // Dizzy stars
+  if (state === 'dizzy') {
+    for (let s = 0; s < 5; s++) {
+      const a = (s / 5) * Math.PI * 2 + time * 5;
+      const sx = Math.cos(a) * 48;
+      const sy = Math.sin(a) * 36 - 10;
+      ctx.fillStyle = '#ffe000';
+      ctx.font = '18px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('★', sx, sy);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawMenuRobot() {
+  mctx.clearRect(0, 0, 120, 120);
+  drawRobot(mctx, 60, 72, selectedColor, 'idle', Date.now()/1000, false);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DRAWING COLLECTIBLES & HAZARDS
+// ═══════════════════════════════════════════════════════════════════
+function drawGear(ctx, x, y, radius, color, glow, t) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(t * 1.5);
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 12;
+  // Gear body
+  ctx.fillStyle = color;
+  const teeth = 8;
+  ctx.beginPath();
+  for (let i = 0; i < teeth; i++) {
+    const a1 = (i / teeth) * Math.PI * 2;
+    const a2 = ((i + 0.35) / teeth) * Math.PI * 2;
+    const a3 = ((i + 0.65) / teeth) * Math.PI * 2;
+    const a4 = ((i + 1) / teeth) * Math.PI * 2;
+    ctx.lineTo(Math.cos(a1)*radius, Math.sin(a1)*radius);
+    ctx.lineTo(Math.cos(a2)*(radius+5), Math.sin(a2)*(radius+5));
+    ctx.lineTo(Math.cos(a3)*(radius+5), Math.sin(a3)*(radius+5));
+    ctx.lineTo(Math.cos(a4)*radius, Math.sin(a4)*radius);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // Center hole
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.arc(0, 0, radius*0.4, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawBattery(ctx, x, y, color, glow, t) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 14;
+  const pulse = 0.92 + Math.sin(t * 4) * 0.08;
+  ctx.scale(pulse, pulse);
+  // Body
+  ctx.fillStyle = '#2a2a2a';
+  ctx.beginPath();
+  ctx.roundRect(-10, -16, 20, 32, 4);
+  ctx.fill();
+  // Terminal nub
+  ctx.fillStyle = '#555';
+  ctx.fillRect(-5, -20, 10, 5);
+  // Fill bar
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(-7, -2, 14, 14, 3);
+  ctx.fill();
+  // Plus sign
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, -10); ctx.lineTo(0, -6);
+  ctx.moveTo(-2, -8); ctx.lineTo(2, -8);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawMicrochip(ctx, x, y, color, glow, t) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 18;
+  const spin = t * 0.8;
+  ctx.rotate(spin);
+  // Chip body
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.roundRect(-13, -13, 26, 26, 4);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  // Pin legs
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) {
+    const yp = -6 + i*6;
+    ctx.beginPath(); ctx.moveTo(-13, yp); ctx.lineTo(-20, yp); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13, yp); ctx.lineTo(20, yp); ctx.stroke();
+  }
+  // Diamond center
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(0, -8); ctx.lineTo(8, 0); ctx.lineTo(0, 8); ctx.lineTo(-8, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawHazard(ctx, item, t) {
+  ctx.save();
+  ctx.translate(item.x, item.y);
+  ctx.rotate(item.rot);
+  ctx.fillStyle = item.color;
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1.5;
+  if (item.shape === 0) {
+    // Tire
+    ctx.beginPath();
+    ctx.ellipse(0, 0, item.w/2, item.h/2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, item.w/4, item.h/4, 0, 0, Math.PI*2);
+    ctx.fill();
+  } else if (item.shape === 1) {
+    // Beam
+    ctx.fillRect(-item.w/2, -item.h/2, item.w, item.h);
+    ctx.strokeRect(-item.w/2, -item.h/2, item.w, item.h);
+    // rivets
+    [[-item.w/2+8, 0],[item.w/2-8, 0]].forEach(([rx,ry]) => {
+      ctx.fillStyle = '#888';
+      ctx.beginPath();
+      ctx.arc(rx, ry, 4, 0, Math.PI*2);
+      ctx.fill();
+    });
+  } else {
+    // Big bolt/scrap
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i/6)*Math.PI*2;
+      const r = i%2===0 ? item.w/2 : item.w/3;
+      if (i===0) ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r);
+      else ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BACKGROUND — futuristic junkyard / space station
+// ═══════════════════════════════════════════════════════════════════
+let bgStars = [];
+for (let i = 0; i < 60; i++) {
+  bgStars.push({
+    x: Math.random(), y: Math.random(),
+    r: Math.random() * 2 + 0.5,
+    twinkle: Math.random() * Math.PI * 2
+  });
+}
+
+function drawBackground(ctx, t) {
+  const W = canvas.width, H = canvas.height;
+  // Deep space gradient
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0d0a1a');
+  bg.addColorStop(0.6, '#0a1526');
+  bg.addColorStop(1, '#0f0f1a');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  bgStars.forEach(s => {
+    const alpha = 0.5 + 0.5 * Math.sin(t * 1.2 + s.twinkle);
+    ctx.fillStyle = `rgba(200,210,255,${alpha * 0.8})`;
+    ctx.beginPath();
+    ctx.arc(s.x * W, s.y * H * 0.5, s.r, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // Floor — junkyard ground
+  const floorY = H * 0.88;
+  const floorGrad = ctx.createLinearGradient(0, floorY, 0, H);
+  floorGrad.addColorStop(0, '#1a1a2e');
+  floorGrad.addColorStop(1, '#0d0d1a');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, floorY, W, H - floorY);
+
+  // Floor line detail
+  ctx.strokeStyle = 'rgba(0,229,255,0.12)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, floorY);
+  ctx.lineTo(W, floorY);
+  ctx.stroke();
+  // Grid lines
+  const scroll = (t * 120) % 80;
+  ctx.strokeStyle = 'rgba(0,229,255,0.06)';
+  ctx.lineWidth = 1;
+  for (let gx = -80 + scroll; gx < W + 80; gx += 80) {
+    ctx.beginPath();
+    ctx.moveTo(gx, floorY);
+    ctx.lineTo(gx - 40, H);
+    ctx.stroke();
+  }
+
+  // Background structure silhouettes
+  ctx.fillStyle = 'rgba(20,10,40,0.8)';
+  // Left crane
+  ctx.fillRect(W * 0.05, H * 0.3, 12, H * 0.58);
+  ctx.fillRect(W * 0.05, H * 0.3, 50, 10);
+  // Right structure
+  ctx.fillRect(W * 0.82, H * 0.4, 18, H * 0.48);
+  ctx.fillRect(W * 0.72, H * 0.4, 120, 12);
+
+  // Neon accent strips on floor
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = 'rgba(0,229,255,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, floorY + 2);
+  ctx.lineTo(W, floorY + 2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ROBOT STATE
+// ═══════════════════════════════════════════════════════════════════
+let robot = {
+  x: 0, y: 0,
+  targetX: 0,
+  state: 'idle',    // idle, moving, dizzy
+  dizzyTimer: 0,
+  droppedGears: 0,
+  color: 'cyan',
+};
+
+function getRobotY() {
+  return canvas.height * 0.88 - 10;
+}
+
+function initRobot() {
+  robot.x = canvas.width / 2;
+  robot.targetX = canvas.width / 2;
+  robot.y = getRobotY();
+  robot.state = 'idle';
+  robot.dizzyTimer = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ITEM SPAWNING
+// ═══════════════════════════════════════════════════════════════════
+function spawnCollectible() {
+  const W = canvas.width;
+  const types = ['gear','gear','gear','battery','battery','microchip'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const cfg = COLLECTIBLE_TYPES[type];
+  items.push({
+    kind: 'collectible',
+    type,
+    x: 60 + Math.random() * (W - 120),
+    y: -30,
+    vy: 120 + Math.random() * 80,
+    radius: cfg.radius,
+    color: cfg.color,
+    glow: cfg.glow,
+    points: cfg.points,
+    active: true,
+  });
+}
+
+function spawnHazard() {
+  const W = canvas.width;
+  const htype = HAZARD_TYPES[Math.floor(Math.random() * HAZARD_TYPES.length)];
+  const shape = HAZARD_TYPES.indexOf(htype);
+  items.push({
+    kind: 'hazard',
+    shape,
+    x: 60 + Math.random() * (W - 120),
+    y: -40,
+    vy: 90 + Math.random() * 60,
+    w: htype.w,
+    h: htype.h,
+    color: htype.color,
+    rot: Math.random() * Math.PI * 2,
+    rotV: (Math.random() - 0.5) * 2,
+    active: true,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CONFETTI
+// ═══════════════════════════════════════════════════════════════════
+const CONFETTI_COLORS = ['#ff6ec7','#ffe000','#00e5ff','#39ff7c','#a259ff','#ff4466'];
+
+function burstConfetti(count = 60) {
+  const W = canvas.width;
+  for (let i = 0; i < count; i++) {
+    confettiParticles.push({
+      x: W * 0.3 + Math.random() * W * 0.4,
+      y: canvas.height * 0.3,
+      vx: (Math.random()-0.5)*6,
+      vy: -8 - Math.random()*6,
+      w: 8 + Math.random()*8,
+      h: 6 + Math.random()*6,
+      rot: Math.random()*Math.PI*2,
+      rotV: (Math.random()-0.5)*0.3,
+      color: CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)],
+      life: 2.5 + Math.random(),
+      maxLife: 3,
+    });
+  }
+}
+
+function updateConfetti(dt) {
+  confettiParticles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 400 * dt * 0.05;
+    p.vx *= 0.99;
+    p.rot += p.rotV;
+    p.life -= dt;
+  });
+  confettiParticles = confettiParticles.filter(p => p.life > 0);
+}
+
+function drawConfetti() {
+  cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  confettiParticles.forEach(p => {
+    const alpha = Math.min(1, p.life / 0.5);
+    cctx.save();
+    cctx.globalAlpha = alpha;
+    cctx.translate(p.x, p.y);
+    cctx.rotate(p.rot);
+    cctx.fillStyle = p.color;
+    cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    cctx.restore();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DROPPED GEARS (after hit)
+// ═══════════════════════════════════════════════════════════════════
+let droppedItems = [];
+
+function dropGears(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    const cfg = COLLECTIBLE_TYPES.gear;
+    droppedItems.push({
+      x: x + (Math.random()-0.5)*60,
+      y: y,
+      vy: -100 - Math.random()*80,
+      vx: (Math.random()-0.5)*120,
+      radius: cfg.radius,
+      color: '#ffe000',
+      glow: '#ffb000',
+      active: true,
+      bounced: false,
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FLOATING TEXT POPUPS
+// ═══════════════════════════════════════════════════════════════════
+let floats = [];
+function addFloat(x, y, text, color) {
+  floats.push({ x, y, text, color, life: 1.2, maxLife: 1.2, vy: -60 });
+}
+function updateFloats(dt) {
+  floats.forEach(f => { f.y += f.vy * dt; f.life -= dt; });
+  floats = floats.filter(f => f.life > 0);
+}
+function drawFloats(ctx) {
+  floats.forEach(f => {
+    const alpha = Math.min(1, f.life / 0.4);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = 'bold 22px Nunito, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x, f.y);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CELEBRATION (Level Up badge + confetti)
+// ═══════════════════════════════════════════════════════════════════
+const badge = document.getElementById('levelBadge');
+function showLevelUp() {
+  sfxLevelUp();
+  burstConfetti(80);
+  badge.textContent = '⭐ Level Up! ⭐';
+  badge.classList.add('show');
+  setTimeout(() => badge.classList.remove('show'), 2200);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  HUD UPDATE
+// ═══════════════════════════════════════════════════════════════════
+function updateHUD() {
+  document.getElementById('scoreDisplay').textContent = score;
+  document.getElementById('gearDisplay').textContent = gears;
+  const pct = Math.min(100, magnetPower);
+  document.getElementById('magnetBarInner').style.width = pct + '%';
+  document.getElementById('magnetGlow').className = magnetActive ? 'active' : '';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TOUCH CONTROLS
+// ═══════════════════════════════════════════════════════════════════
+canvas.addEventListener('touchstart', e => {
+  ensureAudio();
+  e.preventDefault();
+  touchX = e.touches[0].clientX;
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  touchX = e.touches[0].clientX;
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+}, { passive: false });
+
+// Mouse fallback for desktop testing
+let mouseDown = false;
+canvas.addEventListener('mousedown', e => {
+  ensureAudio();
+  mouseDown = true;
+  touchX = e.clientX;
+});
+canvas.addEventListener('mousemove', e => {
+  if (mouseDown) touchX = e.clientX;
+});
+canvas.addEventListener('mouseup', () => { mouseDown = false; touchX = null; });
+
+// ═══════════════════════════════════════════════════════════════════
+//  MAIN GAME UPDATE
+// ═══════════════════════════════════════════════════════════════════
+function update(dt) {
+  time += dt;
+  const W = canvas.width, H = canvas.height;
+  const floorY = getRobotY();
+
+  // --- Robot movement ---
+  if (touchX !== null && robot.state !== 'dizzy') {
+    robot.targetX = Math.max(40, Math.min(W - 40, touchX));
+  }
+  const dx = robot.targetX - robot.x;
+  robot.x += dx * Math.min(1, dt * 10);
+  if (Math.abs(dx) > 5 && robot.state !== 'dizzy') robot.state = 'moving';
+  else if (robot.state !== 'dizzy') robot.state = 'idle';
+
+  // --- Dizzy state ---
+  if (robot.state === 'dizzy') {
+    robot.dizzyTimer -= dt;
+    if (robot.dizzyTimer <= 0) {
+      robot.state = 'idle';
+    }
+  }
+
+  // --- Magnet timer ---
+  if (magnetActive) {
+    magnetTimer -= dt;
+    if (magnetTimer <= 0) {
+      magnetActive = false;
+      magnetPower = 0;
+    }
+  }
+
+  // --- Spawn ---
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnCollectible();
+    spawnTimer = 0.5 + Math.random() * 0.6;
+  }
+  hazardTimer -= dt;
+  if (hazardTimer <= 0) {
+    spawnHazard();
+    hazardTimer = 2.5 + Math.random() * 1.5;
+  }
+
+  // --- Update collectibles ---
+  items.forEach(item => {
+    if (!item.active) return;
+
+    // Magnet pull
+    if (magnetActive && item.kind === 'collectible') {
+      const mdx = robot.x - item.x;
+      const mdy = floorY - item.y;
+      const dist = Math.sqrt(mdx*mdx + mdy*mdy);
+      if (dist > 1) {
+        item.x += (mdx/dist) * 350 * dt;
+        item.y += (mdy/dist) * 350 * dt;
+      }
+    }
+
+    item.y += item.vy * dt;
+    if (item.kind === 'hazard') {
+      item.rot += item.rotV * dt;
+    }
+
+    // Floor boundary — deactivate if past
+    if (item.y > H + 60) {
+      item.active = false;
+      return;
+    }
+
+    // Collision with robot
+    const rdx = robot.x - item.x;
+    const rdy = floorY - item.y;
+    const rdist = Math.sqrt(rdx*rdx + rdy*rdy);
+
+    if (item.kind === 'collectible') {
+      if (rdist < 42) {
+        item.active = false;
+        if (item.type === 'gear') {
+          sfxGear();
+          score += item.points;
+          gears++;
+          addFloat(item.x, item.y, '+1 ⚙', '#b0b8c8');
+        } else if (item.type === 'battery') {
+          sfxBattery();
+          score += item.points;
+          magnetPower = Math.min(100, magnetPower + MAGNET_FILL_PER_BATTERY);
+          addFloat(item.x, item.y, '+2 ⚡', '#39ff7c');
+          if (magnetPower >= 100 && !magnetActive) {
+            magnetActive = true;
+            magnetTimer = MAGNET_DURATION;
+            sfxMagnetOn();
+            addFloat(robot.x, floorY - 60, 'MAGNET!', '#a259ff');
+          }
+        } else if (item.type === 'microchip') {
+          sfxMicrochip();
+          score += item.points;
+          addFloat(item.x, item.y, '+5 💠', '#a259ff');
+        }
+        // Milestone check
+        const ms = Math.floor(score / MILESTONE);
+        if (ms > lastMilestone) {
+          lastMilestone = ms;
+          showLevelUp();
+        }
+      }
+    } else if (item.kind === 'hazard') {
+      // Wider hit box for hazards
+      if (rdist < 38 && robot.state !== 'dizzy') {
+        item.active = false;
+        sfxHit();
+        robot.state = 'dizzy';
+        robot.dizzyTimer = 1.8;
+        // Drop some gears
+        const drop = Math.min(gears, Math.floor(Math.random() * 3) + 1);
+        if (drop > 0) {
+          sfxDrop();
+          gears -= drop;
+          score = Math.max(0, score - drop);
+          dropGears(robot.x, floorY - 30, drop);
+          addFloat(robot.x, floorY - 60, `-${drop} ⚙`, '#ff4466');
+        }
+      }
+    }
+  });
+
+  // --- Update dropped gears ---
+  droppedItems.forEach(g => {
+    if (!g.active) return;
+    g.x += g.vx * dt;
+    g.y += g.vy * dt;
+    g.vy += 600 * dt; // gravity
+    const fy = floorY - 10;
+    if (g.y > fy) {
+      g.y = fy;
+      g.vy *= -0.4;
+      g.vx *= 0.7;
+      g.bounced = true;
+    }
+    // Collect dropped gear
+    const ddx = robot.x - g.x;
+    const ddy = floorY - g.y;
+    const dd = Math.sqrt(ddx*ddx + ddy*ddy);
+    if (dd < 38 && robot.state !== 'dizzy') {
+      g.active = false;
+      sfxGear();
+      score++;
+      gears++;
+      addFloat(g.x, g.y, '+1 ⚙', '#ffe000');
+    }
+    if (g.y > floorY + 100) g.active = false;
+  });
+  droppedItems = droppedItems.filter(g => g.active);
+
+  // Clean up inactive items
+  items = items.filter(i => i.active);
+
+  updateConfetti(dt);
+  updateFloats(dt);
+  updateHUD();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════════
+function render() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  drawBackground(ctx, time);
+
+  // Draw items (behind robot)
+  items.forEach(item => {
+    if (!item.active) return;
+    if (item.kind === 'collectible') {
+      if (item.type === 'gear') drawGear(ctx, item.x, item.y, item.radius, item.color, item.glow, time);
+      else if (item.type === 'battery') drawBattery(ctx, item.x, item.y, item.color, item.glow, time);
+      else if (item.type === 'microchip') drawMicrochip(ctx, item.x, item.y, item.color, item.glow, time);
+    } else {
+      drawHazard(ctx, item, time);
+    }
+  });
+
+  // Draw dropped gears
+  droppedItems.forEach(g => {
+    if (!g.active) return;
+    drawGear(ctx, g.x, g.y, 12, '#ffe000', '#ffb000', time);
+  });
+
+  // Magnet forcefield arc
+  if (magnetActive) {
+    const pulse = 0.5 + 0.5 * Math.sin(time * 8);
+    const fY = getRobotY();
+    const grad = ctx.createRadialGradient(robot.x, fY, 0, robot.x, fY, 100 + pulse * 20);
+    grad.addColorStop(0, 'rgba(162,89,255,0)');
+    grad.addColorStop(0.6, `rgba(162,89,255,${0.08 + pulse*0.06})`);
+    grad.addColorStop(1, `rgba(0,229,255,${0.15 + pulse*0.1})`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(robot.x, fY, 120, 0, Math.PI*2);
+    ctx.fill();
+    // Arc rings
+    for (let r = 0; r < 3; r++) {
+      const ringR = 50 + r*25 + Math.sin(time * 5 + r) * 5;
+      ctx.strokeStyle = `rgba(${r===0?'162,89,255':r===1?'0,229,255':'255,110,199'},${0.3 - r*0.08})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(robot.x, fY, ringR, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+
+  // Robot
+  drawRobot(ctx, robot.x, getRobotY(), robot.color, robot.state, time, magnetActive);
+
+  // Floating text
+  drawFloats(ctx);
+
+  // Confetti
+  drawConfetti();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MENU ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════════════
+let menuAnimFrame = null;
+function menuAnimation() {
+  drawMenuRobot();
+  menuAnimFrame = requestAnimationFrame(menuAnimation);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  GAME LOOP
+// ═══════════════════════════════════════════════════════════════════
+let rafHandle = null;
+function gameLoop(timestamp) {
+  if (!gameRunning) return;
+  const delta = Math.min((timestamp - lastTime) / 1000, 0.1);
+  lastTime = timestamp;
+  accumulator += delta;
+  while (accumulator >= TICK) {
+    update(TICK);
+    accumulator -= TICK;
+  }
+  render();
+  rafHandle = requestAnimationFrame(gameLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MENU INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════
+document.querySelectorAll('.swatch').forEach(sw => {
+  sw.addEventListener('click', () => {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+    sw.classList.add('selected');
+    selectedColor = sw.dataset.color;
+    robot.color = selectedColor;
+  });
+  sw.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+    sw.classList.add('selected');
+    selectedColor = sw.dataset.color;
+    robot.color = selectedColor;
+  });
+});
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('touchend', (e) => {
+  e.preventDefault();
+  startGame();
+});
+
+function startGame() {
+  ensureAudio();
+  if (menuAnimFrame) { cancelAnimationFrame(menuAnimFrame); menuAnimFrame = null; }
+  robot.color = selectedColor;
+  score = 0;
+  gears = 0;
+  magnetPower = 0;
+  magnetActive = false;
+  magnetTimer = 0;
+  lastMilestone = 0;
+  items = [];
+  droppedItems = [];
+  confettiParticles = [];
+  floats = [];
+  spawnTimer = 0;
+  hazardTimer = 3;
+  time = 0;
+  lastTime = performance.now();
+  accumulator = 0;
+  initRobot();
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('touchHint').style.opacity = '1';
+  setTimeout(() => {
+    document.getElementById('touchHint').style.opacity = '0';
+  }, 3000);
+  gameRunning = true;
+  startBGM();
+  rafHandle = requestAnimationFrame(gameLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  STARTUP
+// ═══════════════════════════════════════════════════════════════════
+document.fonts.ready.then(() => {
+  menuAnimation();
+});
+
+// Draw static background on menu
+(function initBg() {
+  drawBackground(ctx, 0);
+})();
+</script>
+<script data-pplx-inline-edit>
+(function () {
+  if (window === window.top) return;
+
+  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
+  const MAX_FONT_BYTES = 500 * 1024;
+  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
+  let scrollForwarding = false;
+  let scrollRaf = 0;
+  let trustedTopOrigin = null;
+
+  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
+  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
+  // across multiple labels.
+  function matchesAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (const entry of allowedParentOrigins) {
+      if (!entry.includes("*")) {
+        if (entry === origin) return true;
+        continue;
+      }
+      const pattern = new RegExp(
+        "^" +
+          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
+          "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+    return false;
+  }
+
+  // Trust decision: when the sender is same-origin-visible (event.origin is a
+  // real origin like https://www.perplexity.ai) we trust event.origin directly.
+  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
+  // broker's stamped `parentOrigin` to identify the top window. The fallback
+  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
+  // on the response path (see postToTrustedTop) to ensure replies can't be
+  // delivered to anyone but the actual top window of that claimed origin.
+  function getTrustedParentOrigin(event) {
+    const forwardedParentOrigin =
+      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
+    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
+    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
+  }
+
+  // All responses go to window.top with targetOrigin = the allowlisted origin.
+  // An attacker that iframes us inside their own null-origin broker can claim
+  // any parentOrigin they like, but the browser will drop the reply whenever
+  // the real top's origin doesn't match — so the screenshot never leaves.
+  function postToTrustedTop(message) {
+    if (!trustedTopOrigin) return;
+    try {
+      window.top.postMessage(message, trustedTopOrigin);
+    } catch (_error) {}
+  }
+
+  function inlineAll(original, clone) {
+    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
+
+    try {
+      const computedStyle = getComputedStyle(original);
+      // cssText on a computed style is the serialized declaration in modern
+      // Chromium/Safari — a single read beats enumerating ~400 longhand
+      // properties. Firefox returns "" here, so we fall back on empty.
+      const serialized = computedStyle.cssText;
+      if (serialized) {
+        clone.style.cssText = serialized;
+      } else {
+        const parts = new Array(computedStyle.length);
+        for (let index = 0; index < computedStyle.length; index += 1) {
+          const property = computedStyle[index];
+          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
+        }
+        clone.style.cssText = parts.join("");
+      }
+    } catch (_error) {}
+
+    const originalChildren = original.children;
+    const clonedChildren = clone.children;
+    for (
+      let index = 0;
+      index < originalChildren.length && index < clonedChildren.length;
+      index += 1
+    ) {
+      inlineAll(originalChildren[index], clonedChildren[index]);
+    }
+  }
+
+  function extractFontUrl(srcValue) {
+    const matches = [
+      ...srcValue.matchAll(
+        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
+      ),
+    ];
+    if (matches.length === 0) return null;
+    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
+    if (woff2) return woff2[1];
+    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
+    if (woff) return woff[1];
+    return matches[0][1];
+  }
+
+  // Cache resolved font URL -> data URI across captures. Fonts on a page
+  // essentially never change, and a batch run emits multiple captures back to
+  // back — without this we'd refetch + re-base64 every time.
+  const fontDataUriCache = new Map();
+  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
+
+  async function fetchAsDataUri(url) {
+    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
+    let dataUri = null;
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size <= MAX_FONT_BYTES) {
+          dataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    } catch (_error) {
+      dataUri = null;
+    }
+    fontDataUriCache.set(url, dataUri);
+    return dataUri;
+  }
+
+  function collectFontFaceRuleTexts() {
+    const rules = [];
+    for (const sheet of document.styleSheets) {
+      let cssRules;
+      try {
+        cssRules = sheet.cssRules;
+      } catch (_error) {
+        continue;
+      }
+      if (!cssRules) continue;
+      for (const rule of cssRules) {
+        const cssText = rule.cssText || "";
+        if (cssText.startsWith("@font-face")) rules.push(cssText);
+      }
+    }
+    return rules;
+  }
+
+  async function buildInlinedFontCss() {
+    const ruleTexts = collectFontFaceRuleTexts();
+    if (ruleTexts.length === 0) return null;
+
+    const resolved = ruleTexts.map((cssText) => {
+      if (!SRC_DECLARATION_RE.test(cssText)) return null;
+      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
+      if (!srcMatch) return null;
+      const url = extractFontUrl(srcMatch[1]);
+      if (!url) return null;
+      try {
+        return { cssText, url: new URL(url, document.baseURI).href };
+      } catch (_error) {
+        return null;
+      }
+    });
+
+    const dataUris = await Promise.all(
+      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
+    );
+
+    const inlined = [];
+    let totalBytes = 0;
+    for (let index = 0; index < resolved.length; index += 1) {
+      const entry = resolved[index];
+      const dataUri = dataUris[index];
+      if (!entry || !dataUri) continue;
+      const approxBytes = dataUri.length * 0.75;
+      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
+      totalBytes += approxBytes;
+      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
+    }
+    return inlined.length > 0 ? inlined.join("\n") : null;
+  }
+
+  function stripExternal(clone) {
+    const images = clone.querySelectorAll("img");
+    for (let index = 0; index < images.length; index += 1) {
+      const src = images[index].getAttribute("src");
+      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
+    }
+
+    const elements = clone.querySelectorAll("*");
+    for (let index = 0; index < elements.length; index += 1) {
+      const style = elements[index].style.cssText;
+      if (style && style.includes("url(")) {
+        elements[index].style.cssText = style.replace(
+          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
+          "none",
+        );
+      }
+    }
+  }
+
+  function emitScroll() {
+    scrollRaf = 0;
+    if (!scrollForwarding) return;
+    postToTrustedTop({
+      type: "INLINE_EDIT_SCROLL",
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    });
+  }
+
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (!scrollForwarding || scrollRaf) return;
+      scrollRaf = requestAnimationFrame(emitScroll);
+    },
+    { passive: true, capture: true },
+  );
+
+  async function handleCaptureRequest(event) {
+    const requestId = event.data.requestId;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    function postResult(dataUrl) {
+      postToTrustedTop({
+        type: "INLINE_EDIT_SCREENSHOT_RESULT",
+        requestId,
+        dataUrl,
+        scrollX,
+        scrollY,
+      });
+    }
+
+    try {
+      // Wait for any pending web fonts to resolve so both inline metrics and
+      // the @font-face inlining below see the same loaded faces.
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_error) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      inlineAll(document.documentElement, clone);
+
+      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
+      for (let index = 0; index < removedNodes.length; index += 1) {
+        removedNodes[index].remove();
+      }
+
+      stripExternal(clone);
+
+      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
+      // can resolve them — external font URLs aren't fetched during
+      // foreignObject rendering, which would otherwise force a fallback face
+      // and change text metrics.
+      const inlinedFontCss = await buildInlinedFontCss();
+      if (inlinedFontCss) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = inlinedFontCss;
+        const head = clone.querySelector("head");
+        if (head) head.appendChild(styleEl);
+        else clone.insertBefore(styleEl, clone.firstChild);
+      }
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        '<foreignObject width="100%" height="100%">' +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
+        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
+        html +
+        "</div></div></foreignObject></svg>";
+      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = new Image();
+      image.onload = function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        postResult(canvas.toDataURL("image/png"));
+      };
+      image.onerror = function () {
+        postResult(null);
+      };
+      image.src = svgUrl;
+    } catch (_error) {
+      postResult(null);
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data) return;
+    // Only accept messages from the direct parent frame. Blocks sibling /
+    // unrelated-window postMessage senders that could otherwise reach us.
+    if (event.source !== window.parent) return;
+
+    const trustedParentOrigin = getTrustedParentOrigin(event);
+    if (!trustedParentOrigin) return;
+    trustedTopOrigin = trustedParentOrigin;
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
+      scrollForwarding = true;
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
+      scrollForwarding = false;
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      return;
+    }
+
+    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
+
+    handleCaptureRequest(event);
+  });
+})();
+
+
+</script></body>
+</html>
