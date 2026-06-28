@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Gizmo-Bot Scrap Run</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg, #070b1f 0%, #18294d 100%);
+      color: white;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .app {
+      width: min(100vw, 480px);
+      height: min(100vh, 860px);
+      border-radius: 28px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+      border: 2px solid rgba(255,255,255,0.12);
+      background: #111827;
+    }
+    @media (orientation: landscape) {
+      body {
+        align-items: stretch;
+      }
+      .app {
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+      }
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      background: transparent;
+    }
+    .hud {
+      position: absolute;
+      inset: 0 0 auto 0;
+      padding: 14px 16px 0;
+      pointer-events: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 3;
+    }
+    .pill {
+      background: rgba(8, 18, 38, 0.72);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 15px;
+      font-weight: 700;
+      backdrop-filter: blur(8px);
+    }
+    .bar {
+      width: 100px;
+      height: 10px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .bar>div {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ffd166, #ff7b54);
+      transition: width 0.15s ease;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(3, 8, 24, 0.78);
+      backdrop-filter: blur(10px);
+    }
+    .overlay.hidden { display: none; }
+    .card {
+      width: min(100%, 360px);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.24);
+      text-align: center;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+    .subtitle {
+      margin: 0 0 14px;
+      color: #d5e7ff;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+    .buttons {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 14px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #07111f;
+      background: linear-gradient(90deg, #7ee7ff, #aef2ff);
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.18);
+    }
+    button.secondary {
+      background: linear-gradient(90deg, #ffcb5c, #ff8f68);
+    }
+    .swatches {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .swatch {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.8);
+      cursor: pointer;
+    }
+    .swatch.active { outline: 3px solid white; outline-offset: 2px; }
+    .shop-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      text-align: left;
+    }
+    .shop-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .shop-item small { display: block; color: #bcdfff; margin-top: 2px; }
+    .shop-item button { padding: 8px 12px; font-size: 13px; }
+    .hint {
+      font-size: 13px;
+      color: #d9ecff;
+      margin-top: 10px;
+    }
+    .footernote {
+      font-size: 12px;
+      color: #cfe9ff;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <canvas id="gameCanvas"></canvas>
+    <div class="hud">
+      <div class="pill">
+        <div>Score</div>
+        <div id="scoreText">0</div>
+      </div>
+      <div class="pill">
+        <div>Magnet</div>
+        <div class="bar"><div id="magnetBar"></div></div>
+      </div>
+    </div>
+    <div id="startOverlay" class="overlay">
+      <div class="card">
+        <h1>Gizmo-Bot Scrap Run</h1>
+        <p class="subtitle">Slide your finger to roll Gizmo through the junkyard and collect shiny parts.</p>
+        <div class="buttons">
+          <button id="startButton">Start Run</button>
+          <button class="secondary" id="howButton">How to Play</button>
+        </div>
+        <div class="swatches" id="colorSwatches"></div>
+        <p class="hint">Batteries charge the magnet. Scraps make Gizmo dizzy and drop gears.</p>
+        <p class="footernote">Tip: no game over — every run ends with a parts shop.</p>
+      </div>
+    </div>
+    <div id="shopOverlay" class="overlay hidden">
+      <div class="card">
+        <h1>Run complete!</h1>
+        <p id="shopSummary" class="subtitle"></p>
+        <div class="shop-list" id="shopList"></div>
+        <div class="buttons">
+          <button id="playAgainButton">Play Again</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreText = document.getElementById('scoreText');
+    const magnetBar = document.getElementById('magnetBar');
+    const startOverlay = document.getElementById('startOverlay');
+    const shopOverlay = document.getElementById('shopOverlay');
+    const shopSummary = document.getElementById('shopSummary');
+    const shopList = document.getElementById('shopList');
+    const colorSwatches = document.getElementById('colorSwatches');
+    const startButton = document.getElementById('startButton');
+    const howButton = document.getElementById('howButton');
+    const playAgainButton = document.getElementById('playAgainButton');
+
+    const colors = [
+      { name: 'Cyan', value: '#4dd5ff' },
+      { name: 'Pink', value: '#ff66b3' },
+      { name: 'Green', value: '#7ef29f' },
+      { name: 'Gold', value: '#ffd166' }
+    ];
+
+    const progress = loadProgress();
+    let selectedColor = progress.color || colors[0].value;
+    let gameState = 'menu';
+    let width = 360;
+    let height = 640;
+    let lastTime = 0;
+    let player = createPlayer();
+    let items = [];
+    let particles = [];
+    let confetti = [];
+    let score = 0;
+    let magnetCharge = 0;
+    let magnetTimer = 0;
+    let roundTime = 0;
+    let roundDuration = 22000;
+    let milestoneCount = 0;
+    let milestoneMessageTimer = 0;
+    let messageText = '';
+    let spawnTimer = 0;
+    let hazardTimer = 0;
+    let audioCtx = null;
+    let lastCollectTone = 0;
+
+    function createPlayer() {
+      return {
+        x: width / 2,
+        y: height - 90,
+        width: 58,
+        height: 34,
+        targetX: width / 2,
+        velocityX: 0,
+        rotation: 0,
+        dizzyTimer: 0,
+        color: selectedColor,
+        boost: Boolean(progress.unlocks && progress.unlocks.boosters),
+        tread: Boolean(progress.unlocks && progress.unlocks.treads),
+        shell: Boolean(progress.unlocks && progress.unlocks.shell),
+      };
+    }
+
+    function loadProgress() {
+      try {
+        const stored = localStorage.getItem('gizmo-progress');
+        return stored ? JSON.parse(stored) : { unlocks: {}, tokens: 0, color: colors[0].value };
+      } catch {
+        return { unlocks: {}, tokens: 0, color: colors[0].value };
+      }
+    }
+
+    function saveProgress() {
+      localStorage.setItem('gizmo-progress', JSON.stringify(progress));
+    }
+
+    function init() {
+      buildColorSwatches();
+      resizeCanvas();
+      startButton.addEventListener('click', startRun);
+      howButton.addEventListener('click', () => {
+        messageText = 'Drag on the screen to roll Gizmo. Collect shiny parts, charge the magnet, and avoid scrap metal.';
+        milestoneMessageTimer = 2200;
+      });
+      playAgainButton.addEventListener('click', () => {
+        shopOverlay.classList.add('hidden');
+        startOverlay.classList.remove('hidden');
+      });
+      canvas.addEventListener('pointerdown', onPointerDown);
+      canvas.addEventListener('pointermove', onPointerMove);
+      canvas.addEventListener('pointerup', stopDragging);
+      canvas.addEventListener('pointerleave', stopDragging);
+      window.addEventListener('resize', resizeCanvas);
+      updateHud();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function buildColorSwatches() {
+      colorSwatches.innerHTML = '';
+      colors.forEach((choice) => {
+        const swatch = document.createElement('button');
+        swatch.className = 'swatch';
+        swatch.style.background = choice.value;
+        swatch.setAttribute('aria-label', choice.name);
+        swatch.classList.toggle('active', choice.value === selectedColor);
+        swatch.addEventListener('click', () => {
+          selectedColor = choice.value;
+          progress.color = selectedColor;
+          saveProgress();
+          buildColorSwatches();
+          player.color = selectedColor;
+          playTone(580, 0.06, 'square', 0.025);
+        });
+        colorSwatches.appendChild(swatch);
+      });
+    }
+
+    function resizeCanvas() {
+      const parent = canvas.parentElement;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = parent.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      player.x = clamp(player.x || width / 2, 42, width - 42);
+      player.y = height - 92;
+      player.targetX = player.x;
+    }
+
+    function loop(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      const delta = Math.min(timestamp - lastTime, 33);
+      lastTime = timestamp;
+      update(delta);
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function update(delta) {
+      const dt = delta / 16.6667;
+      if (gameState === 'playing') {
+        updatePlayer(dt);
+        updateItems(dt);
+        updateParticles(dt);
+        updateConfetti(dt);
+
+        spawnTimer += delta;
+        hazardTimer += delta;
+        roundTime += delta;
+        if (spawnTimer > 700) {
+          spawnTimer = 0;
+          spawnItem();
+        }
+        if (hazardTimer > 1400) {
+          hazardTimer = 0;
+          if (Math.random() < 0.45) spawnHazard();
+        }
+        if (milestoneMessageTimer > 0) milestoneMessageTimer -= delta;
+        if (roundTime >= roundDuration) {
+          finishRun();
+        }
+      } else {
+        updateParticles(dt);
+        updateConfetti(dt);
+        if (milestoneMessageTimer > 0) milestoneMessageTimer -= delta;
+      }
+    }
+
+    function updatePlayer(dt) {
+      const target = clamp(player.targetX, 46, width - 46);
+      player.velocityX += (target - player.x) * 0.02 * dt;
+      player.velocityX *= 0.84;
+      player.x += player.velocityX * dt;
+      player.rotation += (player.dizzyTimer > 0 ? 0.18 : 0.04) * dt;
+      if (player.dizzyTimer > 0) {
+        player.dizzyTimer = Math.max(0, player.dizzyTimer - dt * 0.02);
+      }
+      if (player.x < 44) player.x = 44;
+      if (player.x > width - 44) player.x = width - 44;
+      player.y = height - 94;
+    }
+
+    function updateItems(dt) {
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        if (item.type === 'hazard') {
+          item.y += item.vy * dt;
+          item.vy += 0.008 * dt;
+          item.rotation += 0.08 * dt;
+          if (item.y > height + 80) {
+            items.splice(i, 1);
+            continue;
+          }
+          if (rectsOverlap(player, item)) {
+            hitHazard(item);
+            items.splice(i, 1);
+          }
+          continue;
+        }
+        if (magnetTimer > 0) {
+          const pullX = player.x - item.x;
+          const pullY = player.y - item.y;
+          item.x += pullX * 0.013 * dt;
+          item.y += pullY * 0.013 * dt;
+        } else {
+          item.y += item.vy * dt;
+          item.x += item.vx * dt;
+          item.vy += 0.008 * dt;
+        }
+        item.rotation += 0.04 * dt;
+        if (item.y > height + 80 || item.x < -80 || item.x > width + 80) {
+          items.splice(i, 1);
+          continue;
+        }
+        if (rectsOverlap(player, item)) {
+          collectItem(item);
+          items.splice(i, 1);
+        }
+      }
+      if (magnetTimer > 0) {
+        magnetTimer = Math.max(0, magnetTimer - dt * 16.67);
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 0.008 * dt;
+        p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function updateConfetti(dt) {
+      for (let i = confetti.length - 1; i >= 0; i--) {
+        const c = confetti[i];
+        c.x += c.vx * dt;
+        c.y += c.vy * dt;
+        c.vy += 0.009 * dt;
+        c.life -= dt;
+        if (c.life <= 0) confetti.splice(i, 1);
+      }
+    }
+
+    function spawnItem() {
+      const roll = Math.random();
+      let type = 'gear';
+      if (roll < 0.15) type = 'chip';
+      else if (roll < 0.4) type = 'battery';
+      const item = {
+        type,
+        x: rand(48, width - 48),
+        y: -30,
+        vx: rand(-0.6, 0.6),
+        vy: rand(1.6, 2.7),
+        width: type === 'chip' ? 18 : 16,
+        height: type === 'chip' ? 18 : 16,
+        rotation: rand(0, Math.PI * 2),
+      };
+      items.push(item);
+    }
+
+    function spawnHazard() {
+      items.push({
+        type: 'hazard',
+        x: rand(40, width - 40),
+        y: -30,
+        vy: rand(1.6, 2.2),
+        width: 30,
+        height: 30,
+        rotation: rand(0, Math.PI * 2),
+      });
+    }
+
+    function collectItem(item) {
+      if (item.type === 'gear') {
+        score += 1;
+        addSparkle(item.x, item.y, '#ffe58f');
+        playTone(760, 0.06, 'sine', 0.025);
+      } else if (item.type === 'battery') {
+        score += 2;
+        magnetCharge += 20;
+        if (magnetCharge >= 100) {
+          magnetCharge = 100;
+          activateMagnet();
+        }
+        addSparkle(item.x, item.y, '#8cf7ff');
+        playTone(550, 0.08, 'triangle', 0.03);
+      } else if (item.type === 'chip') {
+        score += 5;
+        addSparkle(item.x, item.y, '#ff7af0');
+        playTone(900, 0.09, 'sine', 0.035);
+      }
+      checkMilestone();
+      updateHud();
+    }
+
+    function hitHazard(item) {
+      player.dizzyTimer = 1.6;
+      addSparkle(player.x, player.y - 20, '#ff7b54');
+      playTone(220, 0.14, 'sawtooth', 0.04);
+      score = Math.max(0, score - 3);
+      for (let i = 0; i < 3; i++) {
+        items.push({
+          type: 'gear',
+          x: player.x + rand(-12, 12),
+          y: player.y - 20,
+          vx: rand(-1, 1),
+          vy: rand(1.2, 2.2),
+          width: 16,
+          height: 16,
+          rotation: rand(0, Math.PI * 2),
+        });
+      }
+      checkMilestone();
+      updateHud();
+    }
+
+    function activateMagnet() {
+      magnetTimer = 5000;
+      createBurst(player.x, player.y, '#9cf7ff');
+      playTone(1200, 0.18, 'triangle', 0.04);
+      messageText = 'Magnet Mode!';
+      milestoneMessageTimer = 1400;
+    }
+
+    function checkMilestone() {
+      const currentMilestone = Math.floor(score / 50);
+      if (currentMilestone > milestoneCount) {
+        milestoneCount = currentMilestone;
+        messageText = 'Level Up!';
+        milestoneMessageTimer = 1800;
+        spawnConfettiBurst();
+        playTone(660, 0.1, 'sine', 0.03);
+        playTone(840, 0.11, 'sine', 0.025);
+      }
+    }
+
+    function finishRun() {
+      gameState = 'shop';
+      const earnedTokens = Math.max(6, Math.floor(score / 2) + 4);
+      progress.tokens = (progress.tokens || 0) + earnedTokens;
+      saveProgress();
+      shopSummary.innerHTML = `You earned <strong>${earnedTokens}</strong> parts tokens from this run. Spend them on upgrades or a fresh paint job.`;
+      buildShop();
+      shopOverlay.classList.remove('hidden');
+      startOverlay.classList.add('hidden');
+      playTone(520, 0.12, 'sine', 0.03);
+      playTone(700, 0.12, 'triangle', 0.025);
+    }
+
+    function buildShop() {
+      shopList.innerHTML = '';
+      const options = [
+        {
+          key: 'boosters',
+          title: 'Rocket Boosters',
+          description: 'A zippy boost for Gizmo.',
+          cost: 14,
+          unlocked: Boolean(progress.unlocks && progress.unlocks.boosters),
+        },
+        {
+          key: 'treads',
+          title: 'Tractor Treads',
+          description: 'Sturdy tracks for a smooth roll.',
+          cost: 14,
+          unlocked: Boolean(progress.unlocks && progress.unlocks.treads),
+        },
+        {
+          key: 'shell',
+          title: 'Rainbow Shell',
+          description: 'A bright color change for the bot.',
+          cost: 10,
+          unlocked: Boolean(progress.unlocks && progress.unlocks.shell),
+        }
+      ];
+      options.forEach((option) => {
+        const row = document.createElement('div');
+        row.className = 'shop-item';
+        const text = document.createElement('div');
+        text.innerHTML = `<strong>${option.title}</strong><small>${option.description}</small>`;
+        const button = document.createElement('button');
+        if (option.unlocked) {
+          button.textContent = 'Owned';
+          button.disabled = true;
+        } else if ((progress.tokens || 0) >= option.cost) {
+          button.textContent = `Buy • ${option.cost}`;
+          button.addEventListener('click', () => buyUpgrade(option.key, option.cost));
+        } else {
+          button.textContent = `${option.cost} Tokens`;
+          button.disabled = true;
+        }
+        row.appendChild(text);
+        row.appendChild(button);
+        shopList.appendChild(row);
+      });
+    }
+
+    function buyUpgrade(key, cost) {
+      if ((progress.tokens || 0) < cost) return;
+      progress.tokens -= cost;
+      progress.unlocks[key] = true;
+      saveProgress();
+      player.boost = Boolean(progress.unlocks.boosters);
+      player.tread = Boolean(progress.unlocks.treads);
+      player.shell = Boolean(progress.unlocks.shell);
+      buildShop();
+      playTone(720, 0.1, 'square', 0.03);
+      playTone(980, 0.1, 'sine', 0.025);
+    }
+
+    function startRun() {
+      startOverlay.classList.add('hidden');
+      shopOverlay.classList.add('hidden');
+      gameState = 'playing';
+      player = createPlayer();
+      player.color = selectedColor;
+      items = [];
+      particles = [];
+      confetti = [];
+      score = 0;
+      magnetCharge = 0;
+      magnetTimer = 0;
+      roundTime = 0;
+      milestoneCount = 0;
+      milestoneMessageTimer = 0;
+      messageText = 'Collect, roll, and smile!';
+      updateHud();
+      spawnTimer = 0;
+      hazardTimer = 0;
+      playTone(440, 0.08, 'sine', 0.03);
+      playTone(660, 0.08, 'triangle', 0.025);
+    }
+
+    function onPointerDown(event) {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      player.targetX = clamp(x, 46, width - 46);
+      if (gameState === 'menu') {
+        startRun();
+      }
+    }
+
+    function onPointerMove(event) {
+      if (gameState !== 'playing' && gameState !== 'menu') return;
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      player.targetX = clamp(x, 46, width - 46);
+    }
+
+    function stopDragging() {
+      if (gameState !== 'playing' && gameState !== 'menu') return;
+    }
+
+    function updateHud() {
+      scoreText.textContent = score;
+      magnetBar.style.width = `${magnetCharge}%`;
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, width, height);
+      drawBackground();
+      drawGround();
+      drawItems();
+      drawParticles();
+      drawConfetti();
+      drawPlayer();
+      drawOverlayMessage();
+    }
+
+    function drawBackground() {
+      const sky = ctx.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, '#091426');
+      sky.addColorStop(1, '#214161');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      for (let i = 0; i < 35; i++) {
+        const x = (i * 67) % width;
+        const y = (i * 97) % (height * 0.8);
+        ctx.beginPath();
+        ctx.arc(x, y + 28, 1.8 + (i % 3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#4a6a7a';
+      ctx.fillRect(0, height * 0.76, width, height * 0.24);
+      ctx.fillStyle = '#6e8a4a';
+      ctx.fillRect(0, height * 0.82, width, height * 0.18);
+      drawScrapPiles();
+    }
+
+    function drawScrapPiles() {
+      const piles = [
+        { x: width * 0.18, y: height * 0.79, size: 42 },
+        { x: width * 0.72, y: height * 0.76, size: 56 },
+        { x: width * 0.5, y: height * 0.82, size: 38 },
+      ];
+      piles.forEach((pile) => {
+        ctx.fillStyle = '#6d6b6b';
+        ctx.beginPath();
+        ctx.arc(pile.x, pile.y, pile.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#4a4a4a';
+        ctx.fillRect(pile.x - pile.size * 0.5, pile.y - pile.size * 0.2, pile.size * 0.6, pile.size * 0.25);
+      });
+    }
+
+    function drawGround() {
+      ctx.fillStyle = '#2f3a45';
+      ctx.fillRect(0, height - 60, width, 60);
+      ctx.fillStyle = '#6f7c86';
+      ctx.fillRect(0, height - 52, width, 8);
+      ctx.fillStyle = '#dfe8f0';
+      for (let i = 0; i < 10; i++) {
+        ctx.fillRect(i * 42, height - 44, 20, 2);
+      }
+    }
+
+    function drawItems() {
+      items.forEach((item) => {
+        ctx.save();
+        ctx.translate(item.x, item.y);
+        ctx.rotate(item.rotation);
+        if (item.type === 'gear') {
+          ctx.fillStyle = '#ffd166';
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#8d5f00';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(angle) * 7, Math.sin(angle) * 7);
+          }
+          ctx.stroke();
+        } else if (item.type === 'battery') {
+          ctx.fillStyle = '#8cf7ff';
+          ctx.fillRect(-8, -8, 16, 16);
+          ctx.fillStyle = '#1c4c62';
+          ctx.fillRect(-3, -10, 6, 4);
+        } else if (item.type === 'chip') {
+          ctx.fillStyle = '#ff7af0';
+          ctx.fillRect(-9, -9, 18, 18);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(-4, -4, 8, 8);
+        } else if (item.type === 'hazard') {
+          ctx.fillStyle = '#6f6c70';
+          ctx.fillRect(-14, -14, 28, 28);
+          ctx.fillStyle = '#bfbfbf';
+          ctx.fillRect(-6, -16, 12, 10);
+        }
+        ctx.restore();
+      });
+    }
+
+    function drawParticles() {
+      particles.forEach((p) => {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = Math.max(0, p.life / 18);
+        ctx.fillRect(p.x, p.y, 3, 3);
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function drawConfetti() {
+      confetti.forEach((c) => {
+        ctx.fillStyle = c.color;
+        ctx.globalAlpha = Math.max(0, c.life / 30);
+        ctx.fillRect(c.x, c.y, 4, 6);
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.dizzyTimer > 0 ? player.rotation : 0);
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = player.color;
+      ctx.fillStyle = player.color;
+      ctx.fillRect(-28, -16, 56, 32);
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(-16, -10, 32, 6);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-12, -8, 6, 2);
+      ctx.fillRect(6, -8, 6, 2);
+      ctx.fillStyle = '#fcd34d';
+      ctx.fillRect(-22, -4, 8, 8);
+      ctx.fillRect(14, -4, 8, 8);
+      if (player.boost) {
+        ctx.fillStyle = '#ff7b54';
+        ctx.fillRect(-22, 16, 6, 10);
+        ctx.fillRect(16, 16, 6, 10);
+      }
+      if (player.tread) {
+        ctx.fillStyle = '#1f2937';
+        ctx.fillRect(-18, 18, 36, 6);
+      }
+      if (player.shell) {
+        ctx.strokeStyle = '#fef3c7';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(-30, -18, 60, 36);
+      }
+      if (magnetTimer > 0) {
+        ctx.strokeStyle = '#a7f3d0';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 34 + Math.sin(Date.now() / 120) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawOverlayMessage() {
+      if (milestoneMessageTimer <= 0) return;
+      ctx.save();
+      ctx.font = 'bold 24px Trebuchet MS';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText(messageText, width / 2, 120);
+      ctx.restore();
+    }
+
+    function addSparkle(x, y, color) {
+      for (let i = 0; i < 6; i++) {
+        particles.push({ x, y, vx: rand(-1.4, 1.4), vy: rand(-1.8, -0.4), color, life: 20 });
+      }
+    }
+
+    function createBurst(x, y, color) {
+      for (let i = 0; i < 16; i++) {
+        particles.push({ x, y, vx: rand(-2.2, 2.2), vy: rand(-2.2, 2.2), color, life: 25 });
+      }
+    }
+
+    function spawnConfettiBurst() {
+      const colorsList = ['#ff7b54', '#ffd166', '#8cf7ff', '#ff7af0'];
+      for (let i = 0; i < 18; i++) {
+        confetti.push({
+          x: width / 2,
+          y: 120,
+          vx: rand(-1.4, 1.4),
+          vy: rand(0.8, 2.2),
+          color: colorsList[i % colorsList.length],
+          life: 45,
+        });
+      }
+    }
+
+    function playTone(freq, duration, type, volume = 0.03) {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function rectsOverlap(a, b) {
+      return a.x - a.width / 2 < b.x + b.width / 2 &&
+        a.x + a.width / 2 > b.x - b.width / 2 &&
+        a.y - a.height / 2 < b.y + b.height / 2 &&
+        a.y + a.height / 2 > b.y - b.height / 2;
+    }
+
+    init();
+  </script>
+</body>
+</html>
