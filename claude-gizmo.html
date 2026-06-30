@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b1026">
+<title>Gizmo-Bot Scrap Run</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: #0b1026; color: #fff;
+    font-family: "Baloo 2", "Comic Sans MS", "Segoe UI Rounded", "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+    touch-action: none; overscroll-behavior: none;
+    user-select: none; -webkit-user-select: none;
+  }
+  #game { position: fixed; inset: 0; display: block; z-index: 0; }
+  .overlay { position: fixed; inset: 0; z-index: 10; }
+  .hidden { display: none !important; }
+
+  /* ---- Screens (menu / garage) ---- */
+  .screen { display: flex; align-items: center; justify-content: center; padding: 12px; }
+  .panel {
+    width: min(94vw, 760px); max-height: 96vh; overflow: auto;
+    background: linear-gradient(160deg, rgba(20,28,58,.92), rgba(10,14,32,.95));
+    border: 3px solid rgba(120,220,255,.5); border-radius: 28px;
+    box-shadow: 0 0 40px rgba(60,180,255,.35), inset 0 0 30px rgba(60,120,255,.15);
+    padding: clamp(16px, 3.4vmin, 30px); text-align: center;
+  }
+  .title {
+    font-size: clamp(28px, 7vmin, 58px); font-weight: 800; margin: 0 0 .12em; line-height: 1.05;
+    background: linear-gradient(90deg, #19e3ff, #ff45c0, #ffd23f, #54ff7a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(120,220,255,.25); letter-spacing: 1px;
+  }
+  .subtitle { font-size: clamp(13px, 2.6vmin, 19px); opacity: .85; margin: .1em 0 .5em; }
+  .preview { width: clamp(150px, 40vmin, 250px); height: clamp(150px, 40vmin, 250px); margin: 4px auto; display: block; }
+  .label { font-size: clamp(12px, 2.3vmin, 17px); opacity: .8; margin: .5em 0 .25em; letter-spacing: 2px; font-weight: 700; }
+
+  .swatches { display: flex; gap: clamp(10px, 2.6vmin, 20px); justify-content: center; margin: .2em 0 .5em; }
+  .swatch {
+    width: clamp(42px, 8.4vmin, 60px); height: clamp(42px, 8.4vmin, 60px); border-radius: 50%;
+    border: 4px solid rgba(255,255,255,.25); cursor: pointer; transition: transform .12s; padding: 0;
+  }
+  .swatch.sel { border-color: #fff; transform: scale(1.16); box-shadow: 0 0 16px rgba(255,255,255,.7); }
+
+  .btn {
+    border: none; border-radius: 18px; color: #08111f; font-weight: 800; font-family: inherit;
+    font-size: clamp(18px, 3.6vmin, 27px); padding: clamp(12px, 2.4vmin, 18px) clamp(20px, 5vmin, 38px);
+    margin: 8px; cursor: pointer;
+    background: linear-gradient(180deg, #7ef0ff, #19c6ef);
+    box-shadow: 0 6px 0 #0e7e9c, 0 8px 20px rgba(0,0,0,.4);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #0e7e9c; }
+  .btn.play { background: linear-gradient(180deg, #8dff9f, #34d85a); box-shadow: 0 6px 0 #1c9a3b, 0 8px 20px rgba(0,0,0,.4); }
+  .btn.secondary { background: linear-gradient(180deg, #cfd8e6, #9aa6bd); box-shadow: 0 6px 0 #5a6478, 0 8px 20px rgba(0,0,0,.4); color: #10182a; }
+  .btn-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: .3em; }
+  .stat-line { font-size: clamp(13px, 2.5vmin, 18px); opacity: .9; color: #cfe7ff; margin-top: .5em; }
+
+  .coins { font-size: clamp(20px, 4.2vmin, 30px); font-weight: 800; color: #ffd23f; margin: .15em 0; }
+
+  /* ---- Parts grid ---- */
+  .parts { display: flex; flex-wrap: wrap; gap: clamp(8px, 2vmin, 14px); justify-content: center; margin: .3em 0; }
+  .part {
+    width: clamp(120px, 28vmin, 190px); background: rgba(255,255,255,.06);
+    border: 2px solid rgba(120,200,255,.3); border-radius: 18px; padding: clamp(8px, 2vmin, 14px);
+    transition: transform .1s;
+  }
+  .part.sel { border-color: #fff; box-shadow: 0 0 16px rgba(120,220,255,.5); background: rgba(120,220,255,.12); }
+  .part .pic { font-size: clamp(30px, 7vmin, 44px); line-height: 1.1; }
+  .part .pname { font-size: clamp(12px, 2.3vmin, 16px); font-weight: 700; margin: .2em 0 .45em; }
+  .part .perk { font-size: clamp(10px, 1.9vmin, 13px); opacity: .7; margin-bottom: .4em; min-height: 1.4em; }
+  .part .pbtn { width: 100%; border: none; border-radius: 12px; padding: .55em; font-weight: 800; font-family: inherit; font-size: clamp(12px, 2.3vmin, 16px); cursor: pointer; }
+  .pbtn.buy { background: linear-gradient(180deg, #ffe07a, #ffc01f); color: #5a3c00; }
+  .pbtn.equip { background: linear-gradient(180deg, #8dff9f, #34d85a); color: #0a3a16; }
+  .pbtn.equipped { background: #33415c; color: #b8c8e0; opacity: .85; cursor: default; }
+  .shake { animation: shake .35s; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+
+  /* ---- HUD ---- */
+  #hud { z-index: 5; pointer-events: none; }
+  .hud-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 10px;
+    padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); }
+  .hud-stat { background: rgba(8,14,30,.55); border: 2px solid rgba(120,220,255,.35); border-radius: 16px;
+    padding: 5px 14px; font-size: clamp(18px, 3.4vmin, 26px); font-weight: 800; }
+  .hud-stat.coin { color: #ffd23f; }
+  .hud-buttons { margin-left: auto; display: flex; gap: 8px; pointer-events: auto; }
+  .icon-btn { pointer-events: auto; width: clamp(44px, 8vmin, 56px); height: clamp(44px, 8vmin, 56px);
+    border-radius: 14px; border: 2px solid rgba(120,220,255,.4); background: rgba(8,14,30,.6); color: #fff;
+    font-size: clamp(20px, 4vmin, 26px); cursor: pointer; }
+  .icon-btn:active { transform: scale(.92); }
+  .magnet-wrap { position: absolute; left: 50%; transform: translateX(-50%);
+    top: max(56px, calc(env(safe-area-inset-top) + 52px)); width: min(62vw, 360px); text-align: center; }
+  .magnet-label { font-size: clamp(10px, 2vmin, 14px); letter-spacing: 3px; opacity: .9; margin-bottom: 3px; font-weight: 800; }
+  .magnet-bar { height: clamp(14px, 2.6vmin, 20px); background: rgba(8,14,30,.6); border: 2px solid rgba(120,220,255,.4);
+    border-radius: 20px; overflow: hidden; }
+  .magnet-fill { height: 100%; width: 0%; border-radius: 20px;
+    background: linear-gradient(90deg, #19e3ff, #54ff7a, #ffd23f, #ff45c0); transition: width .08s linear; }
+  .magnet-bar.full { animation: pulse .5s infinite alternate; }
+  @keyframes pulse { from { box-shadow: 0 0 4px #fff; } to { box-shadow: 0 0 18px #fff, 0 0 30px #ffd23f; } }
+
+  .levelup { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(0);
+    font-size: clamp(34px, 9vmin, 72px); font-weight: 900; color: #fff; text-align: center; white-space: nowrap;
+    text-shadow: 0 0 20px #ffd23f, 0 0 40px #ff45c0; pointer-events: none; opacity: 0; }
+  .levelup.show { animation: levelpop 1.7s ease-out; }
+  @keyframes levelpop {
+    0% { transform: translate(-50%,-50%) scale(0) rotate(-12deg); opacity: 0; }
+    18% { transform: translate(-50%,-50%) scale(1.25) rotate(6deg); opacity: 1; }
+    34% { transform: translate(-50%,-50%) scale(1) rotate(0); opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translate(-50%,-62%) scale(1); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- HUD (during PLAY) -->
+  <div id="hud" class="overlay hidden">
+    <div class="hud-top">
+      <div class="hud-stat">⭐ <span id="scoreVal">0</span></div>
+      <div class="hud-stat coin">🪙 <span id="coinVal">0</span></div>
+      <div class="hud-buttons">
+        <button id="muteBtn" class="icon-btn" aria-label="Sound">🔊</button>
+        <button id="garageBtnHud" class="icon-btn" aria-label="Garage">🔧</button>
+      </div>
+    </div>
+    <div class="magnet-wrap">
+      <div class="magnet-label">⚡ MAGNET POWER</div>
+      <div id="magnetBar" class="magnet-bar"><div id="magnetFill" class="magnet-fill"></div></div>
+    </div>
+    <div id="levelUp" class="levelup">LEVEL UP!</div>
+  </div>
+
+  <!-- MAIN MENU -->
+  <div id="menu" class="overlay screen">
+    <div class="panel">
+      <h1 class="title">Gizmo-Bot<br>Scrap Run</h1>
+      <div class="subtitle">Slide your finger to roll &amp; grab the goodies!</div>
+      <canvas id="menuPreview" class="preview"></canvas>
+      <div class="label">PAINT COLOR</div>
+      <div id="menuSwatches" class="swatches"></div>
+      <div class="btn-row">
+        <button id="playBtn" class="btn play">▶ PLAY</button>
+        <button id="garageBtnMenu" class="btn">🔧 GARAGE</button>
+      </div>
+      <div class="stat-line">🪙 <span id="menuCoins">0</span> scrap &nbsp;·&nbsp; Best ⭐ <span id="menuBest">0</span></div>
+    </div>
+  </div>
+
+  <!-- GARAGE -->
+  <div id="garage" class="overlay screen hidden">
+    <div class="panel">
+      <h1 class="title" style="font-size:clamp(26px,6vmin,48px)">🔧 Garage</h1>
+      <div class="coins">🪙 <span id="garageCoins">0</span></div>
+      <canvas id="garagePreview" class="preview"></canvas>
+      <div class="label">WHEELS</div>
+      <div id="partsGrid" class="parts"></div>
+      <div class="label">PAINT COLOR</div>
+      <div id="garageSwatches" class="swatches"></div>
+      <div class="btn-row">
+        <button id="garagePlayBtn" class="btn play">▶ PLAY</button>
+        <button id="garageBackBtn" class="btn secondary">🏠 Menu</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+(function () {
+  // =========================================================================
+  //  CONFIG
+  // =========================================================================
+  const MAGNET_TIME = 5;          // seconds of magnet mode
+  const MAGNET_PER_BATTERY = 0.2; // bar fill per battery (5 batteries -> full)
+  const DIZZY_TIME = 1.5;         // seconds spinning after a hazard hit
+  const INVULN_TIME = 2.2;        // safe window after a hit
+  const MILESTONE = 50;           // points per celebration
+
+  const COLORS = {
+    cyan:  { main: "#19e3ff", dark: "#0b9fbf", glow: "#9bf3ff" },
+    pink:  { main: "#ff45c0", dark: "#c92e94", glow: "#ff9fe3" },
+    green: { main: "#54ff7a", dark: "#1fcf4a", glow: "#bdffc9" },
+    gold:  { main: "#ffd23f", dark: "#e0a911", glow: "#fff0a8" },
+  };
+  const COLOR_ORDER = ["cyan", "pink", "green", "gold"];
+
+  const WHEELS = [
+    { id: "standard", name: "Wheels",  icon: "⚙️", price: 0,  perk: "Trusty & round" },
+    { id: "treads",   name: "Treads",  icon: "🚜", price: 30, perk: "Wider grab!" },
+    { id: "boosters", name: "Boosters",icon: "🚀", price: 75, perk: "Zoom faster!" },
+  ];
+  const CONFETTI = ["#ff45c0", "#19e3ff", "#54ff7a", "#ffd23f", "#ff7a1f", "#b46bff"];
+
+  // =========================================================================
+  //  SMALL HELPERS
+  // =========================================================================
+  const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  function rr(g, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  // =========================================================================
+  //  SAVE  (localStorage)
+  // =========================================================================
+  const SAVE_KEY = "gizmoSave";
+  const DEFAULT_SAVE = { coins: 0, color: "cyan", unlocked: { treads: false, boosters: false }, equippedWheels: "standard", bestScore: 0, muted: false };
+  let save = loadSave();
+  function loadSave() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(SAVE_KEY));
+      if (raw && typeof raw === "object") {
+        return Object.assign({}, DEFAULT_SAVE, raw, { unlocked: Object.assign({}, DEFAULT_SAVE.unlocked, raw.unlocked || {}) });
+      }
+    } catch (e) {}
+    return Object.assign({}, DEFAULT_SAVE, { unlocked: Object.assign({}, DEFAULT_SAVE.unlocked) });
+  }
+  function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+  function commitProgress() { save.bestScore = Math.max(save.bestScore, state.score); persist(); }
+
+  // =========================================================================
+  //  AUDIO  (synthesized via Web Audio API, unlocked on first gesture)
+  // =========================================================================
+  let actx = null, masterGain = null;
+  function ensureAudio() {
+    if (actx) { if (actx.state === "suspended") actx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    actx = new AC();
+    masterGain = actx.createGain();
+    masterGain.gain.value = save.muted ? 0 : 0.5;
+    masterGain.connect(actx.destination);
+  }
+  function tone(freq, dur, type, vol, when, glideTo) {
+    if (!actx) return;
+    const t0 = actx.currentTime + (when || 0);
+    const osc = actx.createOscillator();
+    const g = actx.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, t0);
+    if (glideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(1, glideTo), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || 0.3, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(t0); osc.stop(t0 + dur + 0.03);
+  }
+  function noiseBurst(dur, vol, filterFreq) {
+    if (!actx) return;
+    const t0 = actx.currentTime;
+    const n = actx.createBufferSource();
+    const buf = actx.createBuffer(1, Math.floor(actx.sampleRate * dur), actx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    n.buffer = buf;
+    const f = actx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = filterFreq || 1200;
+    const g = actx.createGain(); g.gain.setValueAtTime(vol || 0.2, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    n.connect(f); f.connect(g); g.connect(masterGain);
+    n.start(t0); n.stop(t0 + dur);
+  }
+  const sfx = {
+    gear()    { tone(680, 0.09, "square", 0.18); tone(940, 0.08, "square", 0.12, 0.04); },
+    battery() { tone(520, 0.1, "triangle", 0.22); tone(784, 0.13, "triangle", 0.18, 0.07); },
+    chip()    { [880, 1175, 1568, 2093].forEach((f, i) => tone(f, 0.16, "sine", 0.16, i * 0.05)); },
+    hazard()  { tone(400, 0.45, "sawtooth", 0.28, 0, 120); tone(300, 0.5, "square", 0.12, 0.05, 90); noiseBurst(0.25, 0.12, 800); },
+    magnet()  { tone(200, 0.6, "sawtooth", 0.3, 0, 1300); [660, 880, 1175, 1568].forEach((f, i) => tone(f, 0.18, "sine", 0.14, 0.12 + i * 0.06)); },
+    levelup() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.18, "triangle", 0.22, i * 0.09)); },
+    tap()     { tone(440, 0.06, "square", 0.14); },
+    coin()    { tone(988, 0.06, "square", 0.18); tone(1319, 0.09, "square", 0.15, 0.05); },
+    buzz()    { tone(150, 0.2, "sawtooth", 0.25, 0, 80); },
+  };
+  function play(name) { ensureAudio(); if (sfx[name]) sfx[name](); }
+
+  // =========================================================================
+  //  STATE
+  // =========================================================================
+  const state = {
+    screen: "MENU",          // MENU | PLAY | GARAGE
+    score: 0, nextMilestone: MILESTONE,
+    magnet: 0, magnetActive: false, magnetTimer: 0,
+    dizzyTimer: 0, invuln: 0,
+    garageReturn: "menu",
+    shakeT: 0, shakeMag: 0,
+    spawnTimer: 0, saveTimer: 8,
+    items: [], particles: [],
+    hudScore: -1, hudCoin: -1,
+  };
+  const robot = { x: 0, lastX: 0, targetX: 0, cy: 0, spin: 0, wheelSpin: 0 };
+
+  let T = 0;        // global time (seconds)
+  let gs = 1;       // game robot scale (set in resize)
+  let groundY = 0;  // floor line (set in resize)
+
+  // =========================================================================
+  //  CANVAS
+  // =========================================================================
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0;
+  const previews = {};
+
+  function fitPreview(p) {
+    if (!p) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = p.cnv.clientWidth, h = p.cnv.clientHeight;
+    if (!w || !h) return;
+    p.cnv.width = Math.round(w * dpr); p.cnv.height = Math.round(h * dpr);
+    p.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    p.w = w; p.h = h;
+  }
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gs = clamp(Math.min(W, H) / 620, 0.8, 1.5);
+    groundY = H - Math.max(26, H * 0.05);
+    robot.cy = groundY - 34 * gs;
+    if (!robot.x) { robot.x = robot.targetX = W / 2; }
+    robot.x = clamp(robot.x, catchRadius() + 8, W - catchRadius() - 8);
+    initBackground();
+    fitPreview(previews.menu); fitPreview(previews.garage);
+  }
+  function catchRadius() {
+    const base = 42 * gs;
+    return save.equippedWheels === "treads" ? base * 1.3 : base;
+  }
+
+  // =========================================================================
+  //  BACKGROUND (living space-junkyard, drawn behind everything)
+  // =========================================================================
+  let stars = [], scrap = [], dashOffset = 0;
+  function initBackground() {
+    stars = [];
+    const n = Math.round((W * H) / 14000);
+    for (let i = 0; i < n; i++) stars.push({ x: rand(0, W), y: rand(0, H), r: rand(0.6, 2.1), sp: rand(6, 26), tw: rand(0.5, 3) });
+    scrap = [];
+    for (let i = 0; i < 7; i++) scrap.push({ x: rand(0, W), y: groundY - rand(4, 60), s: rand(16, 46), sp: rand(6, 16), kind: i % 2 });
+  }
+  function updateBackground(dt) {
+    const sc = H / 800;
+    for (const s of stars) { s.y += s.sp * dt * sc; if (s.y > H + 4) { s.y = -4; s.x = rand(0, W); } }
+    for (const p of scrap) { p.x -= p.sp * dt; if (p.x < -60) { p.x = W + rand(0, 80); p.y = groundY - rand(4, 60); } }
+    dashOffset = (dashOffset + 60 * dt) % 40;
+  }
+  function drawBackground() {
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "#0a1030"); grad.addColorStop(0.55, "#121a3a"); grad.addColorStop(1, "#1a2348");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    // stars
+    for (const s of stars) {
+      ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(T * s.tw + s.x));
+      ctx.fillStyle = "#dff3ff";
+      ctx.fillRect(s.x, s.y, s.r, s.r);
+    }
+    ctx.globalAlpha = 1;
+    // distant scrap silhouettes
+    for (const p of scrap) {
+      ctx.fillStyle = "rgba(40,52,90,.55)";
+      if (p.kind === 0) { drawGear(ctx, p.x, p.y, p.s, "rgba(40,52,90,.55)", "rgba(30,40,70,.55)", T * 0.3 + p.x, 8, false); }
+      else { rr(ctx, p.x - p.s / 2, p.y - p.s, p.s, p.s, 4); ctx.fill(); }
+    }
+    // ground
+    const gg = ctx.createLinearGradient(0, groundY, 0, H);
+    gg.addColorStop(0, "#2a3358"); gg.addColorStop(1, "#10162e");
+    ctx.fillStyle = gg; ctx.fillRect(0, groundY, W, H - groundY);
+    ctx.fillStyle = "rgba(120,220,255,.45)"; ctx.fillRect(0, groundY, W, 3);
+    ctx.fillStyle = "rgba(120,220,255,.25)";
+    for (let x = -dashOffset; x < W; x += 40) ctx.fillRect(x, groundY + 9, 20, 3);
+  }
+
+  // =========================================================================
+  //  DRAWING PRIMITIVES
+  // =========================================================================
+  function drawStar(g, x, y, r, color) {
+    g.save(); g.translate(x, y); g.fillStyle = color; g.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / 5;
+      g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      const a2 = a + Math.PI / 5;
+      g.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
+    }
+    g.closePath(); g.fill(); g.restore();
+  }
+  function drawGear(g, x, y, r, fill, edge, rot, teeth, shiny) {
+    teeth = teeth || 8;
+    g.save();
+    if (shiny) { g.shadowColor = fill; g.shadowBlur = 14; }
+    g.translate(x, y); g.rotate(rot);
+    g.fillStyle = edge;
+    for (let i = 0; i < teeth; i++) { g.rotate(Math.PI * 2 / teeth); g.fillRect(-r * 0.18, -r * 1.22, r * 0.36, r * 0.44); }
+    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fillStyle = fill; g.fill();
+    g.shadowBlur = 0;
+    g.lineWidth = Math.max(2, r * 0.14); g.strokeStyle = edge; g.stroke();
+    g.beginPath(); g.arc(0, 0, r * 0.34, 0, Math.PI * 2); g.fillStyle = edge; g.fill();
+    if (shiny) { g.globalAlpha = 0.5; g.fillStyle = "#fff"; g.beginPath(); g.arc(-r * 0.34, -r * 0.34, r * 0.16, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
+    g.restore();
+  }
+  function drawBrokenGear(g, x, y, r, rot) {
+    drawGear(g, x, y, r, "#8b8f98", "#565b64", rot, 8, false);
+    g.save(); g.translate(x, y); g.rotate(rot);
+    g.strokeStyle = "#2c3038"; g.lineWidth = Math.max(2, r * 0.13);
+    g.beginPath(); g.moveTo(-r * 0.1, -r); g.lineTo(r * 0.16, -r * 0.2); g.lineTo(-r * 0.12, r * 0.12); g.lineTo(r * 0.1, r); g.stroke();
+    g.fillStyle = "rgba(150,80,30,.5)"; g.beginPath(); g.arc(r * 0.32, -r * 0.18, r * 0.16, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  function drawBattery(g, x, y, r, rot) {
+    g.save(); g.translate(x, y); g.rotate(rot * 0.25);
+    const w = r * 1.15, h = r * 1.8;
+    g.fillStyle = "#d7dbe0"; rr(g, -w * 0.22, -h * 0.6, w * 0.44, h * 0.14, 2); g.fill();
+    const grad = g.createLinearGradient(0, -h * 0.5, 0, h * 0.5);
+    grad.addColorStop(0, "#7dff9f"); grad.addColorStop(1, "#15b347");
+    rr(g, -w * 0.5, -h * 0.46, w, h * 0.92, r * 0.3); g.fillStyle = grad; g.fill();
+    g.lineWidth = 2; g.strokeStyle = "#0b7e34"; g.stroke();
+    g.fillStyle = "rgba(255,255,255,.85)"; rr(g, -w * 0.5, -h * 0.05, w, h * 0.2, 2); g.fill();
+    g.fillStyle = "#15b347"; g.beginPath();
+    g.moveTo(2, -h * 0.02); g.lineTo(-5, h * 0.07); g.lineTo(-1, h * 0.07); g.lineTo(-4, h * 0.15); g.lineTo(5, h * 0.04); g.lineTo(1, h * 0.04);
+    g.closePath(); g.fill();
+    g.restore();
+  }
+  function drawChip(g, x, y, r, rot, glow) {
+    g.save(); g.shadowColor = "#46e8ff"; g.shadowBlur = 12 + glow * 12;
+    g.translate(x, y); g.rotate(rot * 0.15);
+    g.fillStyle = "#e6c453";
+    for (let i = -1; i <= 1; i++) {
+      g.fillRect(-r * 0.8, i * r * 0.42 - r * 0.06, r * 0.2, r * 0.13);
+      g.fillRect(r * 0.6, i * r * 0.42 - r * 0.06, r * 0.2, r * 0.13);
+      g.fillRect(i * r * 0.42 - r * 0.06, -r * 0.8, r * 0.13, r * 0.2);
+      g.fillRect(i * r * 0.42 - r * 0.06, r * 0.6, r * 0.13, r * 0.2);
+    }
+    g.shadowBlur = 0;
+    rr(g, -r * 0.6, -r * 0.6, r * 1.2, r * 1.2, r * 0.2); g.fillStyle = "#16233f"; g.fill();
+    g.lineWidth = 2; g.strokeStyle = "#46e8ff"; g.stroke();
+    g.globalAlpha = 0.5 + 0.5 * glow; g.fillStyle = "#7af2ff";
+    rr(g, -r * 0.26, -r * 0.26, r * 0.52, r * 0.52, r * 0.1); g.fill(); g.globalAlpha = 1;
+    g.strokeStyle = "#8af7ff"; g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(0, -r * 0.26); g.lineTo(0, -r * 0.5); g.moveTo(r * 0.26, 0); g.lineTo(r * 0.5, 0); g.stroke();
+    g.restore();
+  }
+  function drawTire(g, x, y, r, rot) {
+    g.save(); g.translate(x, y); g.rotate(rot);
+    g.fillStyle = "#1c1f25"; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+    g.save(); g.fillStyle = "#0e1014";
+    for (let i = 0; i < 12; i++) { g.rotate(Math.PI / 6); g.fillRect(-r * 0.12, -r, r * 0.24, r * 0.2); }
+    g.restore();
+    g.fillStyle = "#3a3f4a"; g.beginPath(); g.arc(0, 0, r * 0.55, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#6b7280"; g.beginPath(); g.arc(0, 0, r * 0.28, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#23262e"; g.beginPath(); g.arc(0, 0, r * 0.12, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  function drawBeam(g, x, y, r, rot) {
+    g.save(); g.translate(x, y); g.rotate(rot * 0.4);
+    const w = r * 2.3, h = r * 0.95;
+    g.fillStyle = "#6b7280"; rr(g, -w / 2, -h / 2, w, h, 4); g.fill();
+    g.save(); rr(g, -w / 2, -h / 2, w, h, 4); g.clip();
+    g.strokeStyle = "#e8b923"; g.lineWidth = r * 0.2;
+    for (let sx = -w * 0.5 + 4; sx < w * 0.5 + h; sx += 13) { g.beginPath(); g.moveTo(sx, -h); g.lineTo(sx - h * 2, h); g.stroke(); }
+    g.restore();
+    g.lineWidth = 2; g.strokeStyle = "#454b55"; rr(g, -w / 2, -h / 2, w, h, 4); g.stroke();
+    g.fillStyle = "#9aa3b0";
+    [-w * 0.4, w * 0.4].forEach(bx => { g.beginPath(); g.arc(bx, -h * 0.22, r * 0.11, 0, Math.PI * 2); g.arc(bx, h * 0.22, r * 0.11, 0, Math.PI * 2); g.fill(); });
+    g.restore();
+  }
+
+  // =========================================================================
+  //  ROBOT
+  // =========================================================================
+  function flameShape(g, w, h) { g.beginPath(); g.moveTo(-w, 0); g.quadraticCurveTo(-w * 0.4, h * 0.6, 0, h); g.quadraticCurveTo(w * 0.4, h * 0.6, w, 0); g.closePath(); g.fill(); }
+  function drawFlame(g, x, y, len, t) {
+    g.save(); g.translate(x, y);
+    const w = 6 + Math.sin(t * 40 + x) * 1.5;
+    g.globalAlpha = 0.92;
+    g.fillStyle = "#ffd23f"; flameShape(g, w * 1.3, len);
+    g.fillStyle = "#ff8a1f"; flameShape(g, w, len * 0.78);
+    g.fillStyle = "#fff3b0"; flameShape(g, w * 0.5, len * 0.5);
+    g.globalAlpha = 1; g.restore();
+  }
+  function drawNozzle(g, x, y) {
+    g.fillStyle = "#b9c2d0"; g.beginPath();
+    g.moveTo(x - 7, y); g.lineTo(x + 7, y); g.lineTo(x + 5, y + 10); g.lineTo(x - 5, y + 10); g.closePath(); g.fill();
+  }
+  function drawWheel(g, x, y, r, t) {
+    g.save(); g.translate(x, y);
+    g.fillStyle = "#23262e"; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#3a3f4a"; g.beginPath(); g.arc(0, 0, r * 0.62, 0, Math.PI * 2); g.fill();
+    g.rotate(t);
+    g.strokeStyle = "#1a1d24"; g.lineWidth = 2;
+    for (let i = 0; i < 4; i++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, r * 0.6); g.stroke(); }
+    g.fillStyle = "#6b7280"; g.beginPath(); g.arc(0, 0, r * 0.22, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  function drawTreads(g, spin) {
+    g.save();
+    g.fillStyle = "#23262e"; rr(g, -30, 14, 60, 22, 11); g.fill();
+    g.fillStyle = "#3a3f4a"; rr(g, -26, 17, 52, 16, 8); g.fill();
+    g.fillStyle = "#1a1d24";
+    const off = (spin * 6) % 10;
+    for (let x = -30 + off; x < 30; x += 10) { g.fillRect(x, 33, 5, 4); g.fillRect(x, 13, 5, 4); }
+    g.fillStyle = "#6b7280";
+    g.beginPath(); g.arc(-16, 25, 5, 0, Math.PI * 2); g.arc(16, 25, 5, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  function drawEye(g, x, y, blink, dizzy, th) {
+    g.save(); g.translate(x, y);
+    if (dizzy) {
+      g.strokeStyle = th.glow; g.lineWidth = 1.6; g.beginPath();
+      for (let a = 0; a < 7; a++) { const rr2 = 0.5 + a * 0.45; g.lineTo(Math.cos(a * 1.5 + T * 8) * rr2, Math.sin(a * 1.5 + T * 8) * rr2); }
+      g.stroke();
+    } else {
+      const h = Math.max(0.12, 1 - blink);
+      g.fillStyle = th.glow; g.beginPath(); g.ellipse(0, 0, 3.4, 4.4 * h, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "#fff"; g.beginPath(); g.arc(-1, -1 * h, 1, 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
+  }
+  function drawRobot(g, cx, cy, s, o) {
+    const th = o.theme, wheels = o.wheels, t = o.t || 0, spin = o.spin || 0;
+    const dizzy = Math.abs(spin) > 0.001;
+    const blink = (t % 4) > 3.86 ? 1 : 0;
+    // shadow (not rotated)
+    g.save(); g.globalAlpha = 0.28; g.fillStyle = "#000";
+    g.beginPath(); g.ellipse(cx, cy + 40 * s, 34 * s, 9 * s, 0, 0, Math.PI * 2); g.fill(); g.restore();
+
+    g.save();
+    g.translate(cx, cy);
+    if (dizzy) g.rotate(spin);
+    g.scale(s, s);
+
+    // locomotion
+    if (wheels === "boosters") {
+      const fl = 11 + Math.sin(t * 30) * 3 + (o.moving ? 7 : 0);
+      drawFlame(g, -15, 24, fl, t); drawFlame(g, 15, 24, fl, t + 1.3);
+      drawNozzle(g, -15, 18); drawNozzle(g, 15, 18);
+    } else if (wheels === "treads") {
+      drawTreads(g, o.wheelSpin || 0);
+    } else {
+      drawWheel(g, -17, 26, 12, o.wheelSpin || 0); drawWheel(g, 17, 26, 12, o.wheelSpin || 0);
+    }
+
+    // body
+    const bg = g.createLinearGradient(0, -34, 0, 24);
+    bg.addColorStop(0, th.glow); bg.addColorStop(0.2, th.main); bg.addColorStop(1, th.dark);
+    g.fillStyle = bg; g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 2;
+    rr(g, -30, -34, 60, 58, 16); g.fill(); g.stroke();
+    g.fillStyle = "rgba(255,255,255,.22)"; rr(g, -26, -30, 11, 48, 7); g.fill();
+
+    // face panel
+    g.fillStyle = "#0c1428"; rr(g, -23, -26, 46, 28, 10); g.fill();
+    g.strokeStyle = th.glow; g.lineWidth = 1.5; rr(g, -23, -26, 46, 28, 10); g.stroke();
+    drawEye(g, -10, -12, blink, dizzy, th); drawEye(g, 10, -12, blink, dizzy, th);
+    g.strokeStyle = th.glow; g.lineWidth = 2; g.beginPath();
+    if (dizzy) { g.moveTo(-8, -2); g.quadraticCurveTo(-4, -6, 0, -2); g.quadraticCurveTo(4, 2, 8, -2); }
+    else { g.arc(0, -6, 7, 0.15 * Math.PI, 0.85 * Math.PI); }
+    g.stroke();
+
+    // antenna
+    g.strokeStyle = th.main; g.lineWidth = 2; g.beginPath(); g.moveTo(0, -34); g.lineTo(0, -44); g.stroke();
+    g.fillStyle = th.glow; g.globalAlpha = 0.6 + 0.4 * Math.sin(t * 4);
+    g.beginPath(); g.arc(0, -47, 4, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+
+    // chest light
+    g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.arc(0, 12, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = th.glow; g.globalAlpha = 0.5 + 0.3 * Math.sin(t * 3 + 1);
+    g.beginPath(); g.arc(0, 12, 4.5, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+
+    g.restore();
+  }
+  function drawForcefield(g, cx, cy, s) {
+    g.save();
+    const baseR = 56 * s;
+    const grd = g.createRadialGradient(cx, cy - 6 * s, 10 * s, cx, cy - 6 * s, baseR + 22 * s);
+    grd.addColorStop(0, "rgba(255,255,255,0.05)"); grd.addColorStop(0.7, "rgba(120,220,255,0.13)"); grd.addColorStop(1, "rgba(120,220,255,0)");
+    g.fillStyle = grd; g.beginPath(); g.arc(cx, cy - 6 * s, baseR + 22 * s, 0, Math.PI * 2); g.fill();
+    for (let ring = 0; ring < 3; ring++) {
+      const r = baseR + ring * 9 * s + Math.sin(T * 6 + ring) * 4 * s;
+      const hue = (T * 200 + ring * 50) % 360;
+      g.lineWidth = 3.5 * s; g.strokeStyle = "hsla(" + hue + ",100%,65%,0.85)";
+      g.beginPath(); g.arc(cx, cy - 6 * s, r, 0, Math.PI * 2); g.stroke();
+    }
+    g.restore();
+  }
+
+  // =========================================================================
+  //  ITEMS
+  // =========================================================================
+  const ITEM_R = { gear: 15, battery: 16, chip: 16, tire: 20, beam: 18, brokengear: 17 };
+  function spawnItem() {
+    const r = Math.random();
+    let type;
+    if (r < 0.50) type = "gear";
+    else if (r < 0.65) type = "battery";
+    else if (r < 0.72) type = "chip";
+    else if (r < 0.82) type = "tire";
+    else if (r < 0.91) type = "beam";
+    else type = "brokengear";
+    const good = (type === "gear" || type === "battery" || type === "chip");
+    const rr2 = ITEM_R[type] * gs;
+    const speed = (120 + Math.random() * 60) * (1 + Math.min(state.score / 600, 0.8)) * (H / 820);
+    state.items.push({ type: type, good: good, x: rand(rr2 + 12, W - rr2 - 12), y: -rr2 - 10, r: rr2, vy: speed, vx: 0, rot: rand(0, 6), vrot: rand(-3, 3), dropped: false, life: 0 });
+  }
+  function dropGears(n) {
+    for (let k = 0; k < n; k++) {
+      const dir = k < n / 2 ? -1 : 1;
+      state.items.push({ type: "gear", good: true, x: robot.x + rand(8, 34) * dir, y: robot.cy - 24 * gs, r: 13 * gs,
+        vx: rand(70, 150) * dir, vy: rand(-230, -150), rot: 0, vrot: rand(-7, 7), dropped: true, life: 9, noCollect: 0.6 });
+    }
+  }
+  function drawItem(it) {
+    switch (it.type) {
+      case "gear": drawGear(ctx, it.x, it.y, it.r, "#ffd23f", "#c8901a", it.rot, 8, true); break;
+      case "battery": drawBattery(ctx, it.x, it.y, it.r, it.rot); break;
+      case "chip": drawChip(ctx, it.x, it.y, it.r, it.rot, 0.5 + 0.5 * Math.sin(T * 6 + it.x)); break;
+      case "tire": drawTire(ctx, it.x, it.y, it.r, it.rot); break;
+      case "beam": drawBeam(ctx, it.x, it.y, it.r, it.rot); break;
+      case "brokengear": drawBrokenGear(ctx, it.x, it.y, it.r, it.rot); break;
+    }
+  }
+
+  // =========================================================================
+  //  PARTICLES
+  // =========================================================================
+  function addParticle(p) { state.particles.push(p); }
+  function spawnSparkle(x, y, color, n) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, Math.PI * 2), sp = rand(40, 180);
+      addParticle({ shape: "star", x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, g: 120, life: 0.6, max: 0.6, size: rand(3, 7) * gs, color: color, rot: rand(0, 6), vrot: rand(-8, 8) });
+    }
+  }
+  function spawnPoof(x, y, color) {
+    addParticle({ shape: "ring", x: x, y: y, vx: 0, vy: 0, g: 0, life: 0.4, max: 0.4, size: 8 * gs, grow: 140 * gs, color: color });
+    for (let i = 0; i < 8; i++) { const a = rand(0, Math.PI * 2), sp = rand(60, 160); addParticle({ shape: "dot", x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 240, life: 0.5, max: 0.5, size: rand(2, 5) * gs, color: color }); }
+  }
+  function spawnConfetti() {
+    for (let i = 0; i < 70; i++) {
+      addParticle({ shape: "rect", x: rand(W * 0.2, W * 0.8), y: rand(-40, 0), vx: rand(-60, 60), vy: rand(40, 160), g: 200,
+        life: rand(1.6, 2.6), max: 2.6, size: rand(5, 11), color: CONFETTI[(Math.random() * CONFETTI.length) | 0], rot: rand(0, 6), vrot: rand(-10, 10) });
+    }
+  }
+  function updateParticles(dt) {
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { state.particles.splice(i, 1); continue; }
+      if (p.shape === "ring") { p.size += p.grow * dt; continue; }
+      p.vy += (p.g || 0) * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.vrot) p.rot += p.vrot * dt;
+    }
+  }
+  function drawParticles() {
+    for (const p of state.particles) {
+      const al = clamp(p.life / p.max, 0, 1);
+      ctx.globalAlpha = al;
+      if (p.shape === "rect") {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6); ctx.restore();
+      } else if (p.shape === "ring") {
+        ctx.strokeStyle = p.color; ctx.lineWidth = 3 * gs; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.stroke();
+      } else if (p.shape === "star") {
+        drawStar(ctx, p.x, p.y, p.size, p.color);
+      } else {
+        ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // =========================================================================
+  //  SCORING / EVENTS
+  // =========================================================================
+  function addScore(pts) {
+    state.score += pts; save.coins += pts;
+    while (state.score >= state.nextMilestone) { celebrate(); state.nextMilestone += MILESTONE; }
+  }
+  function celebrate() {
+    levelUp.classList.remove("show"); void levelUp.offsetWidth; levelUp.classList.add("show");
+    spawnConfetti(); play("levelup"); commitProgress();
+  }
+  function addMagnet(v) {
+    state.magnet = Math.min(1, state.magnet + v);
+    if (state.magnet >= 1 && !state.magnetActive) activateMagnet();
+  }
+  function activateMagnet() {
+    state.magnetActive = true; state.magnetTimer = MAGNET_TIME; play("magnet");
+    addParticle({ shape: "ring", x: robot.x, y: robot.cy - 6 * gs, vx: 0, vy: 0, g: 0, life: 0.6, max: 0.6, size: 20 * gs, grow: 260 * gs, color: "#9bf3ff" });
+  }
+  function collectItem(it) {
+    if (it.type === "gear") { addScore(1); play("gear"); spawnSparkle(it.x, it.y, "#ffe066", 5); }
+    else if (it.type === "battery") { addScore(2); addMagnet(MAGNET_PER_BATTERY); play("battery"); spawnSparkle(it.x, it.y, "#7dff9f", 6); }
+    else if (it.type === "chip") { addScore(5); play("chip"); spawnSparkle(it.x, it.y, "#7af2ff", 12); }
+  }
+  function recycleHazard(it) {
+    addScore(1); play("coin");
+    spawnPoof(it.x, it.y, "hsl(" + ((T * 200) % 360) + ",100%,65%)");
+  }
+  function hitHazard(it) {
+    if (state.dizzyTimer > 0 || state.invuln > 0) { spawnPoof(it.x, it.y, "#9aa3b0"); return; }
+    state.dizzyTimer = DIZZY_TIME; state.invuln = INVULN_TIME;
+    state.shakeT = 0.4; state.shakeMag = 11 * gs;
+    play("hazard"); spawnPoof(it.x, it.y, "#9aa3b0"); dropGears(3);
+  }
+
+  // =========================================================================
+  //  PLAY UPDATE
+  // =========================================================================
+  function updatePlay(dt) {
+    // spawn
+    state.spawnTimer -= dt;
+    if (state.spawnTimer <= 0) { spawnItem(); const interval = Math.max(0.42, 0.9 - state.score * 0.0015); state.spawnTimer = interval * rand(0.7, 1.3); }
+
+    // magnet / dizzy timers
+    if (state.magnetActive) { state.magnetTimer -= dt; if (state.magnetTimer <= 0) { state.magnetActive = false; state.magnet = 0; } }
+    if (state.invuln > 0) state.invuln -= dt;
+    if (state.dizzyTimer > 0) { state.dizzyTimer -= dt; robot.spin += dt * 11; if (state.dizzyTimer <= 0) robot.spin = 0; }
+
+    // robot movement
+    robot.lastX = robot.x;
+    let lerp = save.equippedWheels === "boosters" ? 0.27 : 0.18;
+    if (state.dizzyTimer > 0) lerp *= 0.25;
+    robot.x += (robot.targetX - robot.x) * (1 - Math.pow(1 - lerp, dt * 60));
+    robot.x = clamp(robot.x, catchRadius() + 8, W - catchRadius() - 8);
+    robot.wheelSpin += (robot.x - robot.lastX) * 0.07;
+
+    const cR = catchRadius();
+    const moving = Math.abs(robot.x - robot.lastX) > 0.4;
+    robot._moving = moving;
+
+    // items
+    for (let i = state.items.length - 1; i >= 0; i--) {
+      const it = state.items[i];
+      if (it.dropped) {
+        it.vy += 620 * (H / 820) * dt;
+        if (state.magnetActive) {
+          const dx = robot.x - it.x, dy = robot.cy - it.y, d = Math.hypot(dx, dy) || 1;
+          it.x += dx / d * 900 * dt; it.y += dy / d * 900 * dt;
+        } else {
+          it.x += it.vx * dt; it.y += it.vy * dt;
+          if (it.y >= groundY - it.r) { it.y = groundY - it.r; if (it.vy > 0) it.vy *= -0.4; if (Math.abs(it.vy) < 30) it.vy = 0; it.vx *= 0.82; }
+          else { it.vx *= 0.995; }
+          if (it.x < it.r) { it.x = it.r; it.vx = Math.abs(it.vx) * 0.5; }
+          else if (it.x > W - it.r) { it.x = W - it.r; it.vx = -Math.abs(it.vx) * 0.5; }
+        }
+        it.rot += it.vrot * dt;
+        it.life -= dt;
+        if (it.noCollect > 0) it.noCollect -= dt;
+        else if (state.magnetActive || Math.abs(it.x - robot.x) < cR + 8) { collectItem(it); state.items.splice(i, 1); continue; }
+        if (it.life <= 0) { state.items.splice(i, 1); continue; }
+        continue;
+      }
+      // falling item
+      if (state.magnetActive) { const dx = robot.x - it.x, dy = (robot.cy - 6 * gs) - it.y, d = Math.hypot(dx, dy) || 1; it.x += dx / d * 1000 * dt; it.y += dy / d * 1000 * dt; }
+      else { it.y += it.vy * dt; }
+      it.rot += it.vrot * dt;
+
+      const dx = it.x - robot.x, dy = it.y - robot.cy;
+      if (state.magnetActive) {
+        const d = Math.hypot(dx, dy);
+        if (d < cR + it.r) { if (it.good) collectItem(it); else recycleHazard(it); state.items.splice(i, 1); continue; }
+      } else if (dy > -70 * gs && dy < 34 * gs && Math.abs(dx) < cR + it.r * 0.4) {
+        if (it.good) { collectItem(it); state.items.splice(i, 1); continue; }
+        else { hitHazard(it); state.items.splice(i, 1); continue; }
+      }
+      if (it.y > H + 70) { state.items.splice(i, 1); }
+    }
+
+    // periodic autosave + hud
+    state.saveTimer -= dt; if (state.saveTimer <= 0) { commitProgress(); state.saveTimer = 8; }
+    updateHud(false);
+  }
+
+  // =========================================================================
+  //  RENDER
+  // =========================================================================
+  function render() {
+    drawBackground();
+    ctx.save();
+    if (state.shakeT > 0) { const m = state.shakeMag * (state.shakeT / 0.4); ctx.translate(rand(-m, m), rand(-m, m)); }
+
+    if (state.screen === "PLAY") {
+      for (const it of state.items) drawItem(it);
+      if (state.magnetActive) drawForcefield(ctx, robot.x, robot.cy, gs);
+      drawRobot(ctx, robot.x, robot.cy, gs, { theme: COLORS[save.color], wheels: save.equippedWheels, t: T, spin: robot.spin, wheelSpin: robot.wheelSpin, moving: robot._moving });
+      if (state.dizzyTimer > 0) { for (let k = 0; k < 3; k++) { const a = T * 6 + k * 2.1; drawStar(ctx, robot.x + Math.cos(a) * 22 * gs, robot.cy - 50 * gs + Math.sin(a) * 8 * gs, 5 * gs, "#ffe066"); } }
+      drawParticles();
+    }
+    ctx.restore();
+  }
+  function drawPreview(p) {
+    if (!p || !p.w) return;
+    p.ctx.clearRect(0, 0, p.w, p.h);
+    const s = Math.min(p.w, p.h) / 130;
+    const cx = p.w / 2, cy = p.h / 2 + Math.sin(T * 2) * 4 + 6 * s;
+    drawRobot(p.ctx, cx, cy, s, { theme: COLORS[save.color], wheels: save.equippedWheels, t: T, spin: 0, wheelSpin: T * 2, moving: true });
+  }
+
+  // =========================================================================
+  //  MAIN LOOP
+  // =========================================================================
+  let last = performance.now();
+  function frame(now) {
+    let dt = (now - last) / 1000; last = now;
+    if (dt > 0.05) dt = 0.05;
+    T += dt;
+    updateBackground(dt);
+    updateParticles(dt);
+    if (state.screen === "PLAY") updatePlay(dt);
+    if (state.shakeT > 0) state.shakeT -= dt;
+    render();
+    if (state.screen === "MENU") drawPreview(previews.menu);
+    else if (state.screen === "GARAGE") drawPreview(previews.garage);
+    requestAnimationFrame(frame);
+  }
+
+  // =========================================================================
+  //  DOM REFERENCES
+  // =========================================================================
+  const menuEl = document.getElementById("menu");
+  const garageEl = document.getElementById("garage");
+  const hudEl = document.getElementById("hud");
+  const scoreVal = document.getElementById("scoreVal");
+  const coinVal = document.getElementById("coinVal");
+  const magnetFill = document.getElementById("magnetFill");
+  const magnetBar = document.getElementById("magnetBar");
+  const levelUp = document.getElementById("levelUp");
+  const muteBtn = document.getElementById("muteBtn");
+  const menuCoins = document.getElementById("menuCoins");
+  const menuBest = document.getElementById("menuBest");
+  const garageCoins = document.getElementById("garageCoins");
+  const partsGrid = document.getElementById("partsGrid");
+
+  previews.menu = { cnv: document.getElementById("menuPreview"), ctx: document.getElementById("menuPreview").getContext("2d"), w: 0, h: 0 };
+  previews.garage = { cnv: document.getElementById("garagePreview"), ctx: document.getElementById("garagePreview").getContext("2d"), w: 0, h: 0 };
+
+  // =========================================================================
+  //  HUD + SCREENS
+  // =========================================================================
+  function updateHud(force) {
+    if (force || state.score !== state.hudScore) { scoreVal.textContent = state.score; state.hudScore = state.score; }
+    if (force || save.coins !== state.hudCoin) { coinVal.textContent = save.coins; state.hudCoin = save.coins; }
+    const pct = state.magnetActive ? (state.magnetTimer / MAGNET_TIME) : state.magnet;
+    magnetFill.style.width = (pct * 100).toFixed(1) + "%";
+    magnetBar.classList.toggle("full", state.magnet >= 1 && !state.magnetActive);
+  }
+  function show(screen) {
+    state.screen = screen;
+    menuEl.classList.toggle("hidden", screen !== "MENU");
+    garageEl.classList.toggle("hidden", screen !== "GARAGE");
+    hudEl.classList.toggle("hidden", screen !== "PLAY");
+    if (screen === "MENU") { menuCoins.textContent = save.coins; menuBest.textContent = save.bestScore; updateSwatchSel(); fitPreview(previews.menu); }
+    if (screen === "GARAGE") { renderGarage(); updateSwatchSel(); fitPreview(previews.garage); }
+    if (screen === "PLAY") updateHud(true);
+  }
+  function startRun() {
+    ensureAudio();
+    state.score = 0; state.nextMilestone = MILESTONE;
+    state.magnet = 0; state.magnetActive = false; state.magnetTimer = 0;
+    state.dizzyTimer = 0; state.invuln = 0; state.saveTimer = 8;
+    state.items.length = 0; state.particles.length = 0;
+    robot.x = robot.targetX = W / 2; robot.spin = 0;
+    show("PLAY");
+  }
+
+  // =========================================================================
+  //  COLOR SWATCHES
+  // =========================================================================
+  function buildSwatches(container) {
+    container.innerHTML = "";
+    for (const c of COLOR_ORDER) {
+      const b = document.createElement("button");
+      b.className = "swatch" + (save.color === c ? " sel" : "");
+      b.style.background = "radial-gradient(circle at 35% 30%, " + COLORS[c].glow + ", " + COLORS[c].main + " 55%, " + COLORS[c].dark + ")";
+      b.dataset.color = c;
+      b.addEventListener("click", () => { save.color = c; persist(); play("tap"); updateSwatchSel(); });
+      container.appendChild(b);
+    }
+  }
+  function updateSwatchSel() {
+    document.querySelectorAll(".swatch").forEach(s => s.classList.toggle("sel", s.dataset.color === save.color));
+  }
+
+  // =========================================================================
+  //  GARAGE
+  // =========================================================================
+  function renderGarage() {
+    garageCoins.textContent = save.coins;
+    partsGrid.innerHTML = "";
+    for (const w of WHEELS) {
+      const owned = w.id === "standard" || save.unlocked[w.id];
+      const equipped = save.equippedWheels === w.id;
+      const card = document.createElement("div");
+      card.className = "part" + (equipped ? " sel" : "");
+      const btn = document.createElement("button");
+      btn.className = "pbtn";
+      if (!owned) { btn.classList.add("buy"); btn.textContent = "🪙 " + w.price; btn.addEventListener("click", () => buyPart(w, card)); }
+      else if (equipped) { btn.classList.add("equipped"); btn.textContent = "Equipped ✓"; }
+      else { btn.classList.add("equip"); btn.textContent = "Equip"; btn.addEventListener("click", () => equipPart(w)); }
+      card.innerHTML = '<div class="pic">' + w.icon + '</div><div class="pname">' + w.name + '</div><div class="perk">' + w.perk + '</div>';
+      card.appendChild(btn);
+      partsGrid.appendChild(card);
+    }
+  }
+  function buyPart(w, card) {
+    if (save.coins >= w.price) {
+      save.coins -= w.price; save.unlocked[w.id] = true; save.equippedWheels = w.id;
+      persist(); play("coin"); renderGarage();
+    } else {
+      play("buzz"); card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake");
+    }
+  }
+  function equipPart(w) { save.equippedWheels = w.id; persist(); play("tap"); renderGarage(); }
+
+  // =========================================================================
+  //  INPUT
+  // =========================================================================
+  function setTarget(clientX) { robot.targetX = clientX; }
+  canvas.addEventListener("pointerdown", (e) => { ensureAudio(); if (state.screen === "PLAY") setTarget(e.clientX); });
+  canvas.addEventListener("pointermove", (e) => { if (state.screen === "PLAY") { setTarget(e.clientX); if (e.cancelable) e.preventDefault(); } }, { passive: false });
+  window.addEventListener("touchmove", (e) => { if (state.screen === "PLAY" && e.cancelable) e.preventDefault(); }, { passive: false });
+  window.addEventListener("pointerdown", ensureAudio, { once: false });
+
+  // Buttons
+  document.getElementById("playBtn").addEventListener("click", () => { state.garageReturn = "menu"; startRun(); });
+  document.getElementById("garageBtnMenu").addEventListener("click", () => { ensureAudio(); play("tap"); state.garageReturn = "menu"; show("GARAGE"); });
+  document.getElementById("garageBtnHud").addEventListener("click", () => { ensureAudio(); play("tap"); state.garageReturn = "play"; commitProgress(); show("GARAGE"); });
+  document.getElementById("garagePlayBtn").addEventListener("click", () => { ensureAudio(); play("tap"); if (state.garageReturn === "play") show("PLAY"); else startRun(); });
+  document.getElementById("garageBackBtn").addEventListener("click", () => { play("tap"); commitProgress(); show("MENU"); });
+  muteBtn.addEventListener("click", () => {
+    save.muted = !save.muted; persist();
+    if (masterGain) masterGain.gain.value = save.muted ? 0 : 0.5;
+    muteBtn.textContent = save.muted ? "🔇" : "🔊";
+  });
+
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", () => setTimeout(resize, 200));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) commitProgress(); });
+
+  // =========================================================================
+  //  INIT
+  // =========================================================================
+  buildSwatches(document.getElementById("menuSwatches"));
+  buildSwatches(document.getElementById("garageSwatches"));
+  muteBtn.textContent = save.muted ? "🔇" : "🔊";
+  resize();
+  show("MENU");
+  requestAnimationFrame(frame);
+
+  // Optional test hook (only when loaded with ?debug=1) — never active in normal play.
+  if (location.search.indexOf("debug") >= 0) {
+    window.__gizmo = { state, robot, save, startRun, show, spawnItem, addScore, addMagnet, hitHazard, dropGears,
+      spawnAt: function (type, dx) { const good = (type === "gear" || type === "battery" || type === "chip"); const r = ITEM_R[type] * gs; state.items.push({ type: type, good: good, x: robot.x + (dx || 0), y: robot.cy - 4 * gs, r: r, vy: 0, vx: 0, rot: 0, vrot: 0, dropped: false, life: 0 }); } };
+  }
+})();
+</script>
+</body>
+</html>
