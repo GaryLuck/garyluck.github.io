@@ -1,0 +1,1874 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Gizmo-Bot Scrap Run</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10131f;
+      --panel: rgba(18, 22, 36, 0.92);
+      --panel-strong: rgba(21, 27, 44, 0.98);
+      --text: #f6fbff;
+      --muted: #b8c4d8;
+      --line: rgba(255, 255, 255, 0.18);
+      --accent: #23d8ff;
+      --accent-2: #ffcc38;
+      --danger: #ff735d;
+      --green: #72f287;
+      font-family: "Trebuchet MS", "Verdana", system-ui, sans-serif;
+      letter-spacing: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      letter-spacing: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 12% 18%, rgba(35, 216, 255, 0.16), transparent 28%),
+        radial-gradient(circle at 82% 24%, rgba(255, 204, 56, 0.16), transparent 24%),
+        linear-gradient(180deg, #111426 0%, #171d2b 48%, #282538 100%);
+      color: var(--text);
+    }
+
+    body {
+      min-height: 100dvh;
+      touch-action: none;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 8px;
+      min-height: 48px;
+      padding: 12px 18px;
+      color: #0c1220;
+      background: linear-gradient(180deg, #fff6a8, #ffc93b);
+      font: 800 1rem/1.1 "Trebuchet MS", "Verdana", system-ui, sans-serif;
+      box-shadow: 0 7px 0 #a86f14, 0 14px 24px rgba(0, 0, 0, 0.22);
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: translateY(4px);
+      box-shadow: 0 3px 0 #a86f14, 0 9px 18px rgba(0, 0, 0, 0.22);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    button.secondary:active {
+      box-shadow: none;
+    }
+
+    button:disabled {
+      opacity: 0.58;
+      transform: none;
+      box-shadow: none;
+      cursor: default;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      isolation: isolate;
+    }
+
+    .hud {
+      position: relative;
+      z-index: 3;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(160px, 300px) auto;
+      gap: 10px;
+      align-items: center;
+      padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 12px) 8px calc(env(safe-area-inset-left) + 12px);
+      background: linear-gradient(180deg, rgba(10, 13, 24, 0.92), rgba(10, 13, 24, 0.48));
+      pointer-events: none;
+    }
+
+    .stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .stat {
+      min-width: 74px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+
+    .stat-label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      display: block;
+      color: var(--text);
+      font-size: 1.12rem;
+      font-weight: 900;
+      line-height: 1.05;
+    }
+
+    .magnet {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .magnet-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .magnet-track {
+      height: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      background: rgba(4, 9, 18, 0.58);
+    }
+
+    .magnet-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #23d8ff, #72f287, #ffcc38, #ff6ec7);
+      box-shadow: 0 0 14px rgba(35, 216, 255, 0.75);
+      transition: width 140ms linear;
+    }
+
+    .hud-actions {
+      display: flex;
+      justify-content: end;
+      pointer-events: auto;
+    }
+
+    .small-button {
+      min-height: 42px;
+      padding: 9px 13px;
+      font-size: 0.88rem;
+    }
+
+    .game-wrap {
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    #gameCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    #gameCanvas.dragging {
+      cursor: grabbing;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(8, 11, 21, 0.45);
+      backdrop-filter: blur(5px);
+    }
+
+    .overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      width: min(760px, 100%);
+      max-height: calc(100dvh - 92px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      background: var(--panel-strong);
+      box-shadow: 0 26px 70px rgba(0, 0, 0, 0.48);
+    }
+
+    .title {
+      margin: 0 0 6px;
+      font-size: 2.05rem;
+      line-height: 1;
+      color: #ffffff;
+      text-shadow: 0 3px 0 rgba(35, 216, 255, 0.28), 0 0 22px rgba(35, 216, 255, 0.35);
+    }
+
+    .subtitle {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 800;
+    }
+
+    .menu-grid {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .robot-preview {
+      width: 100%;
+      height: 100%;
+      display: block;
+      min-height: 280px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(35, 216, 255, 0.11), transparent 54%),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 30px),
+        rgba(255, 255, 255, 0.08);
+    }
+
+    .menu-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .paint-row,
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .paint-swatch {
+      width: 54px;
+      height: 54px;
+      min-height: 54px;
+      padding: 0;
+      border: 3px solid rgba(255, 255, 255, 0.34);
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 5px rgba(0, 0, 0, 0.18), 0 8px 18px rgba(0, 0, 0, 0.24);
+    }
+
+    .paint-swatch.selected {
+      border-color: #ffffff;
+      outline: 4px solid rgba(255, 204, 56, 0.85);
+    }
+
+    .paint-swatch[data-color="cyan"] {
+      background: #23d8ff;
+    }
+
+    .paint-swatch[data-color="pink"] {
+      background: #ff6ec7;
+    }
+
+    .paint-swatch[data-color="green"] {
+      background: #72f287;
+    }
+
+    .paint-swatch[data-color="gold"] {
+      background: #ffcc38;
+    }
+
+    .garage-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .part-card {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      min-height: 116px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .part-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .part-copy {
+      min-width: 0;
+    }
+
+    .part-name {
+      margin: 0 0 4px;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 900;
+    }
+
+    .part-effect {
+      min-height: 32px;
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 700;
+      line-height: 1.22;
+    }
+
+    .part-card button {
+      width: 100%;
+      min-height: 40px;
+      padding: 9px 10px;
+      font-size: 0.86rem;
+    }
+
+    .badge {
+      position: absolute;
+      top: 22%;
+      left: 50%;
+      z-index: 4;
+      width: min(360px, calc(100% - 40px));
+      pointer-events: none;
+      transform: translate(-50%, -24px) scale(0.8);
+      opacity: 0;
+      text-align: center;
+      transition: opacity 160ms ease, transform 220ms cubic-bezier(.18, 1.3, .34, 1);
+    }
+
+    .badge.show {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+
+    .badge-inner {
+      border: 3px solid #ffffff;
+      border-radius: 8px;
+      padding: 16px 18px;
+      color: #11131e;
+      background: linear-gradient(180deg, #fff7a8, #ffcc38);
+      box-shadow: 0 10px 0 #ad7614, 0 22px 34px rgba(0, 0, 0, 0.3);
+      font-size: 1.9rem;
+      font-weight: 1000;
+      text-transform: uppercase;
+    }
+
+    .hide {
+      display: none !important;
+    }
+
+    @media (max-width: 720px) {
+      .hud {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .stats {
+        justify-content: space-between;
+      }
+
+      .hud-actions {
+        justify-content: stretch;
+      }
+
+      .hud-actions button {
+        width: 100%;
+      }
+
+      .menu-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .robot-preview {
+        min-height: 190px;
+      }
+
+      .garage-list {
+        grid-template-columns: 1fr;
+      }
+
+      .modal {
+        padding: 18px;
+      }
+
+      .title {
+        font-size: 1.68rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="app" aria-label="Gizmo-Bot Scrap Run">
+    <section class="hud" aria-label="Run status">
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Scrap</span>
+          <span class="stat-value" id="scoreValue">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Bank</span>
+          <span class="stat-value" id="bankValue">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Time</span>
+          <span class="stat-value" id="timeValue">75</span>
+        </div>
+      </div>
+      <div class="magnet" aria-label="Magnet power">
+        <div class="magnet-top">
+          <span>Magnet</span>
+          <span id="magnetText">0%</span>
+        </div>
+        <div class="magnet-track">
+          <div class="magnet-fill" id="magnetFill"></div>
+        </div>
+      </div>
+      <div class="hud-actions">
+        <button id="workshopButton" class="secondary small-button" type="button">Workshop</button>
+      </div>
+    </section>
+
+    <section class="game-wrap">
+      <canvas id="gameCanvas" aria-label="Gizmo-Bot play field"></canvas>
+
+      <div id="levelBadge" class="badge" aria-hidden="true">
+        <div class="badge-inner">Level Up</div>
+      </div>
+
+      <section id="menuOverlay" class="overlay active" aria-label="Main menu">
+        <div class="modal">
+          <h1 class="title">Gizmo-Bot Scrap Run</h1>
+          <p class="subtitle">Customizer and Collector</p>
+          <div class="menu-grid">
+            <canvas id="previewCanvas" class="robot-preview" width="420" height="560" aria-label="Robot preview"></canvas>
+            <div class="menu-panel">
+              <div>
+                <p class="subtitle">Paint</p>
+                <div class="paint-row" id="paintRow"></div>
+              </div>
+              <div>
+                <p class="subtitle">Parts</p>
+                <div class="stat" style="display:inline-block; min-width:150px;">
+                  <span class="stat-label">Equipped</span>
+                  <span class="stat-value" id="equippedValue">Wheels</span>
+                </div>
+              </div>
+              <div class="button-row">
+                <button id="startButton" type="button">Start Run</button>
+                <button id="garageButton" class="secondary" type="button">Workshop</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="garageOverlay" class="overlay" aria-label="Workshop">
+        <div class="modal">
+          <h2 class="title">Robo Workshop</h2>
+          <p class="subtitle"><span id="garageMessage">Pick a part for the next run.</span></p>
+          <div class="stat" style="display:inline-block; min-width:170px;">
+            <span class="stat-label">Bank</span>
+            <span class="stat-value" id="garageBankValue">0</span>
+          </div>
+          <div class="garage-list" id="garageList"></div>
+          <div class="button-row">
+            <button id="playAgainButton" type="button">Roll Again</button>
+            <button id="backMenuButton" class="secondary" type="button">Main Menu</button>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const previewCanvas = document.getElementById("previewCanvas");
+      const previewCtx = previewCanvas.getContext("2d");
+
+      const scoreValue = document.getElementById("scoreValue");
+      const bankValue = document.getElementById("bankValue");
+      const timeValue = document.getElementById("timeValue");
+      const magnetFill = document.getElementById("magnetFill");
+      const magnetText = document.getElementById("magnetText");
+      const workshopButton = document.getElementById("workshopButton");
+      const menuOverlay = document.getElementById("menuOverlay");
+      const garageOverlay = document.getElementById("garageOverlay");
+      const startButton = document.getElementById("startButton");
+      const garageButton = document.getElementById("garageButton");
+      const playAgainButton = document.getElementById("playAgainButton");
+      const backMenuButton = document.getElementById("backMenuButton");
+      const paintRow = document.getElementById("paintRow");
+      const equippedValue = document.getElementById("equippedValue");
+      const garageList = document.getElementById("garageList");
+      const garageBankValue = document.getElementById("garageBankValue");
+      const garageMessage = document.getElementById("garageMessage");
+      const levelBadge = document.getElementById("levelBadge");
+
+      const PAINTS = {
+        cyan: { name: "Cyan", body: "#23d8ff", dark: "#1289af", shine: "#c7f7ff" },
+        pink: { name: "Pink", body: "#ff6ec7", dark: "#ab3b86", shine: "#ffd1ee" },
+        green: { name: "Green", body: "#72f287", dark: "#2aa349", shine: "#dcffe3" },
+        gold: { name: "Gold", body: "#ffcc38", dark: "#af7d17", shine: "#fff1a6" }
+      };
+
+      const PARTS = [
+        {
+          id: "wheels",
+          name: "Comfy Wheels",
+          cost: 0,
+          effect: "Smooth rolling and bright hubcaps.",
+          response: 11,
+          catchBonus: 0,
+          lossShield: 0
+        },
+        {
+          id: "boosters",
+          name: "Rocket Boosters",
+          cost: 35,
+          effect: "Faster side-to-side zooming.",
+          response: 17,
+          catchBonus: 0,
+          lossShield: 0
+        },
+        {
+          id: "treads",
+          name: "Tractor Treads",
+          cost: 45,
+          effect: "Wider scoop for nearby scrap.",
+          response: 9,
+          catchBonus: 14,
+          lossShield: 1
+        },
+        {
+          id: "starhubs",
+          name: "Star Hubs",
+          cost: 60,
+          effect: "Drops one less piece after bumps.",
+          response: 12,
+          catchBonus: 5,
+          lossShield: 2
+        }
+      ];
+
+      const storage = {
+        read(key, fallback) {
+          try {
+            const value = localStorage.getItem(key);
+            return value === null ? fallback : JSON.parse(value);
+          } catch (error) {
+            return fallback;
+          }
+        },
+        write(key, value) {
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch (error) {
+            // Local storage can be disabled in private browsing.
+          }
+        }
+      };
+
+      const state = {
+        screen: "menu",
+        width: 1,
+        height: 1,
+        dpr: 1,
+        score: 0,
+        bank: storage.read("gizmoBank", 0),
+        runDuration: 75,
+        timeLeft: 75,
+        runBanked: false,
+        magnetCharge: 0,
+        magnetTimer: 0,
+        nextMilestone: 50,
+        objects: [],
+        particles: [],
+        stars: [],
+        spawnTimer: 0,
+        hazardTimer: 1.4,
+        activePointer: null,
+        lastTime: performance.now(),
+        selectedPaint: storage.read("gizmoPaint", "cyan"),
+        selectedPart: storage.read("gizmoPart", "wheels"),
+        unlocked: storage.read("gizmoUnlocked", ["wheels"]),
+        audioReady: false,
+        audio: null,
+        robot: {
+          x: 300,
+          y: 300,
+          targetX: 300,
+          radius: 54,
+          wheelSpin: 0,
+          dizzy: 0,
+          invulnerable: 0
+        }
+      };
+
+      if (!PAINTS[state.selectedPaint]) state.selectedPaint = "cyan";
+      if (!PARTS.some((part) => part.id === state.selectedPart)) state.selectedPart = "wheels";
+      if (!state.unlocked.includes("wheels")) state.unlocked.push("wheels");
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function randomBetween(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function getPart(id = state.selectedPart) {
+        return PARTS.find((part) => part.id === id) || PARTS[0];
+      }
+
+      function saveProgress() {
+        storage.write("gizmoBank", state.bank);
+        storage.write("gizmoPaint", state.selectedPaint);
+        storage.write("gizmoPart", state.selectedPart);
+        storage.write("gizmoUnlocked", state.unlocked);
+      }
+
+      function setupPaintButtons() {
+        paintRow.innerHTML = "";
+        Object.keys(PAINTS).forEach((id) => {
+          const button = document.createElement("button");
+          button.className = "paint-swatch";
+          button.type = "button";
+          button.dataset.color = id;
+          button.setAttribute("aria-label", PAINTS[id].name);
+          button.addEventListener("click", () => {
+            state.selectedPaint = id;
+            saveProgress();
+            updateUI();
+            drawPreview();
+          });
+          paintRow.appendChild(button);
+        });
+      }
+
+      function drawPartIcon(iconCanvas, partId) {
+        const iconCtx = iconCanvas.getContext("2d");
+        const w = iconCanvas.width;
+        const h = iconCanvas.height;
+        iconCtx.clearRect(0, 0, w, h);
+        iconCtx.save();
+        iconCtx.scale(w / 64, h / 64);
+        iconCtx.fillStyle = "rgba(255,255,255,0.1)";
+        iconCtx.fillRect(0, 0, 64, 64);
+        iconCtx.translate(32, 34);
+
+        if (partId === "boosters") {
+          iconCtx.fillStyle = "#8ee7ff";
+          roundRect(iconCtx, -22, -14, 44, 22, 7);
+          iconCtx.fill();
+          iconCtx.fillStyle = "#ffcc38";
+          iconCtx.beginPath();
+          iconCtx.moveTo(-14, 12);
+          iconCtx.lineTo(-5, 30);
+          iconCtx.lineTo(4, 12);
+          iconCtx.fill();
+          iconCtx.beginPath();
+          iconCtx.moveTo(9, 12);
+          iconCtx.lineTo(18, 30);
+          iconCtx.lineTo(27, 12);
+          iconCtx.fill();
+          iconCtx.fillStyle = "#ff735d";
+          iconCtx.beginPath();
+          iconCtx.moveTo(-8, 14);
+          iconCtx.lineTo(-4, 24);
+          iconCtx.lineTo(0, 14);
+          iconCtx.fill();
+          iconCtx.beginPath();
+          iconCtx.moveTo(15, 14);
+          iconCtx.lineTo(19, 24);
+          iconCtx.lineTo(23, 14);
+          iconCtx.fill();
+        } else if (partId === "treads") {
+          iconCtx.fillStyle = "#2b3447";
+          roundRect(iconCtx, -26, -10, 52, 26, 12);
+          iconCtx.fill();
+          iconCtx.strokeStyle = "#9fb4d0";
+          iconCtx.lineWidth = 4;
+          iconCtx.stroke();
+          iconCtx.fillStyle = "#ffcc38";
+          for (let i = -18; i <= 18; i += 12) {
+            iconCtx.beginPath();
+            iconCtx.arc(i, 3, 4, 0, Math.PI * 2);
+            iconCtx.fill();
+          }
+        } else if (partId === "starhubs") {
+          iconCtx.fillStyle = "#252b3d";
+          iconCtx.beginPath();
+          iconCtx.arc(-14, 7, 15, 0, Math.PI * 2);
+          iconCtx.arc(16, 7, 15, 0, Math.PI * 2);
+          iconCtx.fill();
+          iconCtx.fillStyle = "#ffcc38";
+          drawStar(iconCtx, -14, 7, 6, 13, 5);
+          drawStar(iconCtx, 16, 7, 6, 13, 5);
+        } else {
+          iconCtx.fillStyle = "#252b3d";
+          iconCtx.beginPath();
+          iconCtx.arc(-14, 7, 14, 0, Math.PI * 2);
+          iconCtx.arc(16, 7, 14, 0, Math.PI * 2);
+          iconCtx.fill();
+          iconCtx.fillStyle = "#9fb4d0";
+          iconCtx.beginPath();
+          iconCtx.arc(-14, 7, 6, 0, Math.PI * 2);
+          iconCtx.arc(16, 7, 6, 0, Math.PI * 2);
+          iconCtx.fill();
+        }
+        iconCtx.restore();
+      }
+
+      function renderGarage() {
+        garageList.innerHTML = "";
+        PARTS.forEach((part) => {
+          const card = document.createElement("article");
+          card.className = "part-card";
+
+          const icon = document.createElement("canvas");
+          icon.className = "part-icon";
+          icon.width = 96;
+          icon.height = 96;
+          drawPartIcon(icon, part.id);
+
+          const copy = document.createElement("div");
+          copy.className = "part-copy";
+
+          const name = document.createElement("h3");
+          name.className = "part-name";
+          name.textContent = part.name;
+
+          const effect = document.createElement("p");
+          effect.className = "part-effect";
+          effect.textContent = part.effect;
+
+          const action = document.createElement("button");
+          action.type = "button";
+
+          const isUnlocked = state.unlocked.includes(part.id);
+          const isEquipped = state.selectedPart === part.id;
+
+          if (isEquipped) {
+            action.textContent = "Equipped";
+            action.disabled = true;
+          } else if (isUnlocked) {
+            action.textContent = "Choose";
+            action.className = "secondary";
+            action.addEventListener("click", () => {
+              state.selectedPart = part.id;
+              saveProgress();
+              updateUI();
+              renderGarage();
+              drawPreview();
+              playSound("select");
+            });
+          } else {
+            action.textContent = `Unlock ${part.cost}`;
+            action.disabled = state.bank < part.cost;
+            action.addEventListener("click", () => {
+              if (state.bank < part.cost) return;
+              state.bank -= part.cost;
+              state.unlocked.push(part.id);
+              state.selectedPart = part.id;
+              saveProgress();
+              updateUI();
+              renderGarage();
+              drawPreview();
+              playSound("unlock");
+            });
+          }
+
+          copy.append(name, effect, action);
+          card.append(icon, copy);
+          garageList.appendChild(card);
+        });
+      }
+
+      function updateUI() {
+        scoreValue.textContent = String(Math.max(0, Math.floor(state.score)));
+        bankValue.textContent = String(Math.max(0, Math.floor(state.bank)));
+        garageBankValue.textContent = String(Math.max(0, Math.floor(state.bank)));
+        timeValue.textContent = String(Math.max(0, Math.ceil(state.timeLeft)));
+
+        const magnetPercent = state.magnetTimer > 0 ? 100 : Math.round(state.magnetCharge);
+        magnetFill.style.width = `${magnetPercent}%`;
+        magnetText.textContent = state.magnetTimer > 0 ? `${state.magnetTimer.toFixed(1)}s` : `${magnetPercent}%`;
+
+        equippedValue.textContent = getPart().name;
+        document.querySelectorAll(".paint-swatch").forEach((button) => {
+          button.classList.toggle("selected", button.dataset.color === state.selectedPaint);
+        });
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        state.dpr = Math.min(2, window.devicePixelRatio || 1);
+        state.width = Math.max(1, Math.floor(rect.width));
+        state.height = Math.max(1, Math.floor(rect.height));
+        canvas.width = Math.floor(state.width * state.dpr);
+        canvas.height = Math.floor(state.height * state.dpr);
+        canvas.style.width = `${state.width}px`;
+        canvas.style.height = `${state.height}px`;
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+        resetRobotPosition(false);
+        makeStars();
+        drawPreview();
+      }
+
+      function makeStars() {
+        state.stars = [];
+        const count = Math.floor(clamp(state.width / 10, 36, 92));
+        for (let i = 0; i < count; i += 1) {
+          state.stars.push({
+            x: Math.random() * state.width,
+            y: Math.random() * state.height * 0.55,
+            r: randomBetween(0.6, 1.8),
+            a: randomBetween(0.18, 0.72)
+          });
+        }
+      }
+
+      function resetRobotPosition(center = true) {
+        const floorY = getFloorY();
+        const part = getPart();
+        state.robot.radius = 52 + part.catchBonus * 0.25;
+        state.robot.y = floorY - 54;
+        if (center || !state.robot.x) {
+          state.robot.x = state.width * 0.5;
+          state.robot.targetX = state.robot.x;
+        }
+        const margin = 48;
+        state.robot.x = clamp(state.robot.x, margin, state.width - margin);
+        state.robot.targetX = clamp(state.robot.targetX, margin, state.width - margin);
+      }
+
+      function getFloorY() {
+        return state.height - Math.max(92, state.height * 0.18);
+      }
+
+      function initAudio() {
+        if (state.audioReady) return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const context = new AudioContext();
+        const master = context.createGain();
+        master.gain.value = 0.22;
+        master.connect(context.destination);
+        state.audio = { context, master };
+        state.audioReady = true;
+      }
+
+      function resumeAudio() {
+        initAudio();
+        if (state.audio && state.audio.context.state === "suspended") {
+          state.audio.context.resume();
+        }
+      }
+
+      function tone(freq, start, duration, type = "sine", volume = 0.45, slideTo = null) {
+        if (!state.audioReady || !state.audio) return;
+        const { context, master } = state.audio;
+        const osc = context.createOscillator();
+        const gain = context.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, start);
+        if (slideTo) {
+          osc.frequency.exponentialRampToValueAtTime(Math.max(30, slideTo), start + duration);
+        }
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        osc.connect(gain);
+        gain.connect(master);
+        osc.start(start);
+        osc.stop(start + duration + 0.03);
+      }
+
+      function noise(start, duration, volume = 0.16) {
+        if (!state.audioReady || !state.audio) return;
+        const { context, master } = state.audio;
+        const bufferSize = Math.max(1, Math.floor(context.sampleRate * duration));
+        const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i += 1) {
+          data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+        const source = context.createBufferSource();
+        const gain = context.createGain();
+        source.buffer = buffer;
+        gain.gain.setValueAtTime(volume, start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        source.connect(gain);
+        gain.connect(master);
+        source.start(start);
+      }
+
+      function playSound(name) {
+        if (!state.audioReady || !state.audio) return;
+        const now = state.audio.context.currentTime;
+        if (name === "gear") {
+          tone(740, now, 0.08, "triangle", 0.22, 980);
+          tone(1120, now + 0.05, 0.09, "sine", 0.12, 820);
+        } else if (name === "battery") {
+          tone(260, now, 0.1, "sawtooth", 0.18, 420);
+          tone(540, now + 0.08, 0.16, "square", 0.12, 760);
+        } else if (name === "chip") {
+          tone(920, now, 0.12, "sine", 0.16, 1380);
+          tone(1240, now + 0.08, 0.14, "triangle", 0.16, 1720);
+          tone(1840, now + 0.17, 0.16, "sine", 0.1, 1480);
+        } else if (name === "bump") {
+          tone(220, now, 0.18, "sawtooth", 0.22, 90);
+          tone(160, now + 0.08, 0.22, "square", 0.13, 70);
+          noise(now, 0.22, 0.18);
+        } else if (name === "magnet") {
+          tone(180, now, 0.48, "sine", 0.15, 740);
+          tone(360, now + 0.1, 0.38, "triangle", 0.12, 990);
+        } else if (name === "level") {
+          [520, 660, 820, 1040].forEach((freq, index) => {
+            tone(freq, now + index * 0.09, 0.18, "triangle", 0.18, freq * 1.15);
+          });
+        } else if (name === "unlock") {
+          [392, 523, 659, 784].forEach((freq, index) => {
+            tone(freq, now + index * 0.07, 0.15, "triangle", 0.17, freq * 1.1);
+          });
+        } else if (name === "select") {
+          tone(520, now, 0.07, "triangle", 0.14, 720);
+        }
+      }
+
+      function startRun() {
+        resumeAudio();
+        state.screen = "running";
+        state.score = 0;
+        state.timeLeft = state.runDuration;
+        state.runBanked = false;
+        state.magnetCharge = 0;
+        state.magnetTimer = 0;
+        state.nextMilestone = 50;
+        state.objects = [];
+        state.particles = [];
+        state.spawnTimer = 0.2;
+        state.hazardTimer = 1.6;
+        state.robot.dizzy = 0;
+        state.robot.invulnerable = 0;
+        resetRobotPosition(true);
+        menuOverlay.classList.remove("active");
+        garageOverlay.classList.remove("active");
+        updateUI();
+        playSound("select");
+      }
+
+      function openMenu() {
+        state.screen = "menu";
+        menuOverlay.classList.add("active");
+        garageOverlay.classList.remove("active");
+        garageMessage.textContent = "Pick a part for the next run.";
+        updateUI();
+        drawPreview();
+      }
+
+      function openGarage(message = "Pick a part for the next run.") {
+        if (state.screen === "running") {
+          finishRun();
+          return;
+        }
+        state.screen = "garage";
+        garageMessage.textContent = message;
+        menuOverlay.classList.remove("active");
+        garageOverlay.classList.add("active");
+        renderGarage();
+        updateUI();
+      }
+
+      function finishRun() {
+        if (!state.runBanked) {
+          state.bank += Math.max(0, Math.floor(state.score));
+          state.runBanked = true;
+          saveProgress();
+        }
+        state.screen = "garage";
+        garageMessage.textContent = `Run haul: ${Math.max(0, Math.floor(state.score))} scrap`;
+        menuOverlay.classList.remove("active");
+        garageOverlay.classList.add("active");
+        renderGarage();
+        updateUI();
+        playSound("unlock");
+      }
+
+      function pointerToCanvas(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (event.clientX - rect.left) * (state.width / rect.width),
+          y: (event.clientY - rect.top) * (state.height / rect.height)
+        };
+      }
+
+      function setRobotTargetFromEvent(event) {
+        const point = pointerToCanvas(event);
+        const margin = 44;
+        state.robot.targetX = clamp(point.x, margin, state.width - margin);
+      }
+
+      function handlePointerDown(event) {
+        if (state.screen !== "running") return;
+        resumeAudio();
+        state.activePointer = event.pointerId;
+        canvas.setPointerCapture(event.pointerId);
+        canvas.classList.add("dragging");
+        setRobotTargetFromEvent(event);
+        event.preventDefault();
+      }
+
+      function handlePointerMove(event) {
+        if (state.screen !== "running") return;
+        if (state.activePointer !== event.pointerId) return;
+        setRobotTargetFromEvent(event);
+        event.preventDefault();
+      }
+
+      function handlePointerUp(event) {
+        if (state.activePointer !== event.pointerId) return;
+        state.activePointer = null;
+        canvas.classList.remove("dragging");
+      }
+
+      function spawnCollectible(type = null, x = null, y = null) {
+        const chosen = type || chooseCollectibleType();
+        const radius = chosen === "chip" ? 18 : chosen === "battery" ? 20 : 16;
+        state.objects.push({
+          type: chosen,
+          x: x ?? randomBetween(30, state.width - 30),
+          y: y ?? -30,
+          vx: randomBetween(-10, 10),
+          vy: randomBetween(86, 150) + Math.min(80, state.score * 0.35),
+          r: radius,
+          rot: randomBetween(0, Math.PI * 2),
+          spin: randomBetween(-2.2, 2.2),
+          hit: false
+        });
+      }
+
+      function chooseCollectibleType() {
+        const roll = Math.random();
+        if (roll > 0.88) return "chip";
+        if (roll > 0.62) return "battery";
+        return "gear";
+      }
+
+      function spawnHazard() {
+        const hazardTypes = ["beam", "tire", "scrapgear"];
+        const type = hazardTypes[Math.floor(Math.random() * hazardTypes.length)];
+        state.objects.push({
+          type,
+          x: randomBetween(40, state.width - 40),
+          y: -42,
+          vx: randomBetween(-20, 20),
+          vy: randomBetween(118, 195) + Math.min(90, state.score * 0.32),
+          r: type === "beam" ? 28 : 25,
+          rot: randomBetween(0, Math.PI * 2),
+          spin: randomBetween(-2.8, 2.8),
+          hit: false
+        });
+      }
+
+      function dropGears(count) {
+        const floorY = getFloorY();
+        for (let i = 0; i < count; i += 1) {
+          state.objects.push({
+            type: "droppedGear",
+            x: clamp(state.robot.x + randomBetween(-58, 58), 22, state.width - 22),
+            y: floorY - randomBetween(16, 34),
+            vx: randomBetween(-88, 88),
+            vy: randomBetween(-70, -25),
+            r: 15,
+            rot: randomBetween(0, Math.PI * 2),
+            spin: randomBetween(-6, 6),
+            floor: true,
+            hit: false
+          });
+        }
+      }
+
+      function addScore(amount, objectType) {
+        state.score += amount;
+        if (objectType === "battery") {
+          if (state.magnetTimer <= 0) {
+            state.magnetCharge = clamp(state.magnetCharge + 25, 0, 100);
+            if (state.magnetCharge >= 100) {
+              state.magnetCharge = 0;
+              state.magnetTimer = 5;
+              burstParticles(state.robot.x, state.robot.y - 24, 36, "rainbow");
+              playSound("magnet");
+            }
+          }
+        }
+
+        if (state.score >= state.nextMilestone) {
+          showLevelUp();
+          while (state.score >= state.nextMilestone) {
+            state.nextMilestone += 50;
+          }
+        }
+
+        updateUI();
+      }
+
+      function showLevelUp() {
+        levelBadge.classList.add("show");
+        window.clearTimeout(showLevelUp.timeoutId);
+        showLevelUp.timeoutId = window.setTimeout(() => {
+          levelBadge.classList.remove("show");
+        }, 1350);
+        burstParticles(state.width * 0.5, state.height * 0.22, 90, "confetti");
+        playSound("level");
+      }
+
+      function burstParticles(x, y, count, mode = "spark") {
+        const colors = mode === "rainbow"
+          ? ["#23d8ff", "#72f287", "#ffcc38", "#ff6ec7", "#ffffff"]
+          : ["#23d8ff", "#ffcc38", "#ff6ec7", "#72f287", "#ffffff", "#ff735d"];
+        for (let i = 0; i < count; i += 1) {
+          const angle = randomBetween(-Math.PI, Math.PI);
+          const speed = randomBetween(60, mode === "confetti" ? 260 : 190);
+          state.particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - (mode === "confetti" ? 70 : 20),
+            life: randomBetween(0.6, mode === "confetti" ? 1.7 : 1),
+            maxLife: 1,
+            size: randomBetween(4, mode === "confetti" ? 10 : 7),
+            color: colors[Math.floor(Math.random() * colors.length)],
+            rot: randomBetween(0, Math.PI * 2),
+            spin: randomBetween(-7, 7),
+            mode
+          });
+          state.particles[state.particles.length - 1].maxLife = state.particles[state.particles.length - 1].life;
+        }
+      }
+
+      function update(dt) {
+        if (state.screen === "running") {
+          updateRun(dt);
+        }
+        updateParticles(dt);
+      }
+
+      function updateRun(dt) {
+        state.timeLeft -= dt;
+        if (state.timeLeft <= 0) {
+          state.timeLeft = 0;
+          updateUI();
+          finishRun();
+          return;
+        }
+
+        const part = getPart();
+        state.robot.x += (state.robot.targetX - state.robot.x) * clamp(dt * part.response, 0, 1);
+        state.robot.wheelSpin += dt * (4 + Math.abs(state.robot.targetX - state.robot.x) * 0.08);
+        state.robot.dizzy = Math.max(0, state.robot.dizzy - dt);
+        state.robot.invulnerable = Math.max(0, state.robot.invulnerable - dt);
+
+        state.spawnTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          spawnCollectible();
+          const pace = clamp(0.92 - state.score * 0.002, 0.38, 0.92);
+          state.spawnTimer = randomBetween(pace * 0.55, pace * 1.1);
+        }
+
+        state.hazardTimer -= dt;
+        if (state.hazardTimer <= 0) {
+          spawnHazard();
+          state.hazardTimer = randomBetween(1.2, 2.35);
+        }
+
+        if (state.magnetTimer > 0) {
+          state.magnetTimer = Math.max(0, state.magnetTimer - dt);
+          if (state.magnetTimer <= 0) {
+            updateUI();
+          }
+        }
+
+        updateObjects(dt);
+        updateUI();
+      }
+
+      function updateObjects(dt) {
+        const floorY = getFloorY();
+        const robot = state.robot;
+        const catchRadius = robot.radius + getPart().catchBonus;
+
+        state.objects.forEach((object) => {
+          const isCollectible = isGoodObject(object.type);
+          if (state.magnetTimer > 0 && isCollectible) {
+            const dx = robot.x - object.x;
+            const dy = (robot.y - 26) - object.y;
+            const distance = Math.max(18, Math.hypot(dx, dy));
+            const pull = clamp(620 / distance, 2.2, 13);
+            object.vx += (dx / distance) * pull * 80 * dt;
+            object.vy += (dy / distance) * pull * 80 * dt;
+          }
+
+          object.vy += object.floor ? 230 * dt : 18 * dt;
+          object.x += object.vx * dt;
+          object.y += object.vy * dt;
+          object.rot += object.spin * dt;
+
+          if (object.floor && object.y >= floorY - object.r) {
+            object.y = floorY - object.r;
+            object.vy *= -0.25;
+            object.vx *= 0.92;
+          }
+
+          if (object.x < object.r || object.x > state.width - object.r) {
+            object.x = clamp(object.x, object.r, state.width - object.r);
+            object.vx *= -0.45;
+          }
+
+          const dx = object.x - robot.x;
+          const dy = object.y - (robot.y - 8);
+          const distance = Math.hypot(dx, dy);
+
+          if (isCollectible && distance < catchRadius + object.r) {
+            object.hit = true;
+            const value = object.type === "chip" ? 5 : object.type === "battery" ? 2 : 1;
+            addScore(value, object.type === "droppedGear" ? "gear" : object.type);
+            burstParticles(object.x, object.y, object.type === "chip" ? 18 : 9, object.type === "chip" ? "spark" : "collect");
+            playSound(object.type === "chip" ? "chip" : object.type === "battery" ? "battery" : "gear");
+          } else if (!isCollectible && distance < catchRadius + object.r - 8 && robot.invulnerable <= 0) {
+            object.hit = true;
+            const loss = Math.min(Math.floor(state.score), Math.max(0, 4 - getPart().lossShield));
+            state.score = Math.max(0, state.score - loss);
+            if (loss > 0) dropGears(loss);
+            robot.dizzy = 1.15;
+            robot.invulnerable = 1.55;
+            burstParticles(robot.x, robot.y - 32, 26, "bump");
+            playSound("bump");
+            updateUI();
+          }
+        });
+
+        state.objects = state.objects.filter((object) => {
+          if (object.hit) return false;
+          return object.y < state.height + 80;
+        });
+      }
+
+      function updateParticles(dt) {
+        state.particles.forEach((particle) => {
+          particle.life -= dt;
+          particle.vy += (particle.mode === "confetti" ? 460 : 260) * dt;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.rot += particle.spin * dt;
+        });
+        state.particles = state.particles.filter((particle) => particle.life > 0 && particle.y < state.height + 80);
+      }
+
+      function isGoodObject(type) {
+        return type === "gear" || type === "battery" || type === "chip" || type === "droppedGear";
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, state.width, state.height);
+        drawBackground(ctx, state.width, state.height, performance.now() / 1000);
+        state.objects.forEach(drawObject);
+        drawRobot(ctx, state.robot.x, state.robot.y, {
+          paint: state.selectedPaint,
+          part: state.selectedPart,
+          scale: 1,
+          wheelSpin: state.robot.wheelSpin,
+          dizzy: state.robot.dizzy,
+          invulnerable: state.robot.invulnerable,
+          magnetTimer: state.magnetTimer
+        });
+        drawParticles();
+        if (state.screen !== "running") {
+          drawAttractMode();
+        }
+      }
+
+      function drawBackground(context, width, height, time) {
+        const floorY = getFloorY();
+        const sky = context.createLinearGradient(0, 0, 0, height);
+        sky.addColorStop(0, "#101629");
+        sky.addColorStop(0.56, "#18223a");
+        sky.addColorStop(1, "#2b2638");
+        context.fillStyle = sky;
+        context.fillRect(0, 0, width, height);
+
+        context.save();
+        state.stars.forEach((star) => {
+          context.globalAlpha = star.a * (0.7 + Math.sin(time * 2 + star.x) * 0.18);
+          context.fillStyle = "#ffffff";
+          context.beginPath();
+          context.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+          context.fill();
+        });
+        context.restore();
+
+        context.save();
+        context.globalAlpha = 0.22;
+        context.strokeStyle = "#23d8ff";
+        context.lineWidth = 1;
+        for (let x = -80 + (time * 14) % 80; x < width + 80; x += 80) {
+          context.beginPath();
+          context.moveTo(x, floorY);
+          context.lineTo(x + width * 0.18, height);
+          context.stroke();
+        }
+        for (let y = floorY; y < height + 80; y += 22) {
+          context.beginPath();
+          context.moveTo(0, y);
+          context.lineTo(width, y);
+          context.stroke();
+        }
+        context.restore();
+
+        drawJunkPile(context, 28, floorY + 4, 1);
+        drawJunkPile(context, width - 160, floorY + 10, 0.86);
+
+        context.fillStyle = "#262b3d";
+        context.fillRect(0, floorY, width, height - floorY);
+        context.fillStyle = "#3a4158";
+        context.fillRect(0, floorY, width, 10);
+        context.fillStyle = "rgba(255,255,255,0.12)";
+        for (let x = -30 + (time * 45) % 90; x < width + 90; x += 90) {
+          context.fillRect(x, floorY + 16, 46, 6);
+        }
+
+        context.save();
+        context.globalAlpha = 0.75;
+        context.fillStyle = "rgba(35,216,255,0.18)";
+        roundRect(context, width * 0.5 - 140, floorY + 28, 280, 28, 14);
+        context.fill();
+        context.restore();
+      }
+
+      function drawJunkPile(context, x, y, scale) {
+        context.save();
+        context.translate(x, y);
+        context.scale(scale, scale);
+        context.fillStyle = "#384054";
+        context.beginPath();
+        context.moveTo(0, 38);
+        context.quadraticCurveTo(22, -10, 68, 24);
+        context.quadraticCurveTo(106, -4, 144, 38);
+        context.closePath();
+        context.fill();
+        context.fillStyle = "#596178";
+        context.fillRect(30, 10, 48, 12);
+        context.fillStyle = "#ffcc38";
+        context.beginPath();
+        context.arc(96, 18, 12, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = "#202637";
+        context.lineWidth = 5;
+        context.stroke();
+        context.fillStyle = "#23d8ff";
+        roundRect(context, 48, -7, 26, 18, 5);
+        context.fill();
+        context.restore();
+      }
+
+      function drawAttractMode() {
+        const floorY = getFloorY();
+        const pulse = 0.5 + Math.sin(performance.now() / 550) * 0.5;
+        ctx.save();
+        ctx.globalAlpha = 0.18 + pulse * 0.12;
+        ctx.strokeStyle = "#ffcc38";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(70, floorY - 22);
+        ctx.bezierCurveTo(state.width * 0.32, floorY - 66, state.width * 0.68, floorY - 66, state.width - 70, floorY - 22);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawObject(object) {
+        ctx.save();
+        ctx.translate(object.x, object.y);
+        ctx.rotate(object.rot);
+
+        if (object.type === "gear" || object.type === "droppedGear") {
+          drawGear(ctx, 0, 0, object.r, object.type === "droppedGear" ? "#ffcc38" : "#b9c5d6");
+        } else if (object.type === "battery") {
+          drawBattery(ctx, object.r);
+        } else if (object.type === "chip") {
+          drawChip(ctx, object.r);
+        } else if (object.type === "beam") {
+          drawBeam(ctx);
+        } else if (object.type === "tire") {
+          drawTire(ctx, object.r);
+        } else if (object.type === "scrapgear") {
+          drawGear(ctx, 0, 0, object.r + 4, "#8a4f45");
+          ctx.strokeStyle = "#ff735d";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(-16, -16);
+          ctx.lineTo(16, 16);
+          ctx.moveTo(16, -16);
+          ctx.lineTo(-16, 16);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      function drawGear(context, x, y, radius, color) {
+        context.save();
+        context.translate(x, y);
+        context.fillStyle = color;
+        context.strokeStyle = "#32394e";
+        context.lineWidth = 3;
+        context.beginPath();
+        const teeth = 10;
+        for (let i = 0; i < teeth * 2; i += 1) {
+          const angle = (i / (teeth * 2)) * Math.PI * 2;
+          const r = i % 2 === 0 ? radius * 1.18 : radius * 0.86;
+          const px = Math.cos(angle) * r;
+          const py = Math.sin(angle) * r;
+          if (i === 0) context.moveTo(px, py);
+          else context.lineTo(px, py);
+        }
+        context.closePath();
+        context.fill();
+        context.stroke();
+        context.fillStyle = "#242b3c";
+        context.beginPath();
+        context.arc(0, 0, radius * 0.38, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+
+      function drawBattery(context, radius) {
+        context.save();
+        context.fillStyle = "#72f287";
+        context.strokeStyle = "#223044";
+        context.lineWidth = 4;
+        roundRect(context, -radius * 0.72, -radius, radius * 1.44, radius * 1.8, 5);
+        context.fill();
+        context.stroke();
+        context.fillStyle = "#e9ffef";
+        roundRect(context, -radius * 0.35, -radius - 7, radius * 0.7, 8, 3);
+        context.fill();
+        context.fillStyle = "#183d27";
+        context.fillRect(-3, -radius * 0.55, 6, radius * 1.1);
+        context.fillRect(-radius * 0.35, -3, radius * 0.7, 6);
+        context.restore();
+      }
+
+      function drawChip(context, radius) {
+        context.save();
+        context.shadowColor = "#23d8ff";
+        context.shadowBlur = 18;
+        context.fillStyle = "#23d8ff";
+        roundRect(context, -radius, -radius, radius * 2, radius * 2, 5);
+        context.fill();
+        context.shadowBlur = 0;
+        context.strokeStyle = "#e6fbff";
+        context.lineWidth = 3;
+        context.strokeRect(-radius * 0.55, -radius * 0.55, radius * 1.1, radius * 1.1);
+        context.strokeStyle = "#ffcc38";
+        context.lineWidth = 2;
+        for (let i = -2; i <= 2; i += 1) {
+          context.beginPath();
+          context.moveTo(-radius - 5, i * 6);
+          context.lineTo(-radius, i * 6);
+          context.moveTo(radius, i * 6);
+          context.lineTo(radius + 5, i * 6);
+          context.stroke();
+        }
+        context.restore();
+      }
+
+      function drawBeam(context) {
+        context.save();
+        context.fillStyle = "#9b6d5f";
+        context.strokeStyle = "#4a2d2b";
+        context.lineWidth = 4;
+        roundRect(context, -43, -10, 86, 20, 4);
+        context.fill();
+        context.stroke();
+        context.strokeStyle = "rgba(255,255,255,0.25)";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(-34, -4);
+        context.lineTo(34, -4);
+        context.stroke();
+        context.restore();
+      }
+
+      function drawTire(context, radius) {
+        context.save();
+        context.fillStyle = "#181d2b";
+        context.strokeStyle = "#697286";
+        context.lineWidth = 5;
+        context.beginPath();
+        context.arc(0, 0, radius * 1.12, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+        context.fillStyle = "#394053";
+        context.beginPath();
+        context.arc(0, 0, radius * 0.48, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+
+      function drawRobot(context, x, y, options = {}) {
+        const paint = PAINTS[options.paint || state.selectedPaint] || PAINTS.cyan;
+        const partId = options.part || state.selectedPart;
+        const scale = options.scale || 1;
+        const spin = options.wheelSpin || 0;
+        const dizzy = options.dizzy || 0;
+        const invulnerable = options.invulnerable || 0;
+        const magnetTimer = options.magnetTimer || 0;
+
+        context.save();
+        context.translate(x, y);
+        context.scale(scale, scale);
+
+        if (magnetTimer > 0) {
+          const pulse = 0.5 + Math.sin(performance.now() / 95) * 0.5;
+          const ring = context.createRadialGradient(0, -22, 30, 0, -22, 102 + pulse * 18);
+          ring.addColorStop(0, "rgba(255,255,255,0)");
+          ring.addColorStop(0.55, "rgba(35,216,255,0.12)");
+          ring.addColorStop(0.75, "rgba(255,110,199,0.22)");
+          ring.addColorStop(1, "rgba(255,204,56,0)");
+          context.fillStyle = ring;
+          context.beginPath();
+          context.arc(0, -22, 105 + pulse * 16, 0, Math.PI * 2);
+          context.fill();
+          context.strokeStyle = `hsla(${(performance.now() / 8) % 360}, 95%, 68%, 0.85)`;
+          context.lineWidth = 4;
+          context.beginPath();
+          context.arc(0, -22, 78 + pulse * 8, 0, Math.PI * 2);
+          context.stroke();
+        }
+
+        if (invulnerable > 0 && Math.floor(invulnerable * 12) % 2 === 0) {
+          context.globalAlpha = 0.62;
+        }
+
+        if (dizzy > 0) {
+          context.rotate(Math.sin(performance.now() / 45) * 0.26);
+        }
+
+        context.fillStyle = "#2c3449";
+        roundRect(context, -38, -74, 76, 70, 14);
+        context.fill();
+
+        context.fillStyle = paint.dark;
+        roundRect(context, -45, -66, 90, 66, 16);
+        context.fill();
+        context.fillStyle = paint.body;
+        roundRect(context, -39, -72, 78, 66, 15);
+        context.fill();
+
+        context.fillStyle = "rgba(255,255,255,0.28)";
+        roundRect(context, -28, -65, 24, 9, 5);
+        context.fill();
+
+        context.fillStyle = "#f6fbff";
+        context.beginPath();
+        context.arc(-17, -43, 9, 0, Math.PI * 2);
+        context.arc(17, -43, 9, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = "#162032";
+        context.beginPath();
+        context.arc(-17, -42, 4, 0, Math.PI * 2);
+        context.arc(17, -42, 4, 0, Math.PI * 2);
+        context.fill();
+
+        context.strokeStyle = "#182033";
+        context.lineWidth = 4;
+        context.lineCap = "round";
+        context.beginPath();
+        context.moveTo(-16, -22);
+        context.quadraticCurveTo(0, -10, 18, -22);
+        context.stroke();
+
+        context.strokeStyle = "#a7b5c9";
+        context.lineWidth = 5;
+        context.beginPath();
+        context.moveTo(0, -74);
+        context.lineTo(0, -94);
+        context.stroke();
+        context.fillStyle = "#ffcc38";
+        context.beginPath();
+        context.arc(0, -99, 7, 0, Math.PI * 2);
+        context.fill();
+
+        context.fillStyle = "#8693a9";
+        context.beginPath();
+        context.arc(-47, -42, 8, 0, Math.PI * 2);
+        context.arc(47, -42, 8, 0, Math.PI * 2);
+        context.fill();
+
+        if (partId === "boosters") {
+          drawBoosters(context, spin);
+        } else if (partId === "treads") {
+          drawTreads(context, spin);
+        } else {
+          drawWheels(context, spin, partId === "starhubs");
+        }
+
+        if (dizzy > 0) {
+          context.save();
+          context.strokeStyle = "#ffcc38";
+          context.lineWidth = 4;
+          context.globalAlpha = clamp(dizzy, 0, 1);
+          context.beginPath();
+          context.ellipse(0, -104, 42, 14, 0, 0, Math.PI * 1.7);
+          context.stroke();
+          context.fillStyle = "#ffcc38";
+          drawStar(context, -28, -118, 3, 8, 5);
+          drawStar(context, 32, -106, 3, 8, 5);
+          context.restore();
+        }
+
+        context.restore();
+      }
+
+      function drawWheels(context, spin, starHubs) {
+        [-28, 28].forEach((x) => {
+          context.save();
+          context.translate(x, 2);
+          context.rotate(spin);
+          context.fillStyle = "#202638";
+          context.beginPath();
+          context.arc(0, 0, 21, 0, Math.PI * 2);
+          context.fill();
+          context.strokeStyle = "#9fb4d0";
+          context.lineWidth = 5;
+          context.stroke();
+          context.fillStyle = starHubs ? "#ffcc38" : "#d8e2ef";
+          if (starHubs) drawStar(context, 0, 0, 7, 15, 5);
+          else {
+            context.beginPath();
+            context.arc(0, 0, 8, 0, Math.PI * 2);
+            context.fill();
+            context.strokeStyle = "#59657a";
+            context.lineWidth = 2;
+            context.beginPath();
+            context.moveTo(-13, 0);
+            context.lineTo(13, 0);
+            context.moveTo(0, -13);
+            context.lineTo(0, 13);
+            context.stroke();
+          }
+          context.restore();
+        });
+      }
+
+      function drawBoosters(context, spin) {
+        context.fillStyle = "#222a3b";
+        roundRect(context, -44, -3, 88, 16, 8);
+        context.fill();
+        [-25, 25].forEach((x) => {
+          context.fillStyle = "#94e9ff";
+          roundRect(context, x - 14, 0, 28, 28, 8);
+          context.fill();
+          context.fillStyle = "#ffcc38";
+          context.beginPath();
+          context.moveTo(x - 10, 24);
+          context.lineTo(x, 46 + Math.sin(spin * 3 + x) * 7);
+          context.lineTo(x + 10, 24);
+          context.fill();
+          context.fillStyle = "#ff735d";
+          context.beginPath();
+          context.moveTo(x - 5, 26);
+          context.lineTo(x, 38 + Math.sin(spin * 4) * 4);
+          context.lineTo(x + 5, 26);
+          context.fill();
+        });
+      }
+
+      function drawTreads(context, spin) {
+        context.save();
+        context.fillStyle = "#202638";
+        roundRect(context, -48, -5, 96, 31, 16);
+        context.fill();
+        context.strokeStyle = "#9fb4d0";
+        context.lineWidth = 5;
+        context.stroke();
+        context.fillStyle = "#ffcc38";
+        for (let x = -32; x <= 32; x += 16) {
+          context.beginPath();
+          context.arc(x, 10 + Math.sin(spin + x) * 1.5, 5, 0, Math.PI * 2);
+          context.fill();
+        }
+        context.restore();
+      }
+
+      function drawParticles() {
+        state.particles.forEach((particle) => {
+          const alpha = clamp(particle.life / particle.maxLife, 0, 1);
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate(particle.x, particle.y);
+          ctx.rotate(particle.rot);
+          ctx.fillStyle = particle.color;
+          if (particle.mode === "confetti") {
+            ctx.fillRect(-particle.size * 0.45, -particle.size * 0.2, particle.size * 0.9, particle.size * 0.4);
+          } else {
+            ctx.beginPath();
+            ctx.arc(0, 0, particle.size * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        });
+      }
+
+      function drawPreview() {
+        const rect = previewCanvas.getBoundingClientRect();
+        const ratio = Math.min(2, window.devicePixelRatio || 1);
+        const width = Math.max(1, Math.floor(rect.width || previewCanvas.clientWidth || 210));
+        const height = Math.max(1, Math.floor(rect.height || previewCanvas.clientHeight || 280));
+        previewCanvas.width = Math.floor(width * ratio);
+        previewCanvas.height = Math.floor(height * ratio);
+        previewCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        previewCtx.clearRect(0, 0, width, height);
+        const grad = previewCtx.createLinearGradient(0, 0, 0, height);
+        grad.addColorStop(0, "rgba(35,216,255,0.16)");
+        grad.addColorStop(1, "rgba(255,204,56,0.08)");
+        previewCtx.fillStyle = grad;
+        previewCtx.fillRect(0, 0, width, height);
+        previewCtx.save();
+        previewCtx.globalAlpha = 0.14;
+        previewCtx.strokeStyle = "#ffffff";
+        for (let x = 0; x < width; x += 28) {
+          previewCtx.beginPath();
+          previewCtx.moveTo(x, 0);
+          previewCtx.lineTo(x, height);
+          previewCtx.stroke();
+        }
+        for (let y = 0; y < height; y += 28) {
+          previewCtx.beginPath();
+          previewCtx.moveTo(0, y);
+          previewCtx.lineTo(width, y);
+          previewCtx.stroke();
+        }
+        previewCtx.restore();
+        drawRobot(previewCtx, width * 0.5, height * 0.74, {
+          paint: state.selectedPaint,
+          part: state.selectedPart,
+          scale: Math.min(1.45, Math.max(0.95, width / 180)),
+          wheelSpin: performance.now() / 550,
+          dizzy: 0,
+          invulnerable: 0,
+          magnetTimer: 0
+        });
+      }
+
+      function roundRect(context, x, y, width, height, radius) {
+        const r = Math.min(radius, width / 2, height / 2);
+        context.beginPath();
+        context.moveTo(x + r, y);
+        context.lineTo(x + width - r, y);
+        context.quadraticCurveTo(x + width, y, x + width, y + r);
+        context.lineTo(x + width, y + height - r);
+        context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+        context.lineTo(x + r, y + height);
+        context.quadraticCurveTo(x, y + height, x, y + height - r);
+        context.lineTo(x, y + r);
+        context.quadraticCurveTo(x, y, x + r, y);
+        context.closePath();
+      }
+
+      function drawStar(context, x, y, innerRadius, outerRadius, points) {
+        context.beginPath();
+        for (let i = 0; i < points * 2; i += 1) {
+          const radius = i % 2 === 0 ? outerRadius : innerRadius;
+          const angle = -Math.PI / 2 + (i / (points * 2)) * Math.PI * 2;
+          const px = x + Math.cos(angle) * radius;
+          const py = y + Math.sin(angle) * radius;
+          if (i === 0) context.moveTo(px, py);
+          else context.lineTo(px, py);
+        }
+        context.closePath();
+        context.fill();
+      }
+
+      function loop(now) {
+        const dt = clamp((now - state.lastTime) / 1000, 0, 0.035);
+        state.lastTime = now;
+        update(dt);
+        draw();
+        if (state.screen !== "running") drawPreview();
+        requestAnimationFrame(loop);
+      }
+
+      setupPaintButtons();
+      renderGarage();
+      updateUI();
+
+      canvas.addEventListener("pointerdown", handlePointerDown, { passive: false });
+      canvas.addEventListener("pointermove", handlePointerMove, { passive: false });
+      canvas.addEventListener("pointerup", handlePointerUp);
+      canvas.addEventListener("pointercancel", handlePointerUp);
+
+      startButton.addEventListener("click", startRun);
+      playAgainButton.addEventListener("click", startRun);
+      garageButton.addEventListener("click", () => openGarage());
+      workshopButton.addEventListener("click", () => {
+        resumeAudio();
+        if (state.screen === "running") finishRun();
+        else openGarage();
+      });
+      backMenuButton.addEventListener("click", openMenu);
+
+      window.addEventListener("resize", resizeCanvas);
+      window.addEventListener("orientationchange", () => {
+        window.setTimeout(resizeCanvas, 180);
+      });
+
+      resizeCanvas();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
