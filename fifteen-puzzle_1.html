@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Fifteen Puzzle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --felt-hi:#3a6b50; --felt-mid:#1c3527; --felt-lo:#12241b;
+    --red-hi:#d8432f; --red-lo:#a9281b; --well:#7d1f13;
+    --ivory-hi:#fcf7ea; --ivory-lo:#e9dfc5; --ink:#3b342a;
+    --brass:#c9a96a; --paper:#f3ecdd;
+    --gap: 2.5%;
+    --bw: clamp(280px, min(88vw, 52vh), 460px);
+    --ease-slide: cubic-bezier(.25,.8,.35,1.12);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    font-family:"Archivo", system-ui, sans-serif;
+    color:var(--paper);
+    background:
+      radial-gradient(120% 90% at 50% 20%, var(--felt-hi) 0%, var(--felt-mid) 55%, var(--felt-lo) 100%);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px 16px;
+  }
+  /* subtle felt grain */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.28; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+  .stage{ display:flex; flex-direction:column; align-items:center; gap:18px; width:100%; max-width:560px; }
+
+  header{ text-align:center; }
+  .eyebrow{
+    font-size:.7rem; font-weight:600; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--brass); margin-bottom:6px;
+  }
+  h1{
+    font-family:"Alfa Slab One", "Rockwell", serif; font-weight:400;
+    font-size:clamp(1.9rem, 6vw, 2.8rem); line-height:1.05;
+    color:var(--paper); text-shadow:0 3px 0 rgba(0,0,0,.35);
+  }
+  .sub{ margin-top:8px; font-size:.95rem; color:rgba(243,236,221,.75); }
+
+  /* score plaques */
+  .stats{ display:flex; gap:10px; }
+  .plaque{
+    min-width:86px; padding:7px 14px 8px; text-align:center;
+    background:rgba(0,0,0,.28); border:1px solid rgba(243,236,221,.14); border-radius:10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .plaque .label{
+    display:block; font-size:.6rem; font-weight:700; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--brass); margin-bottom:2px;
+  }
+  .plaque .value{
+    font-family:"Alfa Slab One", "Rockwell", serif; font-size:1.05rem; color:var(--paper);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* the toy */
+  .frame-wrap{ position:relative; width:var(--bw); }
+  .frame{
+    position:relative;
+    background:linear-gradient(180deg, var(--red-hi), var(--red-lo));
+    border-radius:24px;
+    padding:calc(var(--bw) * .045);
+    padding-bottom:calc(var(--bw) * .075);
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,.35),
+      inset 0 -3px 0 rgba(0,0,0,.3),
+      0 18px 40px rgba(0,0,0,.5),
+      0 4px 10px rgba(0,0,0,.35);
+  }
+  .frame .brand{
+    position:absolute; left:0; right:0; bottom:calc(var(--bw) * .018);
+    text-align:center; font-size:.62rem; font-weight:700; letter-spacing:.3em;
+    color:rgba(255,225,200,.55); text-transform:uppercase; pointer-events:none;
+  }
+  .well{
+    position:relative; aspect-ratio:1/1; border-radius:14px;
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(0,0,0,.25), rgba(0,0,0,0) 60%),
+      var(--well);
+    box-shadow: inset 0 4px 14px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08);
+  }
+
+  .tile{
+    position:absolute; top:0; left:0; width:25%; height:25%;
+    background:none; border:none; padding:0; cursor:default;
+    transform:translate(0,0);
+    transition:transform .18s var(--ease-slide);
+    -webkit-tap-highlight-color:transparent;
+  }
+  .tile.can-move{ cursor:pointer; }
+  .tile .face{
+    position:absolute; inset:4.5%;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:14%;
+    background:linear-gradient(180deg, var(--ivory-hi) 0%, var(--ivory-lo) 100%);
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,.85),
+      inset 0 -3px 0 rgba(120,100,60,.28),
+      0 3px 6px rgba(0,0,0,.4);
+    font-family:"Alfa Slab One", "Rockwell", serif;
+    font-size:calc(var(--bw) * .075);
+    color:var(--ink);
+    text-shadow:0 1px 0 rgba(255,255,255,.75);
+    transition:filter .15s ease, box-shadow .15s ease;
+  }
+  .tile.can-move:hover .face{ filter:brightness(1.05); }
+  .tile.can-move:active .face{
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -1px 0 rgba(120,100,60,.25), 0 1px 2px rgba(0,0,0,.4);
+    transform:translateY(1px);
+  }
+  .tile:focus-visible .face{ outline:3px solid #ffd86b; outline-offset:2px; }
+
+  .tile.deny .face{ animation:deny .2s ease; }
+  @keyframes deny{
+    25%{ transform:translateX(-3%); } 75%{ transform:translateX(3%); }
+  }
+
+  .no-anim .tile{ transition:none !important; }
+
+  /* win state */
+  .won .tile .face{ animation:pop .5s var(--d, 0ms) var(--ease-slide); }
+  @keyframes pop{ 40%{ transform:scale(.9); } 70%{ transform:scale(1.06); } }
+  .won .frame{ box-shadow:
+      inset 0 2px 0 rgba(255,255,255,.35), inset 0 -3px 0 rgba(0,0,0,.3),
+      0 18px 40px rgba(0,0,0,.5), 0 0 34px rgba(255,216,107,.4); }
+
+  .win{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(18,36,27,.55); backdrop-filter:blur(2px); border-radius:24px;
+    opacity:0; pointer-events:none; transition:opacity .3s ease;
+  }
+  .win.show{ opacity:1; pointer-events:auto; }
+  .win-card{
+    text-align:center; background:linear-gradient(180deg, #fcf7ea, #efe6cf);
+    color:var(--ink); border-radius:16px; padding:22px 30px 24px;
+    box-shadow:0 14px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.9);
+    transform:translateY(6px); transition:transform .3s var(--ease-slide);
+  }
+  .win.show .win-card{ transform:translateY(0); }
+  .win-card h2{ font-family:"Alfa Slab One", "Rockwell", serif; font-weight:400; font-size:1.7rem; margin-bottom:4px; }
+  .win-card .result{ font-size:1rem; font-weight:600; }
+  .win-card .best-note{ font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#a2761f; margin-top:4px; min-height:1em; }
+  .win-card .btn{ margin-top:14px; }
+
+  /* controls */
+  .controls{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .btn{
+    font-family:"Archivo", system-ui, sans-serif; font-weight:700; font-size:.9rem;
+    letter-spacing:.04em; padding:11px 26px; border-radius:12px; cursor:pointer; border:none;
+    transition:filter .12s ease, transform .08s ease;
+  }
+  .btn:active{ transform:translateY(1px); }
+  .btn:focus-visible{ outline:3px solid #ffd86b; outline-offset:2px; }
+  .btn.primary{
+    color:#fff5ee;
+    background:linear-gradient(180deg, var(--red-hi), var(--red-lo));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 0 rgba(0,0,0,.3), 0 4px 10px rgba(0,0,0,.35);
+    text-shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+  .btn.primary:hover{ filter:brightness(1.07); }
+  .btn.ghost{
+    color:var(--paper); background:transparent;
+    border:1.5px solid rgba(243,236,221,.35);
+  }
+  .btn.ghost:hover{ border-color:rgba(243,236,221,.7); }
+  .btn.chip{
+    padding:11px 14px; background:rgba(0,0,0,.28); color:var(--paper);
+    border:1px solid rgba(243,236,221,.14);
+  }
+  .btn.attn{ animation:attn 1.6s ease 2; }
+  @keyframes attn{ 50%{ box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 0 rgba(0,0,0,.3), 0 0 22px rgba(255,216,107,.55); } }
+
+  .hint{ font-size:.8rem; color:rgba(243,236,221,.55); text-align:center; max-width:400px; }
+
+  .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+  @media (prefers-reduced-motion: reduce){
+    .tile{ transition-duration:.01s; }
+    .won .tile .face{ animation:none; }
+    .btn.attn{ animation:none; }
+    .win, .win-card{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<main class="stage">
+  <header>
+    <p class="eyebrow">A pocket classic &middot; est. 1880</p>
+    <h1>The Fifteen Puzzle</h1>
+    <p class="sub">Slide the tiles into order, 1 through 15.</p>
+  </header>
+
+  <section class="stats" aria-label="Game stats">
+    <div class="plaque"><span class="label">Moves</span><span class="value" id="movesEl">0</span></div>
+    <div class="plaque"><span class="label">Time</span><span class="value" id="timeEl">0:00</span></div>
+    <div class="plaque"><span class="label">Best</span><span class="value" id="bestEl">&mdash;</span></div>
+  </section>
+
+  <div class="frame-wrap">
+    <div class="frame">
+      <div class="well" id="well" role="group" aria-label="Puzzle board, 4 by 4 grid"></div>
+      <span class="brand">N&ordm; 15</span>
+    </div>
+    <div class="win" id="winEl" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+      <div class="win-card">
+        <h2 id="winTitle">Solved!</h2>
+        <p class="result" id="resultEl"></p>
+        <p class="best-note" id="bestNoteEl"></p>
+        <button class="btn primary" id="againBtn">Shuffle again</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary attn" id="shuffleBtn">Shuffle</button>
+    <button class="btn ghost" id="resetBtn">Reset</button>
+    <button class="btn chip" id="soundBtn" aria-pressed="true" aria-label="Turn sound off">&#128266;</button>
+  </div>
+
+  <p class="hint">Click a tile in the gap&rsquo;s row or column to push the whole line. Arrow keys slide, too.</p>
+</main>
+
+<div class="sr-only" aria-live="polite" id="liveEl"></div>
+
+<script>
+(function(){
+  "use strict";
+  const N = 4;
+  const SOLVED = Array.from({length: 15}, (_, i) => i + 1).concat(0);
+
+  // --- state ---
+  let board = SOLVED.slice();
+  let moves = 0;
+  let live = false;         // true once shuffled (win celebration only then)
+  let won = false;
+  let startTime = null;     // performance.now() at first move
+  let timerId = null;
+  let elapsed = 0;          // ms, frozen on win
+  let sessionBest = null;   // { moves, time } — kept in memory for this session only
+  let muted = false;
+
+  // --- dom ---
+  const well = document.getElementById("well");
+  const movesEl = document.getElementById("movesEl");
+  const timeEl = document.getElementById("timeEl");
+  const bestEl = document.getElementById("bestEl");
+  const winEl = document.getElementById("winEl");
+  const resultEl = document.getElementById("resultEl");
+  const bestNoteEl = document.getElementById("bestNoteEl");
+  const liveEl = document.getElementById("liveEl");
+  const shuffleBtn = document.getElementById("shuffleBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const againBtn = document.getElementById("againBtn");
+  const soundBtn = document.getElementById("soundBtn");
+
+  // build the 15 tile buttons once; position them via transform
+  const tileEls = {};
+  for (let v = 1; v <= 15; v++) {
+    const b = document.createElement("button");
+    b.className = "tile";
+    b.setAttribute("aria-label", "Tile " + v);
+    b.dataset.value = v;
+    const face = document.createElement("span");
+    face.className = "face";
+    face.textContent = v;
+    b.appendChild(face);
+    b.addEventListener("click", () => onTileClick(v));
+    well.appendChild(b);
+    tileEls[v] = b;
+  }
+
+  // --- core mechanics ---
+  const rowOf = i => Math.floor(i / N);
+  const colOf = i => i % N;
+
+  function canMove(i) {
+    if (won) return false;
+    const b = board.indexOf(0);
+    return rowOf(i) === rowOf(b) || colOf(i) === colOf(b);
+  }
+
+  // Push the whole line between the gap and the clicked tile (like the real toy).
+  // Returns the number of tiles shifted, or 0 if the click wasn't in line with the gap.
+  function pushLine(i) {
+    const b = board.indexOf(0);
+    if (i === b) return 0;
+    let shifted = 0;
+    if (rowOf(i) === rowOf(b)) {
+      const dir = colOf(i) > colOf(b) ? 1 : -1;
+      for (let c = colOf(b); c !== colOf(i); c += dir) {
+        board[rowOf(b) * N + c] = board[rowOf(b) * N + c + dir];
+        shifted++;
+      }
+      board[i] = 0;
+    } else if (colOf(i) === colOf(b)) {
+      const dir = rowOf(i) > rowOf(b) ? 1 : -1;
+      for (let r = rowOf(b); r !== rowOf(i); r += dir) {
+        board[r * N + colOf(i)] = board[(r + dir) * N + colOf(i)];
+        shifted++;
+      }
+      board[i] = 0;
+    }
+    return shifted;
+  }
+
+  function isSolved() {
+    return board.every((v, i) => v === SOLVED[i]);
+  }
+
+  function onTileClick(value) {
+    if (won) return;
+    const i = board.indexOf(value);
+    if (!canMove(i)) {
+      const el = tileEls[value];
+      el.classList.remove("deny");
+      void el.offsetWidth; // restart animation
+      el.classList.add("deny");
+      return;
+    }
+    const shifted = pushLine(i);
+    if (shifted > 0) afterMove(shifted);
+  }
+
+  function slideFromKey(key) {
+    if (won) return false;
+    const b = board.indexOf(0);
+    let target = -1;
+    // Arrow = the direction a tile travels into the gap
+    if (key === "ArrowLeft"  && colOf(b) < N - 1) target = b + 1;
+    if (key === "ArrowRight" && colOf(b) > 0)     target = b - 1;
+    if (key === "ArrowUp"    && rowOf(b) < N - 1) target = b + N;
+    if (key === "ArrowDown"  && rowOf(b) > 0)     target = b - N;
+    if (target < 0) return false;
+    const shifted = pushLine(target);
+    if (shifted > 0) afterMove(shifted);
+    return true;
+  }
+
+  function afterMove(shifted) {
+    moves += shifted;
+    if (startTime === null) startTimer();
+    clack(Math.min(1 + (shifted - 1) * 0.15, 1.4));
+    render();
+    updateStats();
+    if (live && isSolved()) onWin();
+  }
+
+  // --- shuffle: random walk from the solved state, so it is always solvable ---
+  function shuffle() {
+    board = SOLVED.slice();
+    let last = -1;
+    let steps = 180;
+    while (steps > 0 || isSolved()) {
+      const b = board.indexOf(0);
+      const options = [];
+      if (colOf(b) < N - 1) options.push(b + 1);
+      if (colOf(b) > 0)     options.push(b - 1);
+      if (rowOf(b) < N - 1) options.push(b + N);
+      if (rowOf(b) > 0)     options.push(b - N);
+      const pick = options.filter(o => o !== last)[Math.floor(Math.random() * (options.length - (options.includes(last) ? 1 : 0)))];
+      last = b; // the gap moves to `pick`; avoid immediately reversing
+      pushLine(pick);
+      steps--;
+    }
+    moves = 0;
+    live = true;
+    won = false;
+    stopTimer(true);
+    winEl.classList.remove("show");
+    well.parentElement.parentElement.classList.remove("won");
+    shuffleBtn.classList.remove("attn");
+    document.body.classList.add("no-anim");
+    render();
+    void well.offsetWidth;
+    document.body.classList.remove("no-anim");
+    updateStats();
+    clack(1);
+    liveEl.textContent = "Board shuffled.";
+  }
+
+  function reset() {
+    board = SOLVED.slice();
+    moves = 0;
+    live = false;
+    won = false;
+    stopTimer(true);
+    winEl.classList.remove("show");
+    well.parentElement.parentElement.classList.remove("won");
+    render();
+    updateStats();
+    liveEl.textContent = "Board reset to solved.";
+  }
+
+  // --- timer ---
+  function startTimer() {
+    startTime = performance.now();
+    timerId = setInterval(() => {
+      elapsed = performance.now() - startTime;
+      timeEl.textContent = fmtTime(elapsed);
+    }, 200);
+  }
+  function stopTimer(resetToo) {
+    if (timerId) clearInterval(timerId);
+    timerId = null;
+    if (resetToo) { startTime = null; elapsed = 0; timeEl.textContent = "0:00"; }
+  }
+  function fmtTime(ms) {
+    const s = Math.floor(ms / 1000);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  // --- win ---
+  function onWin() {
+    won = true;
+    elapsed = startTime === null ? 0 : performance.now() - startTime;
+    stopTimer(false);
+    timeEl.textContent = fmtTime(elapsed);
+
+    const frameWrap = well.parentElement.parentElement;
+    frameWrap.classList.add("won");
+    Object.values(tileEls).forEach((el, idx) => {
+      el.style.setProperty("--d", (idx * 35) + "ms");
+    });
+
+    let bestNote = "";
+    if (sessionBest === null || moves < sessionBest.moves) {
+      sessionBest = { moves: moves, time: elapsed };
+      bestEl.textContent = moves + " · " + fmtTime(elapsed);
+      bestNote = "New session best";
+    }
+    resultEl.textContent = moves + " moves · " + fmtTime(elapsed);
+    bestNoteEl.textContent = bestNote;
+    liveEl.textContent = "Solved in " + moves + " moves and " + fmtTime(elapsed) + ".";
+    winJingle();
+    setTimeout(() => winEl.classList.add("show"), 550);
+  }
+
+  // --- render ---
+  function render() {
+    for (let i = 0; i < 16; i++) {
+      const v = board[i];
+      if (!v) continue;
+      const el = tileEls[v];
+      el.style.transform = "translate(" + (colOf(i) * 100) + "%, " + (rowOf(i) * 100) + "%)";
+    }
+    for (let v = 1; v <= 15; v++) {
+      tileEls[v].classList.toggle("can-move", canMove(board.indexOf(v)));
+    }
+  }
+  function updateStats() {
+    movesEl.textContent = moves;
+  }
+
+  // --- sound: a small plastic clack, synthesized on the fly ---
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function clack(strength) {
+    if (muted) return;
+    try {
+      const ctx = ensureAudio();
+      const t = ctx.currentTime;
+      // filtered noise burst
+      const dur = 0.06;
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1900; bp.Q.value = 1.1;
+      const g = ctx.createGain(); g.gain.value = 0.1 * strength;
+      src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+      src.start(t);
+      // low thump
+      const o = ctx.createOscillator(); o.type = "sine";
+      o.frequency.setValueAtTime(170, t);
+      o.frequency.exponentialRampToValueAtTime(85, t + 0.05);
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(0.14 * strength, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+      o.connect(g2); g2.connect(ctx.destination);
+      o.start(t); o.stop(t + 0.08);
+    } catch (e) { /* audio unavailable — play on silently */ }
+  }
+  function winJingle() {
+    if (muted) return;
+    try {
+      const ctx = ensureAudio();
+      const t = ctx.currentTime;
+      [523.25, 659.25, 783.99].forEach((f, i) => {
+        const o = ctx.createOscillator(); o.type = "triangle"; o.frequency.value = f;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t + i * 0.12);
+        g.gain.exponentialRampToValueAtTime(0.12, t + i * 0.12 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.3);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.32);
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  // --- wiring ---
+  shuffleBtn.addEventListener("click", shuffle);
+  againBtn.addEventListener("click", shuffle);
+  resetBtn.addEventListener("click", reset);
+  soundBtn.addEventListener("click", () => {
+    muted = !muted;
+    soundBtn.innerHTML = muted ? "&#128263;" : "&#128266;";
+    soundBtn.setAttribute("aria-pressed", String(!muted));
+    soundBtn.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off");
+  });
+  window.addEventListener("keydown", (e) => {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+      if (slideFromKey(e.key)) e.preventDefault();
+    }
+  });
+
+  render();
+  updateStats();
+})();
+</script>
+</body>
+</html>
