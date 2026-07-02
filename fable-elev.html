@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elevator Algorithm (SCAN) Simulator</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141b2f; --card:#1b2440; --line:#2a3355;
+    --text:#e6ebf7; --dim:#93a0c4; --accent:#f5a623; --good:#3ddc84; --bad:#ff5d5d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.45 "Segoe UI",system-ui,sans-serif;}
+  header{padding:14px 22px 4px}
+  header h1{margin:0;font-size:20px}
+  header p{margin:4px 0 0;color:var(--dim);max-width:960px}
+  main{display:flex;gap:18px;padding:14px 22px 26px;flex-wrap:wrap;align-items:flex-start}
+
+  /* ---------- scene ---------- */
+  #scene{position:relative;width:620px;height:506px;flex:0 0 auto;
+         background:linear-gradient(#101832,#0d1428);border:1px solid var(--line);
+         border-radius:10px;overflow:hidden}
+  .roof{position:absolute;left:0;top:0;width:100%;height:36px;
+        background:#0a0f1f;border-bottom:2px solid var(--line);
+        display:flex;align-items:center;gap:14px;padding:0 12px;z-index:2}
+  .roof .sign{font-weight:600;letter-spacing:.12em;font-size:11px;color:var(--dim)}
+  #floorDisplay{margin-left:2px;background:#000;border:1px solid #333;border-radius:4px;
+        color:#ffb63d;font:700 15px/1 Consolas,monospace;padding:4px 10px;min-width:52px;text-align:center}
+  .ground{position:absolute;left:0;bottom:0;width:100%;height:22px;
+        background:repeating-linear-gradient(45deg,#151d38 0 10px,#111830 10px 20px);
+        border-top:2px solid var(--line)}
+  .floor{position:absolute;left:0;width:100%;height:112px;border-bottom:3px solid #232c4e}
+  .floor:nth-child(odd){background:rgba(255,255,255,.015)}
+  .floor .flabel{position:absolute;right:10px;top:8px;color:#3d4a75;font:700 26px/1 "Segoe UI"}
+  #shaft{position:absolute;top:36px;bottom:22px;left:26px;width:112px;z-index:1;
+        background:linear-gradient(90deg,#0a0f1f, #121a33 18%, #121a33 82%, #0a0f1f);
+        border-left:2px solid var(--line);border-right:2px solid var(--line)}
+  #cable{position:absolute;left:0;width:3px;background:#3a4468;z-index:1}
+
+  /* call indicators */
+  .ind{position:absolute;width:16px;z-index:2}
+  .tri{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;margin:3px 0}
+  .tri.up{border-bottom:9px solid #2c3557}
+  .tri.dn{border-top:9px solid #2c3557}
+  .tri.up.lit{border-bottom-color:var(--good);filter:drop-shadow(0 0 4px var(--good))}
+  .tri.dn.lit{border-top-color:var(--accent);filter:drop-shadow(0 0 4px var(--accent))}
+
+  /* elevator car (back layer = interior, front layer = doors + frame) */
+  #carBack,#carFront{position:absolute;width:90px;height:100px}
+  #carBack{z-index:2;background:linear-gradient(#232c4e,#1a2340 60%,#141c36);
+        border-radius:6px;box-shadow:inset 0 -6px 0 #0d1326}
+  #carFront{z-index:4;border:3px solid var(--accent);border-radius:6px;pointer-events:none;
+        box-shadow:0 4px 14px rgba(0,0,0,.5)}
+  .carDisp{position:absolute;left:0;top:0;width:100%;height:16px;background:#000;
+        border-bottom:2px solid var(--accent);border-radius:3px 3px 0 0;
+        color:#ffb63d;font:700 11px/14px Consolas,monospace;text-align:center}
+  .door{position:absolute;top:18px;bottom:0;width:50%;
+        background:linear-gradient(90deg,#8b96ad,#aeb9cf 45%,#78839b);}
+  .door.left{left:0;transform-origin:left center;border-right:1px solid #414a60;border-radius:0 0 0 4px}
+  .door.right{right:0;transform-origin:right center;border-left:1px solid #414a60;border-radius:0 0 4px 0}
+
+  /* people */
+  .person{position:absolute;width:22px;height:54px;z-index:3}
+  .person .tag{position:absolute;top:0;left:50%;transform:translateX(-50%);
+        background:rgba(0,0,0,.72);color:#fff;font:600 9px/1 Consolas,monospace;
+        padding:2px 4px;border-radius:6px;white-space:nowrap}
+  .person .head{width:12px;height:12px;border-radius:50%;background:var(--c);margin:14px auto 0}
+  .person .torso{width:16px;height:19px;border-radius:8px 8px 3px 3px;background:var(--c);margin:1px auto 0}
+  .person .legs{display:flex;justify-content:center;gap:4px;height:8px}
+  .person .legs i{display:block;width:4px;height:8px;background:var(--c);border-radius:0 0 2px 2px}
+  .person.walking .legs i:first-child{animation:step .28s infinite alternate}
+  .person.walking .legs i:last-child {animation:step .28s infinite alternate-reverse}
+  @keyframes step{from{transform:translateY(0)}to{transform:translateY(-4px)}}
+
+  #pausedBadge{position:absolute;top:48px;left:50%;transform:translateX(-50%);z-index:10;
+        background:rgba(20,26,48,.92);border:1px solid var(--accent);color:var(--accent);
+        font-weight:700;letter-spacing:.15em;padding:6px 18px;border-radius:20px;display:none}
+
+  /* ---------- control panel ---------- */
+  #panel{flex:1 1 320px;max-width:430px;min-width:300px;display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+  .statusGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .stat{background:var(--panel);border-radius:8px;padding:6px 10px}
+  .stat b{display:block;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+  .stat span{font:600 15px/1.4 Consolas,monospace}
+  .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);
+        border-radius:6px;padding:5px 8px;font-size:14px}
+  button{background:var(--panel);color:var(--text);border:1px solid var(--line);
+        border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  button:disabled{opacity:.35;cursor:default}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#1a1205}
+  button.primary:hover:not(:disabled){color:#000;filter:brightness(1.1)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;min-height:22px}
+  .chip{border:1px solid var(--line);background:var(--panel);border-radius:14px;
+        padding:2px 9px;font:600 12px/1.5 Consolas,monospace}
+  .chip i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-right:5px}
+  #log{max-height:170px;overflow-y:auto;font:12px/1.55 Consolas,monospace;color:var(--dim)}
+  #log div b{color:var(--text);font-weight:400}
+  footer{padding:0 22px 24px;color:var(--dim);max-width:1000px;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Elevator Algorithm — SCAN Demo</h1>
+  <p>The car keeps travelling in its current direction, serving every request along the way,
+     and reverses only when no requests remain ahead of it — just like a disk arm under SCAN scheduling.</p>
+</header>
+
+<main>
+  <div id="scene">
+    <div class="roof"><span class="sign">SCAN&nbsp;ELEVATOR&nbsp;CO.</span><div id="floorDisplay">1&nbsp;·</div></div>
+    <div id="shaft"></div>
+    <div id="cable"></div>
+    <div id="carBack"></div>
+    <div id="carFront">
+      <div class="carDisp" id="carDisp">1</div>
+      <div class="door left" id="doorL"></div>
+      <div class="door right" id="doorR"></div>
+    </div>
+    <div class="ground"></div>
+    <div id="pausedBadge">&#10074;&#10074;&nbsp;PAUSED</div>
+  </div>
+
+  <aside id="panel">
+    <div class="card">
+      <h3>Status</h3>
+      <div class="statusGrid">
+        <div class="stat"><b>Floor</b><span id="stFloor">1</span></div>
+        <div class="stat"><b>Direction</b><span id="stDir">idle</span></div>
+        <div class="stat"><b>Doors</b><span id="stDoors">closed</span></div>
+        <div class="stat"><b>Passengers</b><span id="stPax">0 / 4</span></div>
+        <div class="stat"><b>Auto arrivals</b><span id="stAuto">off</span></div>
+        <div class="stat"><b>Simulation</b><span id="stSim">running</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Requests</h3>
+      <div class="row">
+        <label>From <select id="selFrom"></select></label>
+        <label>To <select id="selTo"></select></label>
+        <button id="btnAdd" class="primary">Add Request</button>
+        <button id="btnRandom">Random Arrival</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Automatic operation</h3>
+      <div class="row">
+        <button id="btnRun" class="primary">&#9654; Run</button>
+        <button id="btnStop">&#9632; Stop</button>
+        <span style="flex:1"></span>
+        <button id="btnPause">&#10074;&#10074; Pause</button>
+        <button id="btnResume">&#9205; Resume</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Waiting (floor &#9656; dest)</h3>
+      <div class="chips" id="chipsWait"></div>
+      <h3 style="margin-top:10px">In the car (&#8594; dest)</h3>
+      <div class="chips" id="chipsRide"></div>
+    </div>
+
+    <div class="card">
+      <h3>Event log</h3>
+      <div id="log"></div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <b>Try it:</b> press <i>Pause</i>, queue up several requests with <i>Add Request</i> or
+  <i>Random Arrival</i>, then press <i>Resume</i> and watch the car sweep up serving everything
+  ahead of it before reversing. <i>Run</i> keeps random passengers arriving automatically;
+  <i>Stop</i> ends the auto arrivals while the car finishes its queue.
+</footer>
+
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const FLOORS = 4, FLOOR_H = 112, ROOF = 36, GROUND = 22;
+const SCENE_W = 620;
+const SHAFT_X = 26, SHAFT_W = 112, CAR_W = 90, CAR_H = 100;
+const CAR_X = SHAFT_X + (SHAFT_W - CAR_W) / 2;
+const CAP = 4;                 // car capacity
+const CAR_SPEED = 0.9;         // floors per second
+const DOOR_T = 0.55;           // seconds to open/close
+const WALK = 95;               // walking speed px/s
+const DWELL = 0.5;             // pause with doors open after exchange
+const PH = 54;                 // person height
+const CLEAR_X = 190;           // alighting person past this x no longer blocks doors
+const MAX_QUEUE = 8;           // waiting people shown per floor
+
+/* ---------- state ---------- */
+let pos = 1;                   // car position, in floors (float)
+let dir = 0;                   // 1 up, -1 down, 0 idle
+let door = 0;                  // 0 closed .. 1 open
+let mode = 'idle';             // idle | moving | opening | exchange | closing
+let dwell = 0;
+let paused = false;
+let running = false;           // auto random arrivals
+let arrivalTimer = 0;
+let simClock = 0;
+let people = [];               // {id, from, to, color, state, x, targetX, floor, slot, walking}
+let nextId = 1;
+let slots = new Array(CAP).fill(null);   // car slot -> person id
+let logLines = [];
+let logDirty = true, chipSig = '';
+
+/* ---------- geometry helpers ---------- */
+const floorTop  = f => ROOF + (FLOORS - f) * FLOOR_H;
+const personTop = f => floorTop(f) + FLOOR_H - PH - 4;
+const carTopPx  = () => ROOF + (FLOORS - pos) * FLOOR_H + (FLOOR_H - CAR_H - 4);
+const slotX     = i => 210 + Math.min(i, MAX_QUEUE - 1) * 40;
+const carSlotX  = s => CAR_X + 4 + s * 21;
+const dirOf     = p => Math.sign(p.to - p.from);
+
+/* ---------- request queries ---------- */
+const waitingAt   = f => people.filter(p => p.state === 'waiting' && p.from === f);
+const countRiders = () => people.filter(p => p.state === 'riding' || p.state === 'boarding').length;
+const isAboard    = p => p.state === 'riding' || p.state === 'boarding';
+const anyReqAbove = f => people.some(p => (p.state === 'waiting' && p.from > f) || (isAboard(p) && p.to > f));
+const anyReqBelow = f => people.some(p => (p.state === 'waiting' && p.from < f) || (isAboard(p) && p.to < f));
+
+function nearestReq(f, d) {           // distance to nearest request strictly in direction d
+  for (let k = 1; k < FLOORS; k++) {
+    const g = f + d * k;
+    if (g < 1 || g > FLOORS) break;
+    if (people.some(p => (p.state === 'waiting' && p.from === g) || (isAboard(p) && p.to === g))) return k;
+  }
+  return Infinity;
+}
+
+/* ---------- SCAN core ---------- */
+function shouldStop(f, d) {
+  if (people.some(p => isAboard(p) && p.to === f)) return true;          // drop-off
+  const w = waitingAt(f), capLeft = CAP - countRiders();
+  if (capLeft > 0 && w.some(p => dirOf(p) === d)) return true;           // same-direction pickup
+  const beyond = d === 1 ? anyReqAbove(f) : anyReqBelow(f);
+  if (!beyond) return true;                                              // end of sweep: turn around here
+  return false;
+}
+
+function updateServiceDir(f) {        // choose direction to serve while doors are open at f
+  const above = anyReqAbove(f), below = anyReqBelow(f);
+  if (dir === 1)      { if (above) return; if (below) { dir = -1; return; } }
+  else if (dir === -1){ if (below) return; if (above) { dir =  1; return; } }
+  else {
+    if (above && !below) { dir =  1; return; }
+    if (below && !above) { dir = -1; return; }
+    if (above && below)  { dir = nearestReq(f, 1) <= nearestReq(f, -1) ? 1 : -1; return; }
+  }
+  const w = waitingAt(f);
+  dir = w.length ? Math.sign(w[0].to - f) : 0;   // nothing anywhere else: waiters here decide
+}
+
+function decide() {                   // doors just closed (or idle): where next?
+  const f = Math.round(pos);
+  const above = anyReqAbove(f), below = anyReqBelow(f);
+  let d;                              // sweep direction to take next
+  if (dir === 1)       d = above ? 1 : below ? -1 : 0;
+  else if (dir === -1) d = below ? -1 : above ? 1 : 0;
+  else d = above && below ? (nearestReq(f, 1) <= nearestReq(f, -1) ? 1 : -1)
+         : above ? 1 : below ? -1 : 0;
+  const w = waitingAt(f), capLeft = CAP - countRiders();
+  if (d !== 0) {
+    dir = d;
+    // board same-direction waiters at this floor before leaving
+    if (capLeft > 0 && w.some(p => dirOf(p) === d)) { mode = 'opening'; return; }
+    return startMove();
+  }
+  if (w.length && capLeft > 0) { dir = Math.sign(w[0].to - f); mode = 'opening'; return; }
+  dir = 0; mode = 'idle';
+}
+
+function startMove() {
+  mode = 'moving';
+  log(`Car heads ${dir === 1 ? 'up &#9650;' : 'down &#9660;'} from floor ${Math.round(pos)}`);
+}
+
+function beginExchange() {
+  mode = 'exchange'; dwell = DWELL;
+  const f = Math.round(pos);
+  for (const p of people) {
+    if (p.state === 'riding' && p.to === f) {
+      p.state = 'alighting'; p.floor = f; p.targetX = SCENE_W + 40;
+      if (p.slot != null) { slots[p.slot] = null; p.slot = null; }
+      log(`Passenger #${p.id} gets off at floor ${f}`);
+    }
+  }
+  updateServiceDir(f);
+  boardMatching(f);
+}
+
+function boardMatching(f) {
+  if (dir === 0) return;
+  for (const p of waitingAt(f)) {
+    if (dirOf(p) !== dir) continue;
+    const s = slots.indexOf(null);
+    if (s === -1) break;
+    slots[s] = p.id; p.slot = s;
+    p.state = 'boarding'; p.targetX = carSlotX(s);
+    log(`Passenger #${p.id} boards at ${f} (going to ${p.to})`);
+  }
+}
+
+/* ---------- simulation step ---------- */
+function update(dt) {
+  simClock += dt;
+
+  if (running) {
+    arrivalTimer -= dt;
+    if (arrivalTimer <= 0) { spawnRandom(); arrivalTimer = 1.4 + Math.random() * 2.8; }
+  }
+
+  // reflow waiting queues, then walk everyone toward their target
+  for (let f = 1; f <= FLOORS; f++) waitingAt(f).forEach((p, i) => p.targetX = slotX(i));
+  for (const p of people) {
+    if (p.state === 'riding') { p.walking = false; continue; }
+    const dx = p.targetX - p.x;
+    if (Math.abs(dx) > 0.5) {
+      const step = Math.sign(dx) * WALK * dt;
+      p.x += Math.abs(step) > Math.abs(dx) ? dx : step;
+      p.walking = true;
+    } else {
+      p.x = p.targetX; p.walking = false;
+      if (p.state === 'boarding')  p.state = 'riding';
+      else if (p.state === 'alighting') p.dead = true;
+    }
+  }
+  people = people.filter(p => !p.dead);
+
+  // elevator state machine
+  const f = Math.round(pos);
+  switch (mode) {
+    case 'idle':
+      if (people.some(p => p.state === 'waiting')) decide();
+      break;
+    case 'moving': {
+      const nextInt = dir === 1 ? Math.floor(pos + 1e-6) + 1 : Math.ceil(pos - 1e-6) - 1;
+      const np = pos + dir * CAR_SPEED * dt;
+      if ((dir === 1 && np >= nextInt) || (dir === -1 && np <= nextInt)) {
+        if (shouldStop(nextInt, dir)) { pos = nextInt; mode = 'opening'; log(`Car stops at floor ${nextInt}`); }
+        else pos = np;
+      } else pos = np;
+      break;
+    }
+    case 'opening':
+      door += dt / DOOR_T;
+      if (door >= 1) { door = 1; beginExchange(); }
+      break;
+    case 'exchange': {
+      if (dir === 0 && waitingAt(f).length) updateServiceDir(f);
+      boardMatching(f);   // catches requests added while doors are open (e.g. during a pause)
+      const busy = people.some(p => p.state === 'boarding' || (p.state === 'alighting' && p.x < CLEAR_X));
+      if (!busy) { dwell -= dt; if (dwell <= 0) mode = 'closing'; }
+      break;
+    }
+    case 'closing': {
+      const capLeft = CAP - countRiders();
+      if (capLeft > 0 && ((dir !== 0 && waitingAt(f).some(p => dirOf(p) === dir)) ||
+                          (dir === 0 && waitingAt(f).length))) { mode = 'opening'; break; }
+      door -= dt / DOOR_T;
+      if (door <= 0) { door = 0; decide(); }
+      break;
+    }
+  }
+}
+
+/* ---------- requests ---------- */
+function addRequest(from, to) {
+  if (from === to) { log('&#9888; "From" and "To" must be different floors'); return; }
+  if (waitingAt(from).length >= MAX_QUEUE) { log(`&#9888; Floor ${from} lobby is full`); return; }
+  const p = {
+    id: nextId++, from, to, floor: from,
+    color: `hsl(${Math.floor(Math.random() * 360)} 75% 62%)`,
+    state: 'waiting', x: SCENE_W - 18, targetX: SCENE_W - 18,
+    slot: null, walking: false
+  };
+  people.push(p);
+  log(`Request: floor ${from} &#8594; ${to} (passenger #${p.id})`);
+}
+
+function spawnRandom() {
+  const from = 1 + Math.floor(Math.random() * FLOORS);
+  let to = 1 + Math.floor(Math.random() * FLOORS);
+  while (to === from) to = 1 + Math.floor(Math.random() * FLOORS);
+  addRequest(from, to);
+}
+
+/* ---------- logging ---------- */
+function log(msg) {
+  logLines.unshift(`<div><span style="color:#4a5680">[${simClock.toFixed(1)}s]</span> <b>${msg}</b></div>`);
+  if (logLines.length > 40) logLines.pop();
+  logDirty = true;
+}
+
+/* ---------- DOM setup ---------- */
+const $ = id => document.getElementById(id);
+const scene = $('scene');
+
+for (let f = 1; f <= FLOORS; f++) {           // floor bands + labels
+  const band = document.createElement('div');
+  band.className = 'floor';
+  band.style.top = floorTop(f) + 'px';
+  band.innerHTML = `<div class="flabel">${f}</div>`;
+  scene.insertBefore(band, scene.firstChild);
+}
+const inds = {};                              // call indicators
+for (let f = 1; f <= FLOORS; f++) {
+  const el = document.createElement('div');
+  el.className = 'ind';
+  el.style.left = (SHAFT_X + SHAFT_W + 10) + 'px';
+  el.style.top = (personTop(f) + 8) + 'px';
+  el.innerHTML = `${f < FLOORS ? '<div class="tri up"></div>' : ''}${f > 1 ? '<div class="tri dn"></div>' : ''}`;
+  scene.appendChild(el);
+  inds[f] = { up: el.querySelector('.tri.up'), dn: el.querySelector('.tri.dn') };
+}
+
+for (const sel of [$('selFrom'), $('selTo')]) {
+  for (let f = 1; f <= FLOORS; f++) sel.add(new Option('Floor ' + f, f));
+}
+$('selFrom').value = 1; $('selTo').value = 3;
+
+const personEls = new Map();
+function elFor(p) {
+  let el = personEls.get(p.id);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'person';
+    el.style.setProperty('--c', p.color);
+    el.innerHTML = `<div class="tag">&#8594;${p.to}</div><div class="head"></div><div class="torso"></div><div class="legs"><i></i><i></i></div>`;
+    scene.appendChild(el);
+    personEls.set(p.id, el);
+  }
+  return el;
+}
+
+/* ---------- render ---------- */
+function render() {
+  const ct = carTopPx();
+  $('carBack').style.left = $('carFront').style.left = CAR_X + 'px';
+  $('carBack').style.top  = $('carFront').style.top  = ct + 'px';
+  const sq = 1 - door * 0.92;
+  $('doorL').style.transform = `scaleX(${sq})`;
+  $('doorR').style.transform = `scaleX(${sq})`;
+  const cable = $('cable');
+  cable.style.left = (SHAFT_X + SHAFT_W / 2 - 1) + 'px';
+  cable.style.top = ROOF + 'px';
+  cable.style.height = Math.max(0, ct - ROOF) + 'px';
+
+  const f = Math.round(pos);
+  const arrow = dir === 1 ? '&#9650;' : dir === -1 ? '&#9660;' : '&#183;';
+  $('floorDisplay').innerHTML = `${f}&nbsp;${arrow}`;
+  $('carDisp').innerHTML = `${f} ${arrow}`;
+
+  // people
+  const seen = new Set();
+  for (const p of people) {
+    seen.add(p.id);
+    const el = elFor(p);
+    el.style.left = p.x + 'px';
+    el.style.top = (p.state === 'riding' ? ct + CAR_H - PH - 5 : personTop(p.floor)) + 'px';
+    el.style.opacity = p.state === 'alighting' && p.x > SCENE_W - 90
+      ? Math.max(0, (SCENE_W + 10 - p.x) / 100) : 1;
+    el.classList.toggle('walking', p.walking && !paused);
+  }
+  for (const [id, el] of personEls) if (!seen.has(id)) { el.remove(); personEls.delete(id); }
+
+  // call indicators
+  for (let g = 1; g <= FLOORS; g++) {
+    const w = waitingAt(g);
+    if (inds[g].up) inds[g].up.classList.toggle('lit', w.some(p => p.to > g));
+    if (inds[g].dn) inds[g].dn.classList.toggle('lit', w.some(p => p.to < g));
+  }
+
+  // status card
+  $('stFloor').textContent = f;
+  $('stDir').textContent = dir === 1 ? 'up' : dir === -1 ? 'down' : 'idle';
+  $('stDoors').textContent = mode === 'opening' ? 'opening' : mode === 'closing' ? 'closing'
+                           : door >= 1 ? 'open' : 'closed';
+  $('stPax').textContent = `${countRiders()} / ${CAP}`;
+  $('stAuto').textContent = running ? 'on' : 'off';
+  $('stSim').textContent = paused ? 'paused' : 'running';
+  $('pausedBadge').style.display = paused ? 'block' : 'none';
+
+  // chips (rebuild only when the population changes)
+  const sig = people.map(p => p.id + p.state).join('|');
+  if (sig !== chipSig) {
+    chipSig = sig;
+    $('chipsWait').innerHTML = people.filter(p => p.state === 'waiting')
+      .map(p => `<span class="chip" style="--c:${p.color}"><i></i>${p.from} &#9656; ${p.to}</span>`)
+      .join('') || '<span style="color:var(--dim)">none</span>';
+    $('chipsRide').innerHTML = people.filter(isAboard)
+      .map(p => `<span class="chip" style="--c:${p.color}"><i></i>&#8594; ${p.to}</span>`)
+      .join('') || '<span style="color:var(--dim)">empty</span>';
+  }
+  if (logDirty) { logDirty = false; $('log').innerHTML = logLines.join(''); }
+}
+
+/* ---------- controls ---------- */
+function refreshButtons() {
+  $('btnRun').disabled = running;
+  $('btnStop').disabled = !running;
+  $('btnPause').disabled = paused;
+  $('btnResume').disabled = !paused;
+}
+$('btnAdd').onclick    = () => addRequest(+$('selFrom').value, +$('selTo').value);
+$('btnRandom').onclick = () => spawnRandom();
+$('btnRun').onclick    = () => { running = true;  arrivalTimer = 0.3; log('Run: automatic arrivals started'); refreshButtons(); };
+$('btnStop').onclick   = () => { running = false; log('Stop: automatic arrivals ended'); refreshButtons(); };
+$('btnPause').onclick  = () => { paused = true;   log('Simulation paused — queue up some requests!'); refreshButtons(); };
+$('btnResume').onclick = () => { paused = false;  log('Simulation resumed'); refreshButtons(); };
+refreshButtons();
+log('Ready. Add a request, or press Run.');
+
+/* ---------- main loop ---------- */
+let last = performance.now();
+function frame(now) {
+  let dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  if (!paused) update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
