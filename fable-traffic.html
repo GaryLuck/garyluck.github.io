@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic Flow Simulator</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --panel: #1a1a19;
+    --panel-2: #222221;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --hairline: rgba(255,255,255,0.10);
+    --grid: #2c2c2a;
+    --accent: #3987e5;
+    --asphalt: #2a2a2e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    padding: 20px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--hairline);
+    border-radius: 12px; padding: 12px 16px;
+  }
+  header h1 { font-size: 16px; font-weight: 650; margin-right: 6px; }
+  header h1 small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .btn {
+    background: #26262a; color: var(--ink);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 8px; padding: 6px 14px; font: inherit; cursor: pointer;
+    min-width: 84px;
+  }
+  .btn:hover { background: #303036; }
+  .btn.primary { background: var(--accent); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover { background: #4a94ee; }
+  select {
+    background: #26262a; color: var(--ink); font: inherit;
+    border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 6px 8px; cursor: pointer;
+  }
+  .spacer { flex: 1; }
+  .stat { text-align: right; min-width: 78px; }
+  .stat .label { font-size: 11px; color: var(--muted); }
+  .stat .value { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ---------- panels ---------- */
+  .panel {
+    background: var(--panel); border: 1px solid var(--hairline);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .panel h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 10px; }
+  .panel h2 small { color: var(--muted); font-weight: 400; }
+
+  /* ---------- road ---------- */
+  #roadCanvas { width: 100%; height: 180px; display: block; }
+
+  /* ---------- controls ---------- */
+  .controls { display: flex; gap: 28px; flex-wrap: wrap; align-items: center; }
+  .control { display: flex; flex-direction: column; gap: 4px; min-width: 260px; flex: 1; }
+  .control .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .control label { color: var(--ink-2); }
+  .control .readout { font-weight: 600; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  .control .hint { font-size: 11px; color: var(--muted); }
+
+  #demoBar {
+    display: none; margin-top: 12px; padding: 9px 12px;
+    background: var(--panel-2); border-left: 3px solid var(--accent); border-radius: 6px;
+    color: var(--ink-2);
+  }
+  #demoBar.on { display: block; }
+  #demoBar b { color: var(--ink); }
+
+  /* ---------- heatmap ---------- */
+  .heatwrap { position: relative; }
+  #heatCanvas {
+    width: 100%; height: 320px; display: block;
+    image-rendering: pixelated; border-radius: 4px; background: var(--panel-2);
+  }
+  .heat-grid { position: relative; display: grid; grid-template-columns: 1fr 56px; gap: 8px; }
+  .bottleneck-line {
+    position: absolute; top: 0; bottom: 0; width: 0;
+    border-left: 1px dashed rgba(255,255,255,0.38); pointer-events: none;
+  }
+  .bottleneck-line span {
+    position: absolute; top: 2px; left: 5px; font-size: 10px; color: var(--ink-2);
+    background: rgba(13,13,13,0.65); padding: 1px 5px; border-radius: 4px; white-space: nowrap;
+  }
+  .time-labels { position: relative; font-size: 11px; color: var(--muted); }
+  .time-labels span { position: absolute; left: 0; transform: translateY(-50%); }
+  .axis-x {
+    display: flex; justify-content: space-between; margin-top: 5px;
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+    padding-right: 64px;
+  }
+  .axis-title { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .legend { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .legend .bar {
+    width: 220px; height: 10px; border-radius: 5px;
+    /* same stops as speedColor() below */
+    background: linear-gradient(to right, #ff5147, #f28021, #e3a812, #86b53a, #2fa356);
+  }
+  .legend .lab { font-size: 11px; color: var(--muted); }
+  .legend .swatch { width: 14px; height: 10px; border-radius: 3px; background: #222221; border: 1px solid var(--grid); }
+  #heatTip {
+    position: absolute; display: none; pointer-events: none; z-index: 5;
+    background: #0d0d0dee; border: 1px solid var(--hairline); border-radius: 6px;
+    padding: 5px 9px; font-size: 12px; white-space: nowrap; color: var(--ink);
+  }
+  footer { color: var(--muted); font-size: 11px; text-align: center; padding: 2px 0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Traffic Flow Simulator <small>discrete-event · cars &amp; trucks · lane-drop bottleneck</small></h1>
+    <button class="btn" id="btnPlay">⏸ Pause</button>
+    <button class="btn" id="btnReset">Reset</button>
+    <select id="selSpeed" title="Simulation speed">
+      <option value="1">1×</option>
+      <option value="2">2×</option>
+      <option value="4">4×</option>
+      <option value="8">8×</option>
+    </select>
+    <button class="btn primary" id="btnDemo">▶ Run demo</button>
+    <div class="spacer"></div>
+    <div class="stat"><div class="label">sim time</div><div class="value" id="stTime">00:00</div></div>
+    <div class="stat"><div class="label">on road</div><div class="value" id="stCount">0</div></div>
+    <div class="stat"><div class="label">throughput</div><div class="value" id="stFlow">0 /min</div></div>
+  </header>
+
+  <section class="panel">
+    <h2>Highway — two lanes merge to one <small>· vehicles colored by speed</small></h2>
+    <canvas id="roadCanvas"></canvas>
+  </section>
+
+  <section class="panel">
+    <div class="controls">
+      <div class="control">
+        <div class="row"><label for="slRate">Arrival rate</label><span class="readout" id="roRate">16 veh/min</span></div>
+        <input type="range" id="slRate" min="4" max="60" step="1" value="16">
+        <div class="hint">Demand entering the highway. The single-lane bottleneck discharges ≈ 28–32 veh/min — push demand above that and a queue forms.</div>
+      </div>
+      <div class="control">
+        <div class="row"><label for="slTruck">Trucks</label><span class="readout" id="roTruck">15 %</span></div>
+        <input type="range" id="slTruck" min="0" max="50" step="1" value="15">
+        <div class="hint">Trucks are longer, slower and accelerate gently — more trucks means less capacity.</div>
+      </div>
+    </div>
+    <div id="demoBar"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Space–time diagram <small>· each row is a 2 s snapshot of speed along the road; congestion appears as a red wedge growing upstream from the bottleneck</small></h2>
+    <div class="heat-grid">
+      <div class="heatwrap">
+        <canvas id="heatCanvas" width="100" height="180"></canvas>
+        <div class="bottleneck-line" id="bnLine"><span>bottleneck ▸</span></div>
+        <div id="heatTip"></div>
+      </div>
+      <div class="time-labels" id="timeLabels">
+        <span style="top:0.5%">−6 min</span>
+        <span style="top:50%">−3 min</span>
+        <span style="top:99%">now</span>
+      </div>
+    </div>
+    <div class="axis-x" id="axisX"></div>
+    <div class="axis-title">position along road (m) — traffic flows left → right</div>
+    <div class="legend">
+      <span class="lab">stopped&nbsp;0</span>
+      <div class="bar"></div>
+      <span class="lab">65 mph&nbsp;free flow</span>
+      <span style="width:14px"></span>
+      <div class="swatch"></div><span class="lab">no vehicles</span>
+      <div class="spacer"></div>
+      <span class="lab" id="queueReadout"></span>
+    </div>
+  </section>
+
+  <footer>Single-file discrete-event simulation · IDM car-following, MOBIL-style merging · no external dependencies</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ================================================================
+ * Utilities
+ * ================================================================ */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const MPH = 2.23694;
+
+/* ================================================================
+ * Speed → color ramp (shared by vehicles, heatmap, legend)
+ * v01 = speed / free-flow speed. Stops mirror the CSS legend gradient.
+ * ================================================================ */
+const RAMP = [
+  [0.00, 0xff, 0x51, 0x47],  // stopped   — bright coral red
+  [0.25, 0xf2, 0x80, 0x21],  // crawling  — orange
+  [0.50, 0xe3, 0xa8, 0x12],  // slow      — amber
+  [0.75, 0x86, 0xb5, 0x3a],  // moderate  — yellow-green
+  [1.00, 0x2f, 0xa3, 0x56],  // free flow — green
+];
+function speedColorRGB(v01) {
+  const v = clamp(v01, 0, 1);
+  for (let i = 1; i < RAMP.length; i++) {
+    if (v <= RAMP[i][0]) {
+      const [t0, r0, g0, b0] = RAMP[i - 1];
+      const [t1, r1, g1, b1] = RAMP[i];
+      const f = (v - t0) / (t1 - t0);
+      return [r0 + (r1 - r0) * f, g0 + (g1 - g0) * f, b0 + (b1 - b0) * f];
+    }
+  }
+  return [0x2f, 0xa3, 0x56];
+}
+function speedColor(v01) {
+  const [r, g, b] = speedColorRGB(v01);
+  return `rgb(${r | 0},${g | 0},${b | 0})`;
+}
+
+/* ================================================================
+ * Event queue — binary min-heap keyed by sim time (the DES core)
+ * ================================================================ */
+class EventQueue {
+  constructor() { this.h = []; this.seq = 0; }
+  push(t, type, data) {
+    const e = { t, seq: this.seq++, type, data };
+    const h = this.h;
+    h.push(e);
+    let i = h.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (h[p].t < h[i].t || (h[p].t === h[i].t && h[p].seq < h[i].seq)) break;
+      [h[p], h[i]] = [h[i], h[p]]; i = p;
+    }
+    return e;
+  }
+  peek() { return this.h[0]; }
+  pop() {
+    const h = this.h, top = h[0], last = h.pop();
+    if (h.length) {
+      h[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < h.length && (h[l].t < h[m].t || (h[l].t === h[m].t && h[l].seq < h[m].seq))) m = l;
+        if (r < h.length && (h[r].t < h[m].t || (h[r].t === h[m].t && h[r].seq < h[m].seq))) m = r;
+        if (m === i) break;
+        [h[m], h[i]] = [h[i], h[m]]; i = m;
+      }
+    }
+    return top;
+  }
+  clear() { this.h.length = 0; }
+}
+
+/* ================================================================
+ * Road geometry & vehicle parameters (SI units: meters, seconds)
+ * ================================================================ */
+const ROAD_LEN    = 500;   // m
+const LANE_END    = 325;   // lane 0 (top) is closed from here
+const TAPER_START = 275;   // visual taper begins
+const MERGE_ZONE  = 80;    // lane-0 vehicles start looking for a gap here
+const DT          = 0.1;   // motion integration step (s)
+const SAMPLE_DT   = 2.0;   // heatmap row interval (s, sim time)
+const FREE_SPEED  = 29;    // car free-flow speed, m/s (≈65 mph) — color reference
+
+const CAR = { type: "car",   len: 4.6,  v0: 29, a: 1.8, b: 2.2, T: 1.10, s0: 2.0 };
+const TRK = { type: "truck", len: 11.5, v0: 24, a: 1.0, b: 1.8, T: 1.50, s0: 2.5 };
+
+/* Intelligent Driver Model acceleration */
+function idmAcc(v, gap, dv, p) {
+  const sStar = p.s0 + Math.max(0, v * p.T + (v * dv) / (2 * Math.sqrt(p.a * p.b)));
+  return p.a * (1 - Math.pow(v / p.v0, 4) - (sStar / Math.max(gap, 0.1)) ** 2);
+}
+
+/* ================================================================
+ * Simulation state
+ * ================================================================ */
+const SEED = 20260709;
+let vehicleId = 0;
+
+const sim = {
+  q: new EventQueue(),
+  t: 0,
+  running: true,
+  speed: 1,
+  rng: mulberry32(SEED),
+  lanes: [[], []],          // per lane, sorted by x descending (leader first)
+  ratePerMin: 16,
+  truckPct: 15,
+  arrivalToken: 0,          // invalidates stale ARRIVAL chains on rate change
+  pendingEntry: 0,          // demand waiting outside the road (entrance blocked)
+  exits: [],                // recent exit timestamps, for throughput
+  demoToken: 0,
+  demoActive: false,
+};
+
+function makeVehicle(isTruck) {
+  const p = isTruck ? TRK : CAR;
+  return {
+    id: vehicleId++, ...p,
+    x: 0, prevX: 0, v: 0, acc: 0,
+    lane: 0, laneFloat: 0,
+  };
+}
+
+/* ---------- arrivals ---------- */
+function scheduleNextArrival() {
+  const lambda = sim.ratePerMin / 60;               // veh per sim-second
+  const dt = -Math.log(1 - sim.rng()) / lambda;     // exponential inter-arrival
+  sim.q.push(sim.t + dt, "ARRIVAL", { token: sim.arrivalToken });
+}
+function onArrival(data) {
+  if (data.token !== sim.arrivalToken) return;      // stale chain
+  sim.pendingEntry++;
+  scheduleNextArrival();
+}
+function trySpawn() {
+  // spawn as many pending vehicles as the entrance can accept
+  while (sim.pendingEntry > 0) {
+    const isTruck = sim.rng() * 100 < sim.truckPct;
+    const veh = makeVehicle(isTruck);
+    // pick the lane with the most clear room at the entrance
+    let best = -1, bestClear = -Infinity;
+    for (const li of [0, 1]) {
+      const lane = sim.lanes[li];
+      const last = lane[lane.length - 1];
+      const clear = last ? last.x - last.len : Infinity;
+      if (clear > bestClear) { bestClear = clear; best = li; }
+    }
+    if (bestClear < veh.len + 6) { vehicleId--; return; }   // entrance blocked, retry later
+    const lane = sim.lanes[best];
+    const leader = lane[lane.length - 1];
+    veh.lane = best; veh.laneFloat = best;
+    veh.x = veh.prevX = 0;
+    veh.v = leader ? Math.min(veh.v0 * 0.9, leader.v + 3) : veh.v0 * 0.9;
+    lane.push(veh);
+    sim.pendingEntry--;
+  }
+}
+
+/* ---------- merging (lane 0 → lane 1) ---------- */
+function tryMerges() {
+  const lane0 = sim.lanes[0], lane1 = sim.lanes[1];
+  for (let i = lane0.length - 1; i >= 0; i--) {
+    const veh = lane0[i];
+    if (veh.x < MERGE_ZONE || veh.x >= LANE_END) continue;
+    const u = clamp((veh.x - MERGE_ZONE) / (LANE_END - 40 - MERGE_ZONE), 0, 1);
+
+    // neighbors in target lane (lane1 sorted by x desc)
+    let li = 0;
+    while (li < lane1.length && lane1[li].x >= veh.x) li++;
+    const leader = li > 0 ? lane1[li - 1] : null;
+    const follower = li < lane1.length ? lane1[li] : null;
+
+    const clearAhead  = leader   ? leader.x - leader.len - veh.x : Infinity;
+    const clearBehind = follower ? veh.x - veh.len - follower.x  : Infinity;
+    const relax = 1 - 0.75 * u;   // accept smaller gaps as the lane end nears
+    const needAhead  = relax * (veh.s0 + veh.v * 0.9) + 0.8;
+    const needBehind = relax * (1.5 + (follower ? follower.v : 0) * 0.9) + 0.8;
+
+    if (clearAhead >= needAhead && clearBehind >= needBehind) {
+      lane0.splice(i, 1);
+      lane1.splice(li, 0, veh);
+      veh.lane = 1;               // laneFloat animates toward 1 in the motion tick
+    }
+  }
+}
+
+/* ---------- motion tick ---------- */
+function onMotionTick() {
+  // pass 1: accelerations
+  for (let li = 0; li < 2; li++) {
+    const lane = sim.lanes[li];
+    for (let i = 0; i < lane.length; i++) {
+      const veh = lane[i];
+      const leader = i > 0 ? lane[i - 1] : null;
+      const gap = leader ? leader.x - leader.len - veh.x : Infinity;
+      const dv = leader ? veh.v - leader.v : 0;
+      let acc = idmAcc(veh.v, gap, dv, veh);
+      if (li === 0 && veh.x < LANE_END) {
+        // the closed lane end acts as a standing obstacle
+        const wallGap = LANE_END - 2 - veh.x;
+        if (wallGap < gap) acc = Math.min(acc, idmAcc(veh.v, wallGap, veh.v, veh));
+      }
+      veh.acc = clamp(acc, -8, veh.a);
+    }
+  }
+  // pass 2: integrate (semi-implicit Euler) + overlap guard
+  for (let li = 0; li < 2; li++) {
+    const lane = sim.lanes[li];
+    for (let i = 0; i < lane.length; i++) {
+      const veh = lane[i];
+      veh.prevX = veh.x;
+      veh.v = Math.max(0, veh.v + veh.acc * DT);
+      veh.x += veh.v * DT;
+      veh.laneFloat += clamp(veh.lane - veh.laneFloat, -2.2 * DT, 2.2 * DT);
+      const leader = i > 0 ? lane[i - 1] : null;
+      if (leader && leader.x - leader.len - veh.x < 0.2) {
+        veh.x = leader.x - leader.len - 0.2;
+        veh.v = Math.min(veh.v, leader.v);
+      }
+    }
+    // exits
+    while (lane.length && lane[0].x - lane[0].len > ROAD_LEN + 4) {
+      lane.shift();
+      sim.exits.push(sim.t);
+    }
+  }
+  tryMerges();
+  trySpawn();
+  // prune throughput window
+  while (sim.exits.length && sim.exits[0] < sim.t - 60) sim.exits.shift();
+  sim.q.push(sim.t + DT, "MOTION", null);
+}
+
+/* ================================================================
+ * Space–time heatmap
+ * ================================================================ */
+const HEAT_BINS = 100, HEAT_ROWS = 180;   // 100 bins × 180 rows @2 s = 6 min history
+const heatCanvas = document.getElementById("heatCanvas");
+const heatCtx = heatCanvas.getContext("2d");
+const heatRow = heatCtx.createImageData(HEAT_BINS, 1);
+const heatData = [];                       // ring of Float32Array rows (newest last), -1 = empty
+const EMPTY_RGB = [0x22, 0x22, 0x21];
+
+function clearHeatmap() {
+  heatCtx.fillStyle = "#222221";
+  heatCtx.fillRect(0, 0, HEAT_BINS, HEAT_ROWS);
+  heatData.length = 0;
+}
+function onHeatSample() {
+  const sum = new Float32Array(HEAT_BINS), n = new Float32Array(HEAT_BINS);
+  for (const lane of sim.lanes) {
+    for (const veh of lane) {
+      const b = clamp(Math.floor((veh.x / ROAD_LEN) * HEAT_BINS), 0, HEAT_BINS - 1);
+      sum[b] += veh.v; n[b]++;
+    }
+  }
+  const row = new Float32Array(HEAT_BINS).fill(-1);
+  const px = heatRow.data;
+  for (let b = 0; b < HEAT_BINS; b++) {
+    let rgb = EMPTY_RGB;
+    if (n[b] > 0) {
+      row[b] = sum[b] / n[b];
+      rgb = speedColorRGB(row[b] / FREE_SPEED);
+    }
+    px[b * 4] = rgb[0]; px[b * 4 + 1] = rgb[1]; px[b * 4 + 2] = rgb[2]; px[b * 4 + 3] = 255;
+  }
+  heatData.push({ t: sim.t, bins: row });
+  if (heatData.length > HEAT_ROWS) heatData.shift();
+  // scroll up one row, stamp the new row at the bottom
+  heatCtx.drawImage(heatCanvas, 0, 1, HEAT_BINS, HEAT_ROWS - 1, 0, 0, HEAT_BINS, HEAT_ROWS - 1);
+  heatCtx.putImageData(heatRow, 0, HEAT_ROWS - 1);
+  sim.q.push(sim.t + SAMPLE_DT, "HEAT", null);
+}
+
+/* heatmap hover tooltip */
+const heatTip = document.getElementById("heatTip");
+heatCanvas.addEventListener("mousemove", (ev) => {
+  const rect = heatCanvas.getBoundingClientRect();
+  const fx = (ev.clientX - rect.left) / rect.width;
+  const fy = (ev.clientY - rect.top) / rect.height;
+  const bin = clamp(Math.floor(fx * HEAT_BINS), 0, HEAT_BINS - 1);
+  const rowFromBottom = clamp(Math.floor((1 - fy) * HEAT_ROWS), 0, HEAT_ROWS - 1);
+  const idx = heatData.length - 1 - rowFromBottom;
+  if (idx < 0) { heatTip.style.display = "none"; return; }
+  const rec = heatData[idx];
+  const ago = Math.round(sim.t - rec.t);
+  const v = rec.bins[bin];
+  const pos = Math.round((bin + 0.5) / HEAT_BINS * ROAD_LEN);
+  heatTip.textContent = v < 0
+    ? `${pos} m · ${ago} s ago · no vehicles`
+    : `${pos} m · ${ago} s ago · ${Math.round(v * MPH)} mph`;
+  heatTip.style.display = "block";
+  heatTip.style.left = Math.min(ev.clientX - rect.left + 14, rect.width - 170) + "px";
+  heatTip.style.top = (ev.clientY - rect.top - 30) + "px";
+});
+heatCanvas.addEventListener("mouseleave", () => { heatTip.style.display = "none"; });
+
+/* bottleneck marker + x axis labels */
+document.getElementById("bnLine").style.left = (LANE_END / ROAD_LEN * 100) + "%";
+document.getElementById("axisX").innerHTML =
+  [0, 100, 200, 300, 400, 500].map(m => `<span>${m}</span>`).join("");
+
+/* ================================================================
+ * Road renderer
+ * ================================================================ */
+const roadCanvas = document.getElementById("roadCanvas");
+const roadCtx = roadCanvas.getContext("2d");
+let roadW = 0, roadH = 180;
+const LANE_H = 36, ROAD_TOP = 46;
+
+function sizeRoadCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  roadW = roadCanvas.clientWidth;
+  roadCanvas.width = Math.round(roadW * dpr);
+  roadCanvas.height = Math.round(roadH * dpr);
+  roadCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", sizeRoadCanvas);
+
+const laneY = (lf) => ROAD_TOP + LANE_H * (lf + 0.5);
+
+function drawRoad(simNow) {
+  const ctx = roadCtx, W = roadW;
+  const sx = W / ROAD_LEN;
+  ctx.clearRect(0, 0, W, roadH);
+
+  const xTaper = TAPER_START * sx, xEnd = LANE_END * sx;
+  const yTop = ROAD_TOP, yMid = ROAD_TOP + LANE_H, yBot = ROAD_TOP + 2 * LANE_H;
+
+  // asphalt: two lanes narrowing to one
+  ctx.fillStyle = "#2a2a2e";
+  ctx.beginPath();
+  ctx.moveTo(0, yTop);
+  ctx.lineTo(xTaper, yTop);
+  ctx.lineTo(xEnd, yMid);
+  ctx.lineTo(W, yMid);
+  ctx.lineTo(W, yBot);
+  ctx.lineTo(0, yBot);
+  ctx.closePath();
+  ctx.fill();
+
+  // shoulders
+  ctx.strokeStyle = "#8b8d94"; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, yTop); ctx.lineTo(xTaper, yTop); ctx.lineTo(xEnd, yMid); ctx.lineTo(W, yMid);
+  ctx.moveTo(0, yBot); ctx.lineTo(W, yBot);
+  ctx.stroke();
+
+  // dashed center line (up to the taper)
+  ctx.strokeStyle = "#55575e"; ctx.lineWidth = 2; ctx.setLineDash([14, 12]);
+  ctx.beginPath(); ctx.moveTo(0, yMid); ctx.lineTo(xTaper, yMid); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // taper chevrons
+  ctx.strokeStyle = "#4d4f57"; ctx.lineWidth = 2;
+  for (let x = xTaper + 10; x < xEnd; x += 16) {
+    const f = (x - xTaper) / (xEnd - xTaper);
+    ctx.beginPath();
+    ctx.moveTo(x, yTop + f * LANE_H + 3);
+    ctx.lineTo(x - 9, yMid - 3);
+    ctx.stroke();
+  }
+
+  // labels
+  ctx.fillStyle = "#c3c2b7"; ctx.font = "11px system-ui, sans-serif";
+  ctx.fillText("LANE ENDS — MERGE ▸", xTaper - 30, yTop - 10);
+  ctx.fillStyle = "#898781";
+  ctx.fillText("→ traffic", 10, yBot + 22);
+  if (sim.pendingEntry > 0) {
+    ctx.fillStyle = "#e3a812";
+    ctx.fillText(`⏳ ${sim.pendingEntry} waiting to enter`, 10, yTop - 10);
+  }
+
+  // vehicles (interpolated between motion ticks for smoothness)
+  const alpha = clamp((simNow - lastTickT) / DT, 0, 1);
+  for (const lane of sim.lanes) {
+    for (const veh of lane) {
+      const x = (veh.prevX + (veh.x - veh.prevX) * alpha) * sx;
+      const y = laneY(veh.laneFloat);
+      const len = veh.len * sx;
+      const h = veh.type === "truck" ? 13 : 10;
+      ctx.fillStyle = speedColor(veh.v / FREE_SPEED);
+      roundRect(ctx, x - len, y - h / 2, len, h, 3);
+      ctx.fill();
+      if (veh.type === "truck") {
+        // cab notch
+        ctx.fillStyle = "rgba(13,13,13,0.35)";
+        roundRect(ctx, x - len * 0.22, y - h / 2 + 1.5, len * 0.18, h - 3, 2);
+        ctx.fill();
+      }
+    }
+  }
+}
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* ================================================================
+ * Scripted demo — ramp up, jam, ramp down, recover
+ * ================================================================ */
+const DEMO_PHASES = [
+  { rate: 12, dur: 50,
+    text: "<b>Phase 1/3 · Light traffic</b> — 12 veh/min, well under bottleneck capacity. Everything flows freely; the diagram stays green." },
+  { rate: 44, dur: 120,
+    text: "<b>Phase 2/3 · Rush hour</b> — 44 veh/min exceeds what the single lane can discharge. Vehicles queue upstream of the merge; watch the red wedge grow on the space–time diagram." },
+  { rate: 8, dur: 180,
+    text: "<b>Phase 3/3 · Demand eases</b> — 8 veh/min. The queue drains from the front while the bottleneck keeps discharging; the red wedge narrows and vanishes." },
+];
+const demoBar = document.getElementById("demoBar");
+
+function startDemo() {
+  resetSim();
+  sim.demoActive = true;
+  const token = ++sim.demoToken;
+  setSimSpeed(4);
+  sim.q.push(sim.t, "DEMO", { token, phase: 0 });
+}
+function onDemoPhase(data) {
+  if (data.token !== sim.demoToken) return;
+  if (data.phase >= DEMO_PHASES.length) {
+    sim.demoActive = false;
+    demoBar.innerHTML = "<b>Demo complete</b> — congestion has cleared. Drag the sliders to experiment on your own.";
+    return;
+  }
+  const ph = DEMO_PHASES[data.phase];
+  setRate(ph.rate, true);
+  demoBar.classList.add("on");
+  demoBar.innerHTML = ph.text;
+  sim.q.push(sim.t + ph.dur, "DEMO", { token: data.token, phase: data.phase + 1 });
+}
+function cancelDemo() {
+  if (!sim.demoActive) return;
+  sim.demoActive = false;
+  sim.demoToken++;
+  demoBar.innerHTML = "<b>Demo cancelled</b> — you're in manual control.";
+}
+
+/* ================================================================
+ * Event dispatch, reset, main loop
+ * ================================================================ */
+function dispatch(ev) {
+  switch (ev.type) {
+    case "MOTION":  onMotionTick(); break;
+    case "ARRIVAL": onArrival(ev.data); break;
+    case "HEAT":    onHeatSample(); break;
+    case "DEMO":    onDemoPhase(ev.data); break;
+  }
+}
+let lastTickT = 0;
+function advanceTo(target) {
+  const q = sim.q;
+  while (q.peek() && q.peek().t <= target) {
+    const ev = q.pop();
+    sim.t = ev.t;
+    if (ev.type === "MOTION") lastTickT = ev.t;
+    dispatch(ev);
+  }
+  sim.t = target;
+}
+
+function resetSim() {
+  cancelDemo();
+  demoBar.classList.remove("on");
+  sim.q.clear();
+  sim.t = 0; lastTickT = 0;
+  sim.rng = mulberry32(SEED);
+  sim.lanes = [[], []];
+  sim.pendingEntry = 0;
+  sim.exits = [];
+  sim.arrivalToken++;
+  vehicleId = 0;
+  clearHeatmap();
+  sim.q.push(DT, "MOTION", null);
+  sim.q.push(SAMPLE_DT, "HEAT", null);
+  scheduleNextArrival();
+  setRunning(true);
+}
+
+/* ---------- UI wiring ---------- */
+const btnPlay = document.getElementById("btnPlay");
+const slRate = document.getElementById("slRate"), roRate = document.getElementById("roRate");
+const slTruck = document.getElementById("slTruck"), roTruck = document.getElementById("roTruck");
+const selSpeed = document.getElementById("selSpeed");
+let settingProgrammatically = false;
+
+function setRunning(run) {
+  sim.running = run;
+  btnPlay.textContent = run ? "⏸ Pause" : "▶ Play";
+}
+function setRate(rate, programmatic) {
+  sim.ratePerMin = rate;
+  sim.arrivalToken++;          // drop the pending arrival draw, resample at the new rate
+  scheduleNextArrival();
+  settingProgrammatically = true;
+  slRate.value = rate;
+  roRate.textContent = `${rate} veh/min`;
+  settingProgrammatically = false;
+  if (!programmatic) cancelDemo();
+}
+function setSimSpeed(s) {
+  sim.speed = s;
+  selSpeed.value = String(s);
+}
+
+btnPlay.addEventListener("click", () => setRunning(!sim.running));
+document.getElementById("btnReset").addEventListener("click", resetSim);
+document.getElementById("btnDemo").addEventListener("click", startDemo);
+selSpeed.addEventListener("change", () => { sim.speed = Number(selSpeed.value); });
+slRate.addEventListener("input", () => {
+  if (settingProgrammatically) return;
+  setRate(Number(slRate.value), false);
+});
+slTruck.addEventListener("input", () => {
+  sim.truckPct = Number(slTruck.value);
+  roTruck.textContent = `${sim.truckPct} %`;
+  if (!settingProgrammatically) cancelDemo();
+});
+
+/* ---------- stats ---------- */
+const stTime = document.getElementById("stTime");
+const stCount = document.getElementById("stCount");
+const stFlow = document.getElementById("stFlow");
+const queueReadout = document.getElementById("queueReadout");
+
+function updateStats() {
+  const m = Math.floor(sim.t / 60), s = Math.floor(sim.t % 60);
+  stTime.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const count = sim.lanes[0].length + sim.lanes[1].length;
+  stCount.textContent = String(count);
+  const windowLen = Math.min(60, Math.max(sim.t, 1));
+  stFlow.textContent = `${(sim.exits.length * 60 / windowLen).toFixed(0)} /min`;
+  // queued = vehicles moving slower than 20% of free flow
+  let queued = 0;
+  for (const lane of sim.lanes) for (const veh of lane) if (veh.v < FREE_SPEED * 0.2) queued++;
+  queueReadout.textContent = queued > 0 ? `${queued} vehicles in queue` : "no queue";
+}
+
+/* ---------- main loop ---------- */
+let lastFrame = performance.now();
+function frame(now) {
+  const dtReal = Math.min((now - lastFrame) / 1000, 0.1);
+  lastFrame = now;
+  if (sim.running) advanceTo(sim.t + dtReal * sim.speed);
+  drawRoad(sim.t);
+  updateStats();
+  requestAnimationFrame(frame);
+}
+
+sizeRoadCanvas();
+resetSim();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
