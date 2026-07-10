@@ -41,9 +41,11 @@
     background:linear-gradient(#5cff8e,#0cc355);box-shadow:0 7px 0 #077a35,0 0 30px rgba(60,255,140,.35)}
   #startBtn:active{transform:translateY(5px);box-shadow:0 2px 0 #077a35}
 
-  /* ---------- in-game home button ---------- */
-  #homeBtn{position:absolute;z-index:5;top:calc(10px + env(safe-area-inset-top));right:12px;width:56px;height:56px;
+  /* ---------- in-game buttons ---------- */
+  #homeBtn,#pauseBtn{position:absolute;z-index:5;top:calc(10px + env(safe-area-inset-top));width:56px;height:56px;
     border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(20,26,60,.55);font-size:26px;cursor:pointer}
+  #homeBtn{right:12px}
+  #pauseBtn{right:80px}
   .hidden{display:none!important}
 </style>
 </head>
@@ -63,6 +65,7 @@
 </div>
 
 <button id="homeBtn" class="hidden">🏠</button>
+<button id="pauseBtn" class="hidden">⏸️</button>
 
 <script>
 'use strict';
@@ -157,6 +160,34 @@ const sfx={
   nope(){tone(180,.2,'square',.12,0,120);},
   buy(){[600,900,1200].forEach((f,i)=>tone(f,.15,'square',.1,i*.06));},
 };
+// ---------- looping background music (synthesized chiptune, scheduled with lookahead)
+const music={on:false,step:0,next:0,timer:null};
+const MSTEP=.24; // seconds per 8th note (~125 BPM)
+const MELODY=[ // 4 bars of bouncy pentatonic melody, 0 = rest
+  659,0,784,0,880,0,784,659,  587,0,659,0,523,0,659,0,
+  659,0,784,0,880,0,1047,880, 784,0,659,0,523,0,0,0,
+];
+const BASSLINE=[131,110,87,98]; // one root note per bar (C A F G)
+function musicTick(){
+  const ac=audio();if(!ac||!music.on)return;
+  while(music.next<ac.currentTime+.3){ // schedule a little ahead so timing stays steady
+    const s=music.step%MELODY.length,delay=music.next-ac.currentTime;
+    if(MELODY[s])tone(MELODY[s],.22,'square',.045,delay);
+    if(s%2===0)tone(BASSLINE[(s/8|0)],.2,'triangle',.07,delay);
+    if(s%4===2)noiseBurst(.03,.02,delay); // soft hi-hat tick
+    music.next+=MSTEP;music.step++;
+  }
+}
+function startMusic(reset){
+  const ac=audio();if(!ac)return;
+  if(reset)music.step=0;
+  music.on=true;music.next=ac.currentTime+.1;
+  if(!music.timer)music.timer=setInterval(musicTick,100);
+}
+function stopMusic(){
+  music.on=false;
+  if(music.timer){clearInterval(music.timer);music.timer=null;}
+}
 // unlock audio on the very first touch anywhere (iOS requirement)
 document.addEventListener('pointerdown',()=>audio(),{once:true});
 document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
@@ -164,6 +195,7 @@ document.addEventListener('contextmenu',e=>e.preventDefault());
 
 // ============================================================ game state
 let scene='menu';           // 'menu' | 'play'
+let paused=false;
 let items=[];               // falling collectibles + junk
 let drops=[];               // gears knocked loose, sitting on the floor
 let confetti=[], sparks=[], floaters=[];
@@ -177,34 +209,48 @@ function startRun(){
   score=0;celebrated=0;badgeT=0;runT=0;spawnT=.8;hintT=4.5;
   bot.x=bot.tx=W/2;bot.dizzy=0;bot.invuln=0;bot.spin=0;
   magnet.charge=0;magnet.active=0;
+  paused=false;
+  $('pauseBtn').textContent='⏸️';
   $('menu').classList.add('hidden');
   $('homeBtn').classList.remove('hidden');
+  $('pauseBtn').classList.remove('hidden');
   audio();
+  startMusic(true);
 }
 function endRun(){
   save.scrap+=score;persist();
-  scene='menu';
+  scene='menu';paused=false;
+  stopMusic();
   const rr=$('runResult');
   rr.textContent='⭐ Great run! You collected 🔩 '+score+' scrap!';
   rr.classList.remove('hidden');
   $('menu').classList.remove('hidden');
   $('homeBtn').classList.add('hidden');
+  $('pauseBtn').classList.add('hidden');
   refreshMenu();
+}
+
+function setPaused(p){
+  if(scene!=='play'||paused===p)return;
+  paused=p;
+  $('pauseBtn').textContent=p?'▶️':'⏸️';
+  if(p)stopMusic();else startMusic(false); // resume the tune where it left off
 }
 
 // ============================================================ input — slide finger to steer
 let dragId=null;
 canvas.addEventListener('pointerdown',e=>{
-  if(scene!=='play')return;
+  if(scene!=='play'||paused)return;
   dragId=e.pointerId;bot.tx=e.clientX;hintT=Math.min(hintT,.6);
 });
 canvas.addEventListener('pointermove',e=>{
-  if(scene==='play'&&e.pointerId===dragId)bot.tx=e.clientX;
+  if(scene==='play'&&!paused&&e.pointerId===dragId)bot.tx=e.clientX;
 });
 const endDrag=e=>{if(e.pointerId===dragId)dragId=null;};
 canvas.addEventListener('pointerup',endDrag);
 canvas.addEventListener('pointercancel',endDrag);
 $('homeBtn').addEventListener('click',()=>{if(scene==='play')endRun();});
+$('pauseBtn').addEventListener('click',()=>setPaused(!paused));
 
 // ============================================================ spawning
 function spawnItem(){
@@ -623,7 +669,19 @@ function render(t){
     ctx.shadowBlur=0;
   }
   ctx.globalAlpha=1;
-  if(scene==='play')drawHUD(t);
+  if(scene==='play'){
+    drawHUD(t);
+    if(paused){
+      ctx.fillStyle='rgba(5,8,24,.66)';ctx.fillRect(0,0,W,H);
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='#fff';ctx.shadowColor='#2ee6ff';ctx.shadowBlur=24;
+      ctx.font='bold 54px "Trebuchet MS",system-ui';
+      ctx.fillText('⏸ PAUSED',W/2,H*.42);
+      ctx.shadowBlur=0;
+      ctx.font='bold 20px "Trebuchet MS",system-ui';ctx.fillStyle='#8fa2d4';
+      ctx.fillText('Tap ▶️ to keep playing!',W/2,H*.42+52);
+    }
+  }
 }
 
 // ============================================================ menu / garage
@@ -677,14 +735,20 @@ refreshMenu();
 let last=performance.now(),T=0;
 function frame(now){
   const dt=Math.min(.033,(now-last)/1000);
-  last=now;T+=dt;
-  if(scene==='play')update(dt);
+  last=now;
+  if(!paused){
+    T+=dt;
+    if(scene==='play')update(dt);
+  }
   render(T);
   if(scene==='menu')drawPreview(T);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-document.addEventListener('visibilitychange',()=>{last=performance.now();});
+document.addEventListener('visibilitychange',()=>{
+  last=performance.now();
+  if(document.hidden)setPaused(true); // auto-pause (and hush the music) when the tab goes away
+});
 </script>
 </body>
 </html>
