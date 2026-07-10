@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Highway Traffic Simulator</title>
+    <style>
+      :root { color-scheme: dark; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
+      body { margin: 0; background: linear-gradient(135deg, #07131f, #132b3f); color: #f5f7fb; min-height: 100vh; display: grid; place-items: center; }
+      .app { width: min(980px, calc(100vw - 24px)); background: rgba(8, 18, 30, 0.92); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); padding: 24px; box-sizing: border-box; }
+      h1 { margin: 0 0 8px; font-size: 1.7rem; }
+      .intro { margin: 0 0 16px; color: #b8c4d6; line-height: 1.5; }
+      .controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+      button, input[type="range"] { font: inherit; }
+      button { border: none; color: white; background: linear-gradient(135deg, #2b7fff, #1c5dd9); padding: 10px 14px; border-radius: 999px; cursor: pointer; }
+      .secondary { background: linear-gradient(135deg, #5c6574, #414a58); }
+      .control-group { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); border-radius: 999px; padding: 8px 12px; }
+      .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+      .status-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 10px 12px; }
+      .status-card strong { display: block; margin-bottom: 4px; color: #8fb4ff; }
+      .simulator { border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); background: radial-gradient(circle at top, #274357 0%, #0d1723 70%); }
+      svg { display: block; width: 100%; height: auto; }
+      .log { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+      .log h2 { margin: 0 0 8px; font-size: 0.95rem; color: #8fb4ff; }
+      .log ul { margin: 0; padding-left: 18px; color: #dce6f6; }
+      .log li + li { margin-top: 4px; }
+      .legend { display: flex; gap: 16px; margin-top: 10px; color: #c4d0e0; font-size: 0.95rem; flex-wrap: wrap; }
+      .legend span { display: inline-flex; align-items: center; gap: 6px; }
+      .swatch { width: 12px; height: 12px; border-radius: 50%; display: block; }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <h1>Highway Traffic Simulator</h1>
+      <p class="intro">This build adds two mainline lanes and an incoming ramp. A bottleneck near the merge creates congestion that later clears as capacity returns.</p>
+
+      <div class="controls">
+        <button id="toggleBtn">Start</button>
+        <button id="resetBtn" class="secondary">Reset</button>
+        <button id="demoBtn">Play Demo</button>
+        <label class="control-group" for="speedInput">
+          <span>Speed</span>
+          <input id="speedInput" type="range" min="0.5" max="4" step="0.25" value="1" />
+        </label>
+      </div>
+
+      <div class="status-grid">
+        <div class="status-card"><strong>Time</strong><span id="timeValue">0.0 s</span></div>
+        <div class="status-card"><strong>Average speed</strong><span id="speedValue">0.0 m/s</span></div>
+        <div class="status-card"><strong>State</strong><span id="stateValue">Ready</span></div>
+        <div class="status-card"><strong>Vehicles</strong><span id="vehicleValue">0</span></div>
+      </div>
+
+      <div class="simulator">
+        <svg id="roadSvg" viewBox="0 0 900 340" role="img" aria-label="Animated highway road"></svg>
+      </div>
+
+      <div class="log">
+        <h2>Event log</h2>
+        <ul id="logList"></ul>
+      </div>
+
+      <div class="legend">
+        <span><i class="swatch" style="background:#2b7fff"></i> Mainline vehicle</span>
+        <span><i class="swatch" style="background:#8e7cff"></i> Ramp vehicle</span>
+        <span><i class="swatch" style="background:#f7b731"></i> Slow vehicle</span>
+        <span><i class="swatch" style="background:#ff5a5f"></i> Bottleneck zone</span>
+      </div>
+    </div>
+
+    <script>
+      (() => {
+        const svg = document.getElementById('roadSvg');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const demoBtn = document.getElementById('demoBtn');
+        const speedInput = document.getElementById('speedInput');
+        const timeValue = document.getElementById('timeValue');
+        const speedValue = document.getElementById('speedValue');
+        const stateValue = document.getElementById('stateValue');
+        const vehicleValue = document.getElementById('vehicleValue');
+        const logList = document.getElementById('logList');
+
+        const state = {
+          running: false,
+          simTime: 0,
+          speedScale: 1,
+          intervalId: null,
+          vehicles: [],
+          events: [],
+          bottleneckActive: false,
+          log: [],
+          nextVehicleId: 1,
+          roadLength: 900,
+          mergeStart: 420,
+          mergeEnd: 590,
+          rampLength: 180,
+          freeFlowSpeed: 18,
+          bottleneckSpeed: 4,
+          rampSpeed: 8,
+          spawnPeriod: 0.95,
+          rampSpawnPeriod: 1.35,
+          maxMainlineVehicles: 18,
+          maxRampVehicles: 6,
+        };
+
+        function makeSvgElement(tag, attrs = {}) {
+          const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+          Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value));
+          return el;
+        }
+
+        function worldToScreenX(x) {
+          const startX = 70;
+          const endX = 820;
+          return startX + (x / state.roadLength) * (endX - startX);
+        }
+
+        function getRampPoint(progress) {
+          const start = { x: 90, y: 262 };
+          const end = { x: 430, y: 168 };
+          return {
+            x: start.x + (end.x - start.x) * progress,
+            y: start.y + (end.y - start.y) * progress,
+          };
+        }
+
+        function addLog(message) {
+          state.log.unshift({ time: state.simTime.toFixed(1), message });
+          state.log = state.log.slice(0, 6);
+          renderLog();
+        }
+
+        function renderLog() {
+          logList.innerHTML = '';
+          state.log.forEach((entry) => {
+            const item = document.createElement('li');
+            item.textContent = `${entry.time} s — ${entry.message}`;
+            logList.appendChild(item);
+          });
+        }
+
+        function updateStats() {
+          const mainline = state.vehicles.filter((vehicle) => vehicle.type === 'mainline');
+          const ramp = state.vehicles.filter((vehicle) => vehicle.type === 'ramp');
+          const avgSpeed = mainline.length
+            ? mainline.reduce((sum, vehicle) => sum + vehicle.speed, 0) / mainline.length
+            : state.freeFlowSpeed;
+          const occupancy = mainline.length / state.maxMainlineVehicles;
+
+          let stateText = 'Free flow';
+          if (avgSpeed < 7 || occupancy > 0.8 || ramp.length > 3) {
+            stateText = 'Merge congestion';
+          } else if (avgSpeed < 12 || occupancy > 0.55) {
+            stateText = 'Moderate congestion';
+          }
+
+          timeValue.textContent = `${state.simTime.toFixed(1)} s`;
+          speedValue.textContent = `${avgSpeed.toFixed(1)} m/s`;
+          stateValue.textContent = state.bottleneckActive ? 'Bottleneck active' : stateText;
+          vehicleValue.textContent = `${mainline.length} + ${ramp.length}`;
+        }
+
+        function resetSimulation() {
+          state.running = false;
+          if (state.intervalId) {
+            clearInterval(state.intervalId);
+            state.intervalId = null;
+          }
+          state.simTime = 0;
+          state.vehicles = [];
+          state.events = [];
+          state.bottleneckActive = false;
+          state.nextVehicleId = 1;
+          state.log = [];
+          toggleBtn.textContent = 'Start';
+          addLog('Simulation reset.');
+          render();
+          updateStats();
+        }
+
+        function scheduleEvent(time, type) {
+          state.events.push({ time, type });
+          state.events.sort((a, b) => a.time - b.time);
+        }
+
+        function queueDemoScenario() {
+          state.events = [];
+          state.bottleneckActive = false;
+          state.simTime = 0;
+          state.vehicles = [];
+          state.nextVehicleId = 1;
+          scheduleEvent(0.2, 'spawn_main');
+          scheduleEvent(0.4, 'spawn_ramp');
+          scheduleEvent(13, 'bottleneck_on');
+          scheduleEvent(34, 'bottleneck_off');
+          addLog('Demo started. Two lanes and an on-ramp are active.');
+        }
+
+        function spawnMainlineVehicle() {
+          if (state.vehicles.filter((vehicle) => vehicle.type === 'mainline').length >= state.maxMainlineVehicles) {
+            return;
+          }
+          const lane0 = state.vehicles.filter((vehicle) => vehicle.type === 'mainline' && vehicle.lane === 0).length;
+          const lane1 = state.vehicles.filter((vehicle) => vehicle.type === 'mainline' && vehicle.lane === 1).length;
+          const lane = lane0 <= lane1 ? 0 : 1;
+          state.vehicles.push({ id: state.nextVehicleId++, type: 'mainline', lane, x: 0, speed: state.freeFlowSpeed - 2, length: 20, width: 10, color: '#2b7fff', laneChangeCooldown: 0 });
+          scheduleEvent(state.simTime + state.spawnPeriod, 'spawn_main');
+        }
+
+        function spawnRampVehicle() {
+          if (state.vehicles.filter((vehicle) => vehicle.type === 'ramp').length >= state.maxRampVehicles) {
+            return;
+          }
+          state.vehicles.push({ id: state.nextVehicleId++, type: 'ramp', progress: 0, speed: state.rampSpeed, color: '#8e7cff' });
+          scheduleEvent(state.simTime + state.rampSpawnPeriod, 'spawn_ramp');
+        }
+
+        function step(dt) {
+          while (state.events.length && state.events[0].time <= state.simTime + 1e-9) {
+            const event = state.events.shift();
+            if (event.type === 'spawn_main') {
+              spawnMainlineVehicle();
+            } else if (event.type === 'spawn_ramp') {
+              spawnRampVehicle();
+            } else if (event.type === 'bottleneck_on') {
+              state.bottleneckActive = true;
+              addLog('A temporary bottleneck is slowing the merge zone.');
+            } else if (event.type === 'bottleneck_off') {
+              state.bottleneckActive = false;
+              addLog('The bottleneck cleared and the queue is easing.');
+            }
+          }
+
+          const mainline = state.vehicles.filter((vehicle) => vehicle.type === 'mainline');
+          const lane0 = mainline.filter((vehicle) => vehicle.lane === 0).sort((a, b) => a.x - b.x);
+          const lane1 = mainline.filter((vehicle) => vehicle.lane === 1).sort((a, b) => a.x - b.x);
+          const laneOrder = [...lane0, ...lane1].sort((a, b) => a.x - b.x);
+
+          const getLaneGap = (vehicle, laneVehicles) => {
+            let lead = null;
+            let trail = null;
+            laneVehicles.forEach((candidate) => {
+              if (candidate.id === vehicle.id) {
+                return;
+              }
+              if (candidate.x > vehicle.x && (!lead || candidate.x < lead.x)) {
+                lead = candidate;
+              }
+              if (candidate.x < vehicle.x && (!trail || candidate.x > trail.x)) {
+                trail = candidate;
+              }
+            });
+            return {
+              leadGap: lead ? lead.x - vehicle.x - vehicle.length : Infinity,
+              trailGap: trail ? vehicle.x - trail.x - trail.length : Infinity,
+            };
+          };
+
+          laneOrder.forEach((vehicle) => {
+            if (vehicle.laneChangeCooldown > 0) {
+              vehicle.laneChangeCooldown = Math.max(0, vehicle.laneChangeCooldown - dt);
+              return;
+            }
+
+            const currentLaneVehicles = vehicle.lane === 0 ? lane0 : lane1;
+            const targetLane = vehicle.lane === 0 ? 1 : 0;
+            const targetLaneVehicles = targetLane === 0 ? lane0 : lane1;
+            const currentGap = getLaneGap(vehicle, currentLaneVehicles);
+            const targetGap = getLaneGap(vehicle, targetLaneVehicles);
+            const nearMerge = vehicle.x > state.mergeStart - 120;
+            const shouldChange = currentGap.leadGap < 24 && targetGap.leadGap > 24 && targetGap.trailGap > 16 && (nearMerge ? targetLane === 0 : true);
+
+            if (shouldChange) {
+              vehicle.lane = targetLane;
+              vehicle.laneChangeCooldown = 1.4;
+            }
+          });
+
+          const updatedMainline = [];
+          const updateLane = (vehicles) => {
+            for (let index = 0; index < vehicles.length; index += 1) {
+              const vehicle = vehicles[index];
+              const ahead = vehicles[index + 1];
+              let targetSpeed = state.freeFlowSpeed;
+              if (ahead) {
+                const gap = ahead.x - vehicle.x - vehicle.length;
+                if (gap < 24) {
+                  targetSpeed = Math.max(0, (gap - 10) / 1.05);
+                }
+              }
+              const inMergeZone = vehicle.x > state.mergeStart - 80 && vehicle.x < state.mergeEnd + 80;
+              if (state.bottleneckActive && inMergeZone) {
+                targetSpeed = Math.min(targetSpeed, state.bottleneckSpeed);
+              }
+              vehicle.speed = Math.max(0, Math.min(vehicle.speed + 4 * dt, targetSpeed));
+              vehicle.x += vehicle.speed * dt;
+              vehicle.color = state.bottleneckActive && inMergeZone ? '#f7b731' : '#2b7fff';
+              updatedMainline.push(vehicle);
+            }
+          };
+
+          updateLane(lane0);
+          updateLane(lane1);
+
+          const rampVehicles = state.vehicles.filter((vehicle) => vehicle.type === 'ramp');
+          const nextVehicles = [];
+          updatedMainline.forEach((vehicle) => nextVehicles.push(vehicle));
+
+          rampVehicles.forEach((vehicle) => {
+            if (vehicle.progress >= 1) {
+              const lane = updatedMainline.filter((candidate) => candidate.lane === 0).length <= updatedMainline.filter((candidate) => candidate.lane === 1).length ? 0 : 1;
+              nextVehicles.push({ id: vehicle.id, type: 'mainline', lane, x: state.mergeStart - 30, speed: state.freeFlowSpeed - 2, length: 20, width: 10, color: '#2b7fff', laneChangeCooldown: 0 });
+            } else {
+              const moveRate = state.bottleneckActive ? state.rampSpeed - 2 : state.rampSpeed;
+              vehicle.progress += (moveRate * dt) / state.rampLength;
+              vehicle.speed = moveRate;
+              nextVehicles.push(vehicle);
+            }
+          });
+
+          state.vehicles = nextVehicles.filter((vehicle) => {
+            if (vehicle.type === 'mainline') {
+              return vehicle.x < state.roadLength + 60;
+            }
+            return vehicle.progress < 1;
+          });
+
+          state.simTime += dt;
+          updateStats();
+        }
+
+        function render() {
+          svg.innerHTML = '';
+
+          const road = makeSvgElement('rect', { x: '60', y: '98', width: '780', height: '140', rx: '24', fill: '#3d4b59' });
+          svg.appendChild(road);
+          const shoulder = makeSvgElement('rect', { x: '60', y: '98', width: '780', height: '140', rx: '24', fill: 'none', stroke: '#7f8a98', 'stroke-width': '2' });
+          svg.appendChild(shoulder);
+          const laneLine1 = makeSvgElement('line', { x1: '60', y1: '150', x2: '840', y2: '150', stroke: '#f6f7f9', 'stroke-width': '2', 'stroke-dasharray': '16 16' });
+          svg.appendChild(laneLine1);
+          const laneLine2 = makeSvgElement('line', { x1: '60', y1: '212', x2: '840', y2: '212', stroke: '#f6f7f9', 'stroke-width': '2', 'stroke-dasharray': '16 16' });
+          svg.appendChild(laneLine2);
+          const rampPath = makeSvgElement('path', { d: 'M90 262 C180 235, 270 210, 420 178', fill: 'none', stroke: '#8aa0b7', 'stroke-width': '24', 'stroke-linecap': 'round', 'stroke-opacity': '0.7' });
+          svg.appendChild(rampPath);
+          const rampOutline = makeSvgElement('path', { d: 'M90 262 C180 235, 270 210, 420 178', fill: 'none', stroke: '#4d5764', 'stroke-width': '28', 'stroke-linecap': 'round' });
+          svg.appendChild(rampOutline);
+          const mergeZone = makeSvgElement('rect', { x: '390', y: '112', width: '114', height: '110', rx: '14', fill: state.bottleneckActive ? '#ff5a5f' : '#4b5664', 'fill-opacity': state.bottleneckActive ? '0.85' : '0.45', stroke: state.bottleneckActive ? '#ffd166' : '#8aa0b7', 'stroke-width': '3' });
+          svg.appendChild(mergeZone);
+          const mergeLabel = makeSvgElement('text', { x: '447', y: '172', 'text-anchor': 'middle', fill: '#ffffff', 'font-size': '18', 'font-weight': '600' });
+          mergeLabel.textContent = state.bottleneckActive ? 'Merge jam' : 'Merge';
+          svg.appendChild(mergeLabel);
+          const roadside = makeSvgElement('line', { x1: '60', y1: '238', x2: '840', y2: '238', stroke: '#4a5661', 'stroke-width': '2' });
+          svg.appendChild(roadside);
+
+          state.vehicles.forEach((vehicle) => {
+            if (vehicle.type === 'mainline') {
+              const x = worldToScreenX(vehicle.x);
+              const y = vehicle.lane === 0 ? 140 : 202;
+              const car = makeSvgElement('rect', { x: (x - vehicle.length).toString(), y: (y - vehicle.width / 2).toString(), width: vehicle.length.toString(), height: vehicle.width.toString(), rx: '4', fill: vehicle.color, stroke: '#0f1724', 'stroke-width': '2' });
+              svg.appendChild(car);
+              const roof = makeSvgElement('rect', { x: (x - vehicle.length * 0.7).toString(), y: (y - vehicle.width / 2 - 6).toString(), width: (vehicle.length * 0.7).toString(), height: '6', rx: '2', fill: '#dce6f6', 'fill-opacity': '0.9' });
+              svg.appendChild(roof);
+            } else {
+              const point = getRampPoint(vehicle.progress);
+              const angle = Math.atan2(168 - 262, 430 - 90) * 180 / Math.PI;
+              const group = makeSvgElement('g', { transform: `translate(${point.x} ${point.y}) rotate(${angle})` });
+              const car = makeSvgElement('rect', { x: '-8', y: '-5', width: '16', height: '10', rx: '3', fill: vehicle.color, stroke: '#0f1724', 'stroke-width': '2' });
+              group.appendChild(car);
+              svg.appendChild(group);
+            }
+          });
+
+          const title = makeSvgElement('text', { x: '120', y: '82', fill: '#cde2ff', 'font-size': '22', 'font-weight': '600' });
+          title.textContent = 'Two-lane highway with on-ramp';
+          svg.appendChild(title);
+        }
+
+        function startSimulation() {
+          if (state.running) return;
+          state.running = true;
+          toggleBtn.textContent = 'Pause';
+          state.intervalId = window.setInterval(() => {
+            step(0.05 * state.speedScale);
+            render();
+          }, 50);
+        }
+
+        toggleBtn.addEventListener('click', () => {
+          if (state.running) {
+            state.running = false;
+            if (state.intervalId) {
+              clearInterval(state.intervalId);
+              state.intervalId = null;
+            }
+            toggleBtn.textContent = 'Start';
+          } else {
+            startSimulation();
+          }
+        });
+
+        resetBtn.addEventListener('click', () => resetSimulation());
+        demoBtn.addEventListener('click', () => {
+          queueDemoScenario();
+          render();
+          updateStats();
+          startSimulation();
+        });
+        speedInput.addEventListener('input', (event) => {
+          state.speedScale = Number(event.target.value);
+        });
+
+        resetSimulation();
+      })();
+    </script>
+  </body>
+</html>
