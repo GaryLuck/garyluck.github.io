@@ -24,7 +24,7 @@
   #scrapTotal{font-size:21px;font-weight:800;color:#ffd44d}
   #preview{width:min(46vw,240px);height:auto}
   .label{font-size:14px;letter-spacing:4px;color:#8fa2d4;font-weight:700;margin-top:2px}
-  #paints{display:flex;gap:14px}
+  #paints{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
   .swatch{width:54px;height:54px;border-radius:50%;border:4px solid rgba(255,255,255,.15);cursor:pointer}
   .swatch.sel{border-color:#fff;box-shadow:0 0 18px 2px rgba(255,255,255,.45)}
   #parts{display:flex;gap:12px}
@@ -85,7 +85,8 @@ function rr(c,x,y,w,h,r){ // rounded rect path (works on older Safari too)
 }
 
 // ============================================================ saved progress
-const PAINTS={cyan:'#2ee6ff',pink:'#ff5fd7',green:'#4dff77',gold:'#ffd44d'};
+const PAINTS={cyan:'#2ee6ff',pink:'#ff5fd7',green:'#4dff77',gold:'#ffd44d',
+  teal:'#14e0b0',red:'#ff5252',orange:'#ff9d2e',purple:'#9b4dff'};
 const WHEELS={
   wheels:  {name:'Roller Wheels', ico:'🛞', cost:0},
   treads:  {name:'Tractor Treads',ico:'🚜', cost:50},
