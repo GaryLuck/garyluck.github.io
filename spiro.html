@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spirograph</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111;
+      color: #ddd;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas-wrap {
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      background: #111;
+    }
+
+    /* â”€â”€ Controls â”€â”€ */
+    #controls {
+      flex: 0 0 auto;
+      background: #1a1a1a;
+      border-top: 1px solid #333;
+      padding: 10px 16px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 20px;
+      align-items: flex-end;
+    }
+
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 110px;
+    }
+
+    .ctrl-group label {
+      display: flex;
+      justify-content: space-between;
+      color: #aaa;
+      user-select: none;
+    }
+
+    .ctrl-group label span {
+      color: #fff;
+      min-width: 28px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #7af;
+      cursor: pointer;
+    }
+
+    /* color picker */
+    input[type="color"] {
+      width: 36px;
+      height: 26px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    /* preset colors */
+    #presets {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform .1s, border-color .1s;
+    }
+    .preset-btn:hover { transform: scale(1.2); }
+    .preset-btn.active { border-color: #fff; }
+
+    /* gradient toggle */
+    #gradient-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #aaa;
+      cursor: pointer;
+      user-select: none;
+    }
+    #gradient-wrap input { accent-color: #7af; cursor: pointer; }
+
+    /* layer toggle */
+    #layer-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #aaa;
+      cursor: pointer;
+      user-select: none;
+    }
+    #layer-wrap input { accent-color: #7af; cursor: pointer; }
+
+    /* mode toggle */
+    #mode-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #aaa;
+      cursor: pointer;
+      user-select: none;
+    }
+    #mode-wrap input { accent-color: #7af; cursor: pointer; }
+
+    /* buttons */
+    .btn-group {
+      display: flex;
+      gap: 6px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 5px 14px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #2a2a2a;
+      color: #ddd;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background .1s;
+    }
+    button:hover { background: #3a3a3a; }
+    button:active { background: #1e1e1e; }
+    button.primary { background: #1a5fa8; border-color: #2277cc; }
+    button.primary:hover { background: #2277cc; }
+    button#btn-stop { display: none; background: #7a1a1a; border-color: #cc2222; }
+    button#btn-stop:hover { background: #cc2222; }
+  </style>
+</head>
+<body>
+
+<div id="canvas-wrap">
+  <canvas id="spiro"></canvas>
+</div>
+
+<div id="controls">
+
+  <!-- R -->
+  <div class="ctrl-group">
+    <label>Outer R <span id="val-R">120</span></label>
+    <input type="range" id="sl-R" min="20" max="300" value="120" />
+  </div>
+
+  <!-- r -->
+  <div class="ctrl-group">
+    <label>Inner r <span id="val-r">45</span></label>
+    <input type="range" id="sl-r" min="1" max="299" value="45" />
+  </div>
+
+  <!-- d -->
+  <div class="ctrl-group">
+    <label>Pen d <span id="val-d">60</span></label>
+    <input type="range" id="sl-d" min="0" max="300" value="60" />
+  </div>
+
+  <!-- line width -->
+  <div class="ctrl-group" style="min-width:90px">
+    <label>Width <span id="val-w">1.5</span></label>
+    <input type="range" id="sl-w" min="0.5" max="8" step="0.5" value="1.5" />
+  </div>
+
+  <!-- speed -->
+  <div class="ctrl-group" style="min-width:90px">
+    <label>Speed <span id="val-speed">4</span></label>
+    <input type="range" id="sl-speed" min="1" max="60" value="4" />
+  </div>
+
+  <!-- color + presets -->
+  <div class="ctrl-group" style="min-width:auto">
+    <label style="justify-content:flex-start;gap:6px;">
+      Color
+      <input type="color" id="color-pick" value="#7aaeff" />
+    </label>
+    <div id="presets">
+      <button class="preset-btn active" data-color="#7aaeff" style="background:#7aaeff" title="Blue"></button>
+      <button class="preset-btn" data-color="#ff7aa0" style="background:#ff7aa0" title="Pink"></button>
+      <button class="preset-btn" data-color="#7affc4" style="background:#7affc4" title="Mint"></button>
+      <button class="preset-btn" data-color="#ffd97a" style="background:#ffd97a" title="Gold"></button>
+      <button class="preset-btn" data-color="#d07aff" style="background:#d07aff" title="Purple"></button>
+      <button class="preset-btn" data-color="#ff9f4a" style="background:#ff9f4a" title="Orange"></button>
+      <button class="preset-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+    </div>
+  </div>
+
+  <!-- toggles -->
+  <div class="ctrl-group" style="min-width:auto;gap:8px">
+    <label id="gradient-wrap">
+      <input type="checkbox" id="chk-gradient" /> Rainbow stroke
+    </label>
+    <label id="layer-wrap">
+      <input type="checkbox" id="chk-layer" /> Layer mode
+    </label>
+    <label id="mode-wrap">
+      <input type="checkbox" id="chk-epi" /> Epitrochoid
+    </label>
+  </div>
+
+  <!-- action buttons -->
+  <div class="btn-group">
+    <button id="btn-draw"    class="primary">Draw</button>
+    <button id="btn-animate" class="primary">Animate</button>
+    <button id="btn-stop">Stop</button>
+    <button id="btn-clear">Clear</button>
+    <button id="btn-save">Save PNG</button>
+  </div>
+
+</div>
+
+<script>
+/* â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function gcd(a, b) {
+  a = Math.abs(Math.round(a));
+  b = Math.abs(Math.round(b));
+  while (b) { [a, b] = [b, a % b]; }
+  return a || 1;
+}
+function lcm(a, b) { return (a / gcd(a, b)) * b; }
+
+/* â”€â”€ Curve generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+const MAX_STEPS = 100_000;
+
+/**
+ * Generate hypotrochoid (epi=false) or epitrochoid (epi=true) points.
+ * Returns array of {x, y} centred at (0,0).
+ */
+function generatePoints(R, r, d, epi) {
+  // Guard: r must be > 0
+  if (r <= 0) r = 1;
+
+  // For hypotrochoid r must be < R; clamp silently
+  if (!epi && r >= R) r = R - 1;
+
+  // Number of rotations until curve closes = lcm(R,r)/r.
+  // rawSteps targets ~360 sample points per full rotation of the inner circle;
+  // the actual angular step size dt is (2Ï€ Ã— rotations) / steps.
+  const L = lcm(R, r);
+  const rotations = L / r;
+  const rawSteps = Math.round(rotations * 360);
+  const steps = Math.min(rawSteps, MAX_STEPS);
+
+  const pts = [];
+  const dt = (2 * Math.PI * rotations) / steps;
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i * dt;
+    let x, y;
+    if (epi) {
+      // epitrochoid: small circle rolls outside
+      x = (R + r) * Math.cos(t) - d * Math.cos(((R + r) / r) * t);
+      y = (R + r) * Math.sin(t) - d * Math.sin(((R + r) / r) * t);
+    } else {
+      // hypotrochoid: small circle rolls inside
+      x = (R - r) * Math.cos(t) + d * Math.cos(((R - r) / r) * t);
+      y = (R - r) * Math.sin(t) - d * Math.sin(((R - r) / r) * t);
+    }
+    pts.push({ x, y });
+  }
+  return pts;
+}
+
+/* â”€â”€ Canvas setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+const canvas = document.getElementById('spiro');
+const ctx    = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const wrap = document.getElementById('canvas-wrap');
+  const size = Math.min(wrap.clientWidth, wrap.clientHeight);
+  canvas.width  = size;
+  canvas.height = size;
+  if (!document.getElementById('chk-layer').checked) {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+/* â”€â”€ Draw helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function hsl(hue) { return `hsl(${hue},100%,65%)`; }
+
+function drawCurve(pts, color, lineWidth, rainbow) {
+  if (pts.length < 2) return;
+  const cx = canvas.width  / 2;
+  const cy = canvas.height / 2;
+
+  ctx.lineWidth   = lineWidth;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  ctx.strokeStyle = color;
+
+  if (rainbow) {
+    // Draw segment-by-segment with hue interpolation
+    for (let i = 1; i < pts.length; i++) {
+      const hue = (i / pts.length) * 360;
+      ctx.beginPath();
+      ctx.strokeStyle = hsl(hue);
+      ctx.moveTo(cx + pts[i - 1].x, cy + pts[i - 1].y);
+      ctx.lineTo(cx + pts[i].x,     cy + pts[i].y);
+      ctx.stroke();
+    }
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(cx + pts[0].x, cy + pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(cx + pts[i].x, cy + pts[i].y);
+    }
+    ctx.stroke();
+  }
+}
+
+/* â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+let animId   = null; // requestAnimationFrame id
+let animPts  = [];
+let animIdx  = 0;
+
+function stopAnimation() {
+  if (animId !== null) {
+    cancelAnimationFrame(animId);
+    animId = null;
+  }
+  document.getElementById('btn-stop').style.display    = 'none';
+  document.getElementById('btn-animate').style.display = '';
+  document.getElementById('btn-draw').style.display    = '';
+}
+
+/* â”€â”€ Read controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function getParams() {
+  return {
+    R:       +document.getElementById('sl-R').value,
+    r:       +document.getElementById('sl-r').value,
+    d:       +document.getElementById('sl-d').value,
+    lw:      +document.getElementById('sl-w').value,
+    speed:   +document.getElementById('sl-speed').value,
+    color: document.getElementById('color-pick').value,
+    rainbow: document.getElementById('chk-gradient').checked,
+    layer:   document.getElementById('chk-layer').checked,
+    epi:     document.getElementById('chk-epi').checked,
+  };
+}
+
+function clearCanvas() {
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+/* â”€â”€ Instant draw â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function drawNow() {
+  stopAnimation();
+  const p = getParams();
+  if (!p.layer) clearCanvas();
+  const pts = generatePoints(p.R, p.r, p.d, p.epi);
+  drawCurve(pts, p.color, p.lw, p.rainbow);
+}
+
+/* â”€â”€ Animation draw â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function startAnimation() {
+  stopAnimation();
+  const p = getParams();
+  if (!p.layer) clearCanvas();
+  animPts = generatePoints(p.R, p.r, p.d, p.epi);
+  animIdx = 1;
+
+  const cx = canvas.width  / 2;
+  const cy = canvas.height / 2;
+  const total = animPts.length;
+
+  function frame() {
+    const speed = +document.getElementById('sl-speed').value;
+    const end   = Math.min(animIdx + speed, total);
+
+    ctx.lineWidth   = p.lw;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+
+    for (let i = animIdx; i < end; i++) {
+      if (p.rainbow) {
+        ctx.strokeStyle = hsl((i / total) * 360);
+      } else {
+        ctx.strokeStyle = p.color;
+      }
+      ctx.beginPath();
+      ctx.moveTo(cx + animPts[i - 1].x, cy + animPts[i - 1].y);
+      ctx.lineTo(cx + animPts[i].x,     cy + animPts[i].y);
+      ctx.stroke();
+    }
+
+    animIdx = end;
+    if (animIdx < total) {
+      animId = requestAnimationFrame(frame);
+    } else {
+      stopAnimation();
+    }
+  }
+
+  document.getElementById('btn-stop').style.display    = '';
+  document.getElementById('btn-animate').style.display = 'none';
+  document.getElementById('btn-draw').style.display    = 'none';
+  animId = requestAnimationFrame(frame);
+}
+
+/* â”€â”€ Save PNG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function savePNG() {
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = 'spirograph.png';
+    a.click();
+    // Revoke after a short delay to ensure the browser has started the download
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+}
+
+/* â”€â”€ Wire sliders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function wireSlider(id, displayId, redraw) {
+  const sl   = document.getElementById(id);
+  const disp = document.getElementById(displayId);
+  sl.addEventListener('input', () => {
+    disp.textContent = sl.value;
+    if (redraw) drawNow();
+  });
+}
+
+wireSlider('sl-R',     'val-R',     true);
+wireSlider('sl-r',     'val-r',     true);
+wireSlider('sl-d',     'val-d',     true);
+wireSlider('sl-w',     'val-w',     true);
+wireSlider('sl-speed', 'val-speed', false); // speed doesn't need redraw
+
+// Keep r slider max in sync with R so r < R is always satisfied at the UI level.
+// This prevents the silent clamping inside generatePoints from ever being needed.
+function syncRSliderMax() {
+  const R   = +document.getElementById('sl-R').value;
+  const slR = document.getElementById('sl-r');
+  slR.max = R - 1;
+  if (+slR.value >= R) {
+    slR.value = R - 1;
+    document.getElementById('val-r').textContent = slR.value;
+  }
+}
+document.getElementById('sl-R').addEventListener('input', syncRSliderMax);
+syncRSliderMax(); // apply on load
+
+/* â”€â”€ Wire color â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+document.getElementById('color-pick').addEventListener('input', () => {
+  // deactivate all presets
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  drawNow();
+});
+
+/* â”€â”€ Preset colors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('color-pick').value = btn.dataset.color;
+    drawNow();
+  });
+});
+
+/* â”€â”€ Checkboxes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+document.getElementById('chk-gradient').addEventListener('change', drawNow);
+document.getElementById('chk-epi').addEventListener('change', drawNow);
+// layer mode doesn't redraw by itself
+
+/* â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+document.getElementById('btn-draw').addEventListener('click', drawNow);
+document.getElementById('btn-animate').addEventListener('click', startAnimation);
+document.getElementById('btn-stop').addEventListener('click', stopAnimation);
+document.getElementById('btn-clear').addEventListener('click', () => { stopAnimation(); clearCanvas(); });
+document.getElementById('btn-save').addEventListener('click', savePNG);
+
+/* â”€â”€ Responsive resize â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+let resizeTimer = null;
+const ro = new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { resizeCanvas(); drawNow(); }, 100);
+});
+ro.observe(document.getElementById('canvas-wrap'));
+
+/* â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+resizeCanvas();
+drawNow();
+</script>
+</body>
+</htmlz>
