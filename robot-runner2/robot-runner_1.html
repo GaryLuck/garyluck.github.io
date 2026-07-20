@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Robot Runner</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    overflow: hidden;
+    background: #7ee8e0;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: -apple-system, "Segoe UI", "Arial Rounded MT Bold", Arial, sans-serif;
+  }
+  canvas { display: block; position: fixed; inset: 0; }
+
+  /* ---------- full-screen overlays: login / ready / admin ---------- */
+  .ov {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(#7ee8e0 0%, #cfeef2 55%, #fbd3ec 100%);
+    text-align: center;
+    gap: 14px; padding: 16px; box-sizing: border-box;
+  }
+  #ttl { line-height: 0.95; margin-bottom: 18px; }
+  #ttl span {
+    display: inline-block;
+    font-weight: 900;
+    font-size: clamp(44px, 11vmin, 96px);
+    letter-spacing: 0.02em;
+    text-shadow: 0 4px 0 rgba(0,0,0,0.12);
+    animation: hop 1.5s ease-in-out infinite;
+  }
+  @keyframes hop {
+    0%, 55%, 100% { transform: translateY(0) rotate(0deg); }
+    22% { transform: translateY(-16px) rotate(-4deg); }
+    38% { transform: translateY(0) rotate(2deg); }
+  }
+  .sub {
+    font-size: clamp(16px, 2.6vmin, 22px);
+    font-weight: 700; color: #3c4a7a;
+    margin: 0 24px 4px;
+    line-height: 1.5;
+  }
+  #play {
+    font-size: clamp(22px, 3.6vmin, 32px);
+    font-weight: 900; color: #fff;
+    background: linear-gradient(#ff9b54, #ff7043);
+    border-radius: 999px;
+    padding: 18px 42px;
+    box-shadow: 0 6px 0 #d1552f, 0 10px 22px rgba(0,0,0,0.18);
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { transform: scale(1.07); } }
+
+  /* ---------- pause button + menu ---------- */
+  #pauseBtn {
+    position: fixed; z-index: 9;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    right: calc(env(safe-area-inset-right, 0px) + 10px);
+    width: 58px; height: 58px;
+    border: none; border-radius: 18px;
+    background: rgba(255,255,255,0.85);
+    color: #3c4a7a; font-size: 22px; font-weight: 900;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+  }
+  #menu {
+    position: fixed; inset: 0; z-index: 11;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(30, 40, 80, 0.45);
+    backdrop-filter: blur(3px);
+  }
+  #menu .card {
+    background: #fff; border-radius: 28px;
+    padding: 28px 30px; min-width: 260px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+    text-align: center;
+  }
+  #menu h2 { margin: 0 0 18px; color: #3c4a7a; font-size: 30px; font-weight: 900; }
+  #menu button {
+    display: block; width: 100%;
+    margin: 10px 0; padding: 16px;
+    font-size: 20px; font-weight: 800;
+    border: none; border-radius: 16px;
+    color: #fff; background: #58a6ff;
+    box-shadow: 0 4px 0 #3b7fd4;
+  }
+  #menu button:active { transform: translateY(2px); box-shadow: 0 2px 0 #3b7fd4; }
+  #menu #restartB { background: #ff9b54; box-shadow: 0 4px 0 #d1552f; }
+  #menu #soundB  { background: #62ce7a; box-shadow: 0 4px 0 #3f9e58; }
+  /* ---------- login: leaderboard, player chips, password ---------- */
+  #login { justify-content: flex-start; overflow-y: auto; padding-top: max(22px, env(safe-area-inset-top)); }
+  #login #ttl span { font-size: clamp(30px, 7.5vmin, 60px); }
+  .panel {
+    background: rgba(255,255,255,0.88); border-radius: 22px;
+    padding: 14px 18px; box-shadow: 0 8px 22px rgba(0,0,0,0.12);
+    width: min(440px, 94vw); box-sizing: border-box;
+  }
+  .panel h3 { margin: 2px 0 10px; color: #3c4a7a; font-size: 19px; font-weight: 900; }
+  #board { max-height: 24vh; overflow-y: auto; }
+  #board .row { display: flex; justify-content: space-between; font-weight: 800; color: #3c4a7a; font-size: 17px; padding: 5px 8px; }
+  #board .row:nth-child(odd) { background: rgba(88,166,255,0.10); border-radius: 10px; }
+  #chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .chip {
+    border: none; border-radius: 999px; padding: 12px 20px;
+    font-size: 18px; font-weight: 900; color: #fff;
+    background: #58a6ff; box-shadow: 0 4px 0 #3b7fd4;
+  }
+  .chip.sel { background: #ff9b54; box-shadow: 0 4px 0 #d1552f; }
+  .pwrow { display: flex; gap: 8px; margin-top: 12px; }
+  .pwrow input {
+    flex: 1; min-width: 0; font-size: 18px; font-weight: 700;
+    border: 3px solid #58a6ff; border-radius: 14px; padding: 10px 12px;
+    color: #3c4a7a; background: #fff; outline: none;
+  }
+  .pwrow button { border: none; border-radius: 14px; font-size: 18px; font-weight: 900; color: #fff; padding: 0 16px; }
+  #eyeB { background: #a98be0; box-shadow: 0 3px 0 #7a5cc0; }
+  #goB  { background: #62ce7a; box-shadow: 0 3px 0 #3f9e58; }
+  #msg  { min-height: 22px; font-weight: 800; color: #d1552f; font-size: 16px; }
+
+  /* ---------- ready + admin screens ---------- */
+  #ready h1 { color: #3c4a7a; font-size: clamp(30px, 7vmin, 52px); margin: 0 0 8px; font-weight: 900; }
+  .readyrow { display: flex; gap: 10px; margin-top: 14px; }
+  .mini {
+    border: none; border-radius: 12px; padding: 10px 14px;
+    font-size: 15px; font-weight: 800; color: #3c4a7a;
+    background: rgba(255,255,255,0.85); box-shadow: 0 3px 0 rgba(0,0,0,0.12);
+  }
+  #admin .panel { max-height: 84vh; overflow-y: auto; }
+  #ulist .u { border-top: 2px solid rgba(88,166,255,0.25); padding: 10px 0; text-align: left; }
+  #ulist .u .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 900; color: #3c4a7a; font-size: 17px; }
+  .abtn { border: none; border-radius: 10px; padding: 8px 10px; font-size: 14px; font-weight: 800; color: #fff; }
+  .abtn.pw { background: #58a6ff; }
+  .abtn.del { background: #e2574c; }
+  .abtn.ok { background: #62ce7a; }
+  .abtn.no { background: #9fb2bd; }
+  .frm { display: flex; gap: 6px; margin-top: 10px; }
+  .frm input { flex: 1; min-width: 0; font-size: 16px; font-weight: 700; border: 2px solid #58a6ff; border-radius: 10px; padding: 8px 10px; color: #3c4a7a; }
+  #amsg { min-height: 20px; color: #d1552f; font-weight: 800; font-size: 14px; margin-top: 6px; }
+  #adminClose { margin-top: 10px; }
+  #menu #manageB2 { background: #a98be0; box-shadow: 0 4px 0 #7a5cc0; }
+  #menu #switchB2 { background: #7a8fa6; box-shadow: 0 4px 0 #5c6d80; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<button id="pauseBtn" hidden>&#10074;&#10074;</button>
+
+<div id="login" class="ov scroll-ok">
+  <div id="ttl"></div>
+  <div class="sub">Gizmo the robot zooms on jet power!</div>
+  <div class="panel">
+    <h3>&#127942; Leader Board</h3>
+    <div id="board" class="scroll-ok"></div>
+  </div>
+  <div class="panel">
+    <h3>Who's playing?</h3>
+    <div id="chips"></div>
+    <div class="pwrow" id="pwrow" hidden>
+      <input id="pw" type="password" placeholder="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button id="eyeB" aria-label="show password">&#128065;</button>
+      <button id="goB">GO</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+</div>
+
+<div id="ready" class="ov" hidden>
+  <h1 id="hiName">Hi!</h1>
+  <div id="play">&#9654;&nbsp; TAP TO PLAY</div>
+  <div class="sub">Hold to fly up &bull; let go to drift down<br>Grab the gears, dodge the zappers!</div>
+  <div class="readyrow">
+    <button id="manageB1" class="mini" hidden>&#9881;&#65039; Manage players</button>
+    <button id="switchB1" class="mini">&#8617; Switch player</button>
+  </div>
+</div>
+
+<div id="admin" class="ov" hidden>
+  <div class="panel scroll-ok">
+    <h3>&#9881;&#65039; Manage players</h3>
+    <div id="ulist"></div>
+    <div class="frm">
+      <input id="addName" placeholder="new player name" autocapitalize="words" autocomplete="off">
+      <input id="addPw" placeholder="password" autocomplete="off" autocapitalize="off">
+      <button id="addB" class="abtn ok">Add</button>
+    </div>
+    <div id="amsg"></div>
+    <button id="adminClose" class="chip">Done</button>
+  </div>
+</div>
+
+<div id="menu" hidden>
+  <div class="card">
+    <h2>Paused</h2>
+    <button id="resumeB">&#9654; Keep playing</button>
+    <button id="restartB">&#8634; Start over</button>
+    <button id="soundB">&#128266; Sound is on</button>
+    <button id="manageB2" hidden>&#9881;&#65039; Manage players</button>
+    <button id="switchB2">&#8617; Switch player</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   ROBOT RUNNER — a hold-to-fly jetpack runner for small hands
+   ---------------------------------------------------------------------
+   Press and HOLD anywhere to fire Gizmo's jetpack; let go to drift
+   down. Collect gears, dodge zapper gates, drones and crate stacks.
+   Gear milestones upgrade the robot mid-run (antenna, boosters, gold
+   star, wing fins, rainbow flame). No fail state: bumps just spark,
+   reset the combo, and grant a moment of shielding.
+   Player accounts, passwords and best scores persist in localStorage —
+   see PLAYERS & SAVED SCORES below. Seed login: Ethan / "super-user".
+   ===================================================================== */
+
+/* ---------------- canvas ---------------- */
+const cv  = document.getElementById('game');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+
+/* ---------------- music constants ---------------- */
+const BPM        = 122;
+const STEP       = 60 / BPM / 4;      // one 16th note, in seconds
+const LOOP_STEPS = 128;               // 8 bars
+
+/* ---------------- flight physics ---------------- */
+const GR = 1500;                      // gravity, px/s^2 (screen-down positive)
+const TH = 3050;                      // jetpack thrust while held, px/s^2
+const VY_MIN = -560, VY_MAX = 640;    // vertical speed clamps
+const RR = 26;                        // robot collision radius
+const TOPPAD = 64;                    // soft ceiling
+
+/* ---------------- layout (recomputed on resize) ---------------- */
+let SPEEDBASE = 340, PX = 200, groundY = 0;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width  = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  cv.style.width  = W + 'px';
+  cv.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  SPEEDBASE = Math.max(280, Math.min(W * 0.28, 430));
+  PX        = Math.max(120, Math.min(W * 0.24, 300));
+  groundY   = H - Math.max(80, H * 0.14);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function () { setTimeout(resize, 120); });
+resize();
+
+/* =====================================================================
+   AUDIO ENGINE — created lazily inside the first user gesture (iOS rule)
+   ===================================================================== */
+let actx = null, master, musicG, sfxG, melBus, noiseBuf, thrustG;
+
+function initAudio() {
+  if (actx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  actx = new AC();
+
+  const comp = actx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 6;
+  comp.connect(actx.destination);
+
+  master = actx.createGain(); master.gain.value = 0.9; master.connect(comp);
+  musicG = actx.createGain(); musicG.gain.value = 0.9; musicG.connect(master);
+  sfxG   = actx.createGain(); sfxG.gain.value   = 1.0; sfxG.connect(master);
+
+  // lead/stab bus: gentle lowpass + beat-synced echo sparkle
+  melBus = actx.createGain(); melBus.gain.value = 1;
+  const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+  melBus.connect(lp); lp.connect(musicG);
+  const send = actx.createGain(); send.gain.value = 0.45;
+  const dly  = actx.createDelay(1); dly.delayTime.value = STEP * 3;
+  const fb   = actx.createGain(); fb.gain.value = 0.33;
+  const wet  = actx.createGain(); wet.gain.value = 0.35;
+  melBus.connect(send); send.connect(dly);
+  dly.connect(fb); fb.connect(dly);
+  dly.connect(wet); wet.connect(musicG);
+
+  // one second of white noise, reused for drums + the jetpack
+  noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+
+  // looping jetpack whoosh; its gain opens while the thumb is down
+  const tsrc = actx.createBufferSource();
+  tsrc.buffer = noiseBuf; tsrc.loop = true;
+  const tflt = actx.createBiquadFilter();
+  tflt.type = 'bandpass'; tflt.frequency.value = 620; tflt.Q.value = 0.7;
+  thrustG = actx.createGain(); thrustG.gain.value = 0;
+  tsrc.connect(tflt); tflt.connect(thrustG); thrustG.connect(sfxG);
+  tsrc.start();
+}
+function setThrustSound(on) {
+  if (!actx) return;
+  thrustG.gain.cancelScheduledValues(actx.currentTime);
+  thrustG.gain.setTargetAtTime(on ? 0.10 : 0, actx.currentTime, 0.05);
+}
+
+function mf(m) { return 440 * Math.pow(2, (m - 69) / 12); }   // midi -> Hz
+
+function tone(freq, t, dur, type, vol, dest) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(dest);
+  o.start(t); o.stop(t + dur + 0.08);
+}
+function bassTone(freq, t, dur, vol) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  const f = actx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 900;
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(f); f.connect(g); g.connect(musicG);
+  o.start(t); o.stop(t + dur + 0.08);
+}
+function noiseHit(t, dur, vol, filtType, filtFreq, dest) {
+  const s = actx.createBufferSource(); s.buffer = noiseBuf;
+  const f = actx.createBiquadFilter(); f.type = filtType; f.frequency.value = filtFreq;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(dest);
+  s.start(t); s.stop(t + dur + 0.05);
+}
+
+/* drums */
+function kick(t) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(150, t);
+  o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+  o.connect(g); g.connect(musicG);
+  o.start(t); o.stop(t + 0.2);
+}
+function clap(t) { noiseHit(t, 0.08, 0.28, 'bandpass', 1700, musicG); }
+function hat(t, v) { noiseHit(t, 0.035, v, 'highpass', 7000, musicG); }
+
+/* ---- song data (extract-tested): 8-bar synth-funk in A minor ---- */
+/* bass roots per bar, then a syncopated riff of [step, +semitones, len] */
+const BASSROOT = [45, 45, 45, 45, 41, 41, 43, 43];   // A2 x4, F2 x2, G2 x2
+const BASSPAT  = [[0,0,2],[3,0,1],[4,12,1],[6,7,1],[8,0,2],[11,12,1],[12,5,1],[14,7,1]];
+/* chord stabs: [bar, [midi notes]] on beat 1 */
+const STABS = [[0,[57,60,64]],[2,[57,60,64]],[4,[53,57,60]],[6,[55,59,62]]];
+/* sparse lead licks per bar: [step, midi, len] (empty bar = rest) */
+const LEAD = [
+  [],
+  [[8,69,2],[10,72,2],[12,76,4]],
+  [],
+  [[8,76,2],[10,74,2],[12,72,4]],
+  [],
+  [[8,72,2],[10,69,2],[12,67,4]],
+  [],
+  [[8,67,2],[10,69,2],[12,71,1],[13,72,3]]
+];
+const PENT = [69, 72, 74, 76, 79, 81, 84, 88];       // gear-collect ladder
+/* ---- end song data ---- */
+
+function musicStep(gs, t) {
+  const s = gs % LOOP_STEPS, bar = s >> 4, st = s & 15;
+  if (st === 0 || st === 4 || st === 8 || st === 12) kick(t);
+  if (st === 4 || st === 12) clap(t);
+  if ((st & 1) === 1) hat(t, 0.12);
+  if (bar === 7 && (st === 13 || st === 15)) hat(t, 0.15);
+  for (let i = 0; i < BASSPAT.length; i++)
+    if (BASSPAT[i][0] === st)
+      bassTone(mf(BASSROOT[bar] + BASSPAT[i][1]), t, STEP * BASSPAT[i][2] * 0.95, 0.24);
+  for (let i = 0; i < STABS.length; i++)
+    if (STABS[i][0] === bar && st === 0)
+      for (let n = 0; n < STABS[i][1].length; n++) {
+        tone(mf(STABS[i][1][n]), t, STEP * 2, 'sawtooth', 0.055, melBus);
+        tone(mf(STABS[i][1][n]) * 1.006, t, STEP * 2, 'sawtooth', 0.045, melBus);
+      }
+  const lick = LEAD[bar];
+  for (let i = 0; i < lick.length; i++)
+    if (lick[i][0] === st)
+      tone(mf(lick[i][1]), t, STEP * lick[i][2] * 0.92, 'square', 0.09, melBus);
+}
+
+/* sound effects */
+function sfxBlip(n) {
+  const t = actx.currentTime;
+  tone(mf(PENT[n % PENT.length]), t, 0.10, 'square', 0.16, sfxG);
+  tone(mf(PENT[n % PENT.length] + 12), t + 0.03, 0.07, 'square', 0.07, sfxG);
+}
+function sfxClank() {
+  const t = actx.currentTime;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'square';
+  o.frequency.setValueAtTime(220, t);
+  o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+  g.gain.setValueAtTime(0.26, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+  o.connect(g); g.connect(sfxG); o.start(t); o.stop(t + 0.2);
+  noiseHit(t, 0.09, 0.24, 'bandpass', 2600, sfxG);   // metallic ring
+  noiseHit(t, 0.12, 0.18, 'lowpass', 320, sfxG);     // thud
+}
+function sfxUpgrade() {
+  const t = actx.currentTime + 0.02;
+  const arp = [69, 72, 76, 81, 84];
+  for (let i = 0; i < arp.length; i++)
+    tone(mf(arp[i]), t + i * STEP * 0.5, 0.15, 'square', 0.14, melBus);
+  noiseHit(t, 0.5, 0.08, 'highpass', 3000, sfxG);
+}
+
+/* =====================================================================
+   MUSIC SCHEDULER — look-ahead notes on one interval
+   (spawning is distance-based in update(), not tied to the beat here)
+   ===================================================================== */
+let noteStep = 0, songStart = 0, schedTimer = null;
+
+function scheduler() {
+  if (!running || paused) return;
+  const t = actx.currentTime;
+  while (songStart + noteStep * STEP < t + 0.16) {
+    musicStep(noteStep, songStart + noteStep * STEP);
+    noteStep++;
+  }
+}
+
+/* =====================================================================
+   GAME STATE
+   ===================================================================== */
+/* robot: y is the screen-y of Gizmo's centre; vy positive = downward */
+const bot = { y: 0, vy: 0, tilt: 0 };
+let running = false, paused = false;
+let score = 0, combo = 0, inv = 0, shake = 0;
+let stage = 0, runT = 0, uiClock = 0, muted = false;
+let nextSpawn = 0, lastWasObstacle = false;
+const UPGRADES = [15, 40, 75, 120, 175];             // gears -> stage 1..5
+const WORDS = ['UPGRADE!', 'SUPER JETS!', 'GOLD STAR!', 'WING POWER!', 'RAINBOW MODE!'];
+
+function curSpeed() { return SPEEDBASE * (1 + Math.min(0.25, runT * 0.012)); }
+
+function resetGame() {
+  ents = []; parts = []; texts = [];
+  score = 0; combo = 0; inv = 0; shake = 0; stage = 0;
+  runT = 0; nextSpawn = 1.2; lastWasObstacle = false;
+  bot.y = (TOPPAD + groundY) / 2; bot.vy = 0; bot.tilt = 0;
+  noteStep = 0;
+  songStart = actx.currentTime + 0.35;
+  bigText('BLAST OFF!');
+}
+
+function startGame() {
+  if (!currentUser) return;
+  initAudio();
+  if (actx.state !== 'running') actx.resume();
+  running = true; paused = false;
+  resetGame();
+  ready.hidden = true;
+  pauseBtn.hidden = false;
+  if (!schedTimer) schedTimer = setInterval(scheduler, 30);
+}
+
+function doPause() {
+  if (!running || paused) return;
+  paused = true;
+  releaseAll();
+  saveData();
+  actx.suspend();
+  menu.hidden = false;
+  pauseBtn.hidden = true;
+}
+function doResume() {
+  paused = false;
+  actx.resume();
+  menu.hidden = true;
+  pauseBtn.hidden = false;
+}
+
+/* ---------------- input: hold to fly ---------------- */
+const pointersDown = {};
+let pointerCount = 0, kbHold = false, holding = false;
+
+function refreshHold() {
+  const h = (pointerCount > 0) || kbHold;
+  if (h !== holding) {
+    holding = h;
+    if (running && !paused) setThrustSound(holding);
+  }
+}
+function releaseAll() {
+  for (const k in pointersDown) delete pointersDown[k];
+  pointerCount = 0; kbHold = false; holding = false;
+  setThrustSound(false);
+}
+
+window.addEventListener('pointerdown', function (e) {
+  if (!running || paused) return;               // overlays handle their own taps
+  if (!menu.hidden || !adminOv.hidden) return;
+  if (actx && actx.state !== 'running') actx.resume();
+  if (!pointersDown[e.pointerId]) { pointersDown[e.pointerId] = true; pointerCount++; }
+  refreshHold();
+});
+window.addEventListener('pointerup', function (e) {
+  if (pointersDown[e.pointerId]) { delete pointersDown[e.pointerId]; pointerCount--; }
+  refreshHold();
+});
+window.addEventListener('pointercancel', function (e) {
+  if (pointersDown[e.pointerId]) { delete pointersDown[e.pointerId]; pointerCount--; }
+  refreshHold();
+});
+window.addEventListener('keydown', function (e) {
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') {
+    if (e.key === 'Enter' && e.target === pw) { e.preventDefault(); tryLogin(); }
+    return;                                     // let people type spaces in names
+  }
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    if (running && !paused && menu.hidden && adminOv.hidden) { kbHold = true; refreshHold(); }
+    else if (!ready.hidden) startGame();
+  }
+});
+window.addEventListener('keyup', function (e) {
+  if (e.code === 'Space' || e.code === 'ArrowUp') { kbHold = false; refreshHold(); }
+});
+document.addEventListener('touchmove', function (e) {
+  if (e.target && e.target.closest && e.target.closest('.scroll-ok')) return;
+  e.preventDefault();
+}, { passive: false });
+document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) { saveData(); doPause(); }
+});
+window.addEventListener('pagehide', function () { saveData(); });
+
+/* ---------------- overlay elements ---------------- */
+const menu     = document.getElementById('menu');
+const pauseBtn = document.getElementById('pauseBtn');
+const soundB   = document.getElementById('soundB');
+const login    = document.getElementById('login');
+const ttlEl    = document.getElementById('ttl');
+const board    = document.getElementById('board');
+const chips    = document.getElementById('chips');
+const pwrow    = document.getElementById('pwrow');
+const pw       = document.getElementById('pw');
+const eyeB     = document.getElementById('eyeB');
+const goB      = document.getElementById('goB');
+const msg      = document.getElementById('msg');
+const ready    = document.getElementById('ready');
+const hiName   = document.getElementById('hiName');
+const manageB1 = document.getElementById('manageB1');
+const switchB1 = document.getElementById('switchB1');
+const manageB2 = document.getElementById('manageB2');
+const switchB2 = document.getElementById('switchB2');
+const adminOv  = document.getElementById('admin');
+const ulist    = document.getElementById('ulist');
+const addName  = document.getElementById('addName');
+const addPw    = document.getElementById('addPw');
+const addB     = document.getElementById('addB');
+const amsg     = document.getElementById('amsg');
+const adminClose = document.getElementById('adminClose');
+
+/* =====================================================================
+   PLAYERS & SAVED SCORES (localStorage)
+   ---------------------------------------------------------------------
+   One JSON blob under LS_KEY. Passwords are stored as djb2(salt+pass) —
+   just enough obscuring for family fun, NOT real security. First run
+   seeds one admin player: Ethan / "super-user". High score = best
+   single run; it updates (and saves) live whenever a run beats it.
+   Robot Runner keeps its own player list, separate from Rhythm Runner.
+   ===================================================================== */
+const LS_KEY = 'robot-runner-v1';
+let data = null, currentUser = null, pickedUser = null, adminFrom = 'ready';
+
+function hash(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+function makeSalt() { return Math.random().toString(36).slice(2, 10); }
+function setPass(u, pass) { u.salt = makeSalt(); u.hash = hash(u.salt + pass); }
+function checkPass(u, pass) { return hash(u.salt + pass) === u.hash; }
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.users) && d.users.length) { data = d; return; }
+    }
+  } catch (err) { /* corrupted or unavailable — start fresh below */ }
+  data = { users: [] };
+  const ethan = { name: 'Ethan', admin: true, best: 0, salt: '', hash: '' };
+  setPass(ethan, 'super-user');
+  data.users.push(ethan);
+  saveData();
+}
+function saveData() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+  catch (err) { /* storage unavailable (e.g. private mode) — play on unsaved */ }
+}
+function findUser(name) {
+  const n = name.trim().toLowerCase();
+  for (let i = 0; i < data.users.length; i++)
+    if (data.users[i].name.toLowerCase() === n) return data.users[i];
+  return null;
+}
+
+/* ---------------- login screen ---------------- */
+function renderBoard() {
+  const rows = data.users.slice().sort(function (a, b) {
+    return b.best - a.best || a.name.localeCompare(b.name);
+  });
+  const medals = ['\u{1F947} ', '\u{1F948} ', '\u{1F949} '];
+  board.innerHTML = '';
+  for (let i = 0; i < rows.length; i++) {
+    const div = document.createElement('div');
+    div.className = 'row';
+    const left = document.createElement('span');
+    const right = document.createElement('span');
+    left.textContent = (i < 3 && rows[i].best > 0 ? medals[i] : '') + rows[i].name;
+    right.textContent = '\u2699\uFE0F ' + rows[i].best;
+    div.appendChild(left); div.appendChild(right);
+    board.appendChild(div);
+  }
+}
+function renderChips() {
+  chips.innerHTML = '';
+  pwrow.hidden = true; pickedUser = null; msg.textContent = '';
+  const us = data.users.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+  for (let i = 0; i < us.length; i++) {
+    (function (u) {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.textContent = u.name;
+      b.addEventListener('pointerdown', function (e) {
+        e.stopPropagation();
+        pickedUser = u;
+        const all = chips.querySelectorAll('.chip');
+        for (let j = 0; j < all.length; j++) all[j].classList.remove('sel');
+        b.classList.add('sel');
+        pwrow.hidden = false; msg.textContent = '';
+        pw.value = ''; pw.focus();
+      });
+      chips.appendChild(b);
+    })(us[i]);
+  }
+}
+function tryLogin() {
+  if (!pickedUser) { msg.textContent = 'Tap your name first!'; return; }
+  if (!checkPass(pickedUser, pw.value)) {
+    msg.textContent = 'Oops \u2014 wrong password. Try again!';
+    pw.value = ''; pw.focus();
+    return;
+  }
+  currentUser = pickedUser;
+  initAudio();                                  // inside a tap: unlocks iOS audio
+  pw.value = ''; pw.blur();
+  login.hidden = true;
+  hiName.textContent = 'Hi, ' + currentUser.name + '!';
+  manageB1.hidden = !currentUser.admin;
+  manageB2.hidden = !currentUser.admin;
+  ready.hidden = false;
+}
+function logout() {
+  saveData();
+  releaseAll();
+  currentUser = null;
+  running = false; paused = false;
+  if (actx) actx.suspend();
+  ents = []; parts = []; texts = [];
+  menu.hidden = true; ready.hidden = true; adminOv.hidden = true;
+  pauseBtn.hidden = true;
+  renderBoard(); renderChips();
+  login.hidden = false;
+}
+goB.addEventListener('pointerdown', function (e) { e.stopPropagation(); tryLogin(); });
+eyeB.addEventListener('pointerdown', function (e) {
+  e.preventDefault(); e.stopPropagation();
+  pw.type = (pw.type === 'password') ? 'text' : 'password';
+});
+
+/* grandpa rescue: press & hold the title 3 s to reset the admin password */
+let holdT = null;
+ttlEl.addEventListener('pointerdown', function () {
+  holdT = setTimeout(function () {
+    if (confirm('Grandpa reset \u2014 set the admin password back to "super-user"?')) {
+      for (let i = 0; i < data.users.length; i++)
+        if (data.users[i].admin) setPass(data.users[i], 'super-user');
+      saveData();
+      msg.textContent = 'Admin password reset \u2713';
+    }
+  }, 3000);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) {
+  ttlEl.addEventListener(ev, function () { clearTimeout(holdT); });
+});
+
+/* ---------------- ready screen ---------------- */
+ready.addEventListener('pointerdown', function () { startGame(); });
+manageB1.addEventListener('pointerdown', function (e) { e.stopPropagation(); openAdmin('ready'); });
+switchB1.addEventListener('pointerdown', function (e) { e.stopPropagation(); logout(); });
+
+/* ---------------- admin panel (Ethan only) ---------------- */
+function openAdmin(from) {
+  adminFrom = from;
+  amsg.textContent = '';
+  renderAdmin();
+  if (from === 'ready') ready.hidden = true; else menu.hidden = true;
+  adminOv.hidden = false;
+}
+function closeAdmin() {
+  adminOv.hidden = true;
+  if (adminFrom === 'ready') ready.hidden = false; else menu.hidden = false;
+}
+function renderAdmin() {
+  ulist.innerHTML = '';
+  for (let i = 0; i < data.users.length; i++) {
+    (function (u) {
+      const row = document.createElement('div'); row.className = 'u';
+      const top = document.createElement('div'); top.className = 'top';
+      const nm  = document.createElement('span');
+      nm.textContent = u.name + (u.admin ? ' \u2605' : '') + ' \u2014 \u2699\uFE0F ' + u.best;
+      const btns = document.createElement('span');
+      const pwB = document.createElement('button');
+      pwB.className = 'abtn pw'; pwB.textContent = 'Password';
+      btns.appendChild(pwB);
+      if (!u.admin) {                            // the admin cannot be deleted
+        const delB = document.createElement('button');
+        delB.className = 'abtn del'; delB.textContent = 'Delete';
+        delB.style.marginLeft = '6px';
+        delB.addEventListener('pointerdown', function (e) {
+          e.stopPropagation();
+          if (confirm('Delete ' + u.name + ' and their scores?')) {
+            data.users = data.users.filter(function (x) { return x !== u; });
+            saveData(); renderAdmin();
+          }
+        });
+        btns.appendChild(delB);
+      }
+      top.appendChild(nm); top.appendChild(btns); row.appendChild(top);
+
+      const frm = document.createElement('div'); frm.className = 'frm'; frm.hidden = true;
+      const inp = document.createElement('input');
+      inp.placeholder = 'new password';
+      inp.autocomplete = 'off'; inp.autocapitalize = 'off';
+      const ok = document.createElement('button'); ok.className = 'abtn ok'; ok.textContent = 'Save';
+      const no = document.createElement('button'); no.className = 'abtn no'; no.textContent = 'Cancel';
+      frm.appendChild(inp); frm.appendChild(ok); frm.appendChild(no);
+      row.appendChild(frm);
+
+      pwB.addEventListener('pointerdown', function (e) { e.stopPropagation(); frm.hidden = false; inp.focus(); });
+      no.addEventListener('pointerdown', function (e) { e.stopPropagation(); frm.hidden = true; inp.value = ''; });
+      ok.addEventListener('pointerdown', function (e) {
+        e.stopPropagation();
+        if (!inp.value) { amsg.textContent = 'Password cannot be empty.'; return; }
+        setPass(u, inp.value); saveData();
+        amsg.textContent = u.name + '\u2019s password updated \u2713';
+        frm.hidden = true; inp.value = '';
+      });
+      ulist.appendChild(row);
+    })(data.users[i]);
+  }
+}
+addB.addEventListener('pointerdown', function (e) {
+  e.stopPropagation();
+  const name = addName.value.trim();
+  if (!name) { amsg.textContent = 'Type a name first.'; return; }
+  if (name.length > 14) { amsg.textContent = 'Names can be 14 letters at most.'; return; }
+  if (findUser(name)) { amsg.textContent = name + ' is already a player.'; return; }
+  if (!addPw.value) { amsg.textContent = 'Give ' + name + ' a password.'; return; }
+  const u = { name: name, admin: false, best: 0, salt: '', hash: '' };
+  setPass(u, addPw.value);
+  data.users.push(u);
+  saveData();
+  addName.value = ''; addPw.value = '';
+  amsg.textContent = name + ' can play now \u2713';
+  renderAdmin();
+});
+adminClose.addEventListener('pointerdown', function (e) { e.stopPropagation(); closeAdmin(); });
+
+/* ---------------- pause menu buttons ---------------- */
+pauseBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); doPause(); });
+document.getElementById('resumeB').addEventListener('pointerdown', function (e) { e.stopPropagation(); doResume(); });
+document.getElementById('restartB').addEventListener('pointerdown', function (e) {
+  e.stopPropagation();
+  doResume(); resetGame();
+});
+soundB.addEventListener('pointerdown', function (e) {
+  e.stopPropagation();
+  muted = !muted;
+  master.gain.value = muted ? 0 : 0.9;
+  soundB.innerHTML = muted ? '&#128263; Sound is off' : '&#128266; Sound is on';
+});
+manageB2.addEventListener('pointerdown', function (e) { e.stopPropagation(); openAdmin('pause'); });
+switchB2.addEventListener('pointerdown', function (e) { e.stopPropagation(); logout(); });
+
+/* boot the accounts */
+loadData();
+renderBoard();
+renderChips();
+
+/* =====================================================================
+   PARTICLES & FLOATY TEXT
+   ===================================================================== */
+let ents = [], parts = [], texts = [];
+
+function flame(x, y, rainbow) {
+  const col = rainbow
+    ? 'hsl(' + ((uiClock * 400) % 360 | 0) + ',95%,60%)'
+    : (Math.random() < 0.5 ? '#FFB347' : '#FF7043');
+  parts.push({ c: 0, x: x, y: y,
+               vx: -120 - Math.random() * 90, vy: 40 + Math.random() * 80,
+               r: 4 + Math.random() * 4, life: 0.3, max: 0.3, col: col });
+}
+function sparkle(x, y, col) {
+  for (let i = 0; i < 7; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 130;
+    parts.push({ c: 0, x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40,
+                 r: 2.5 + Math.random() * 3, life: 0.55, max: 0.55, col: col });
+  }
+}
+function confetti() {
+  for (let i = 0; i < 90; i++)
+    parts.push({ c: 1, x: Math.random() * W, y: -20 - Math.random() * 100,
+                 vx: (Math.random() - 0.5) * 120, vy: 90 + Math.random() * 170,
+                 w: 6 + Math.random() * 6, rot: Math.random() * 6.28,
+                 vr: (Math.random() - 0.5) * 10, life: 3.2, max: 3.2,
+                 col: 'hsl(' + ((Math.random() * 360) | 0) + ',90%,60%)' });
+}
+function bigText(str) { texts.push({ str: str, t0: uiClock }); }
+
+/* =====================================================================
+   PRE-RENDERED SPRITES (no per-frame shadowBlur — iPad friendly)
+   ===================================================================== */
+function makeSprite(size, fn) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size * 2;                 // 2x for crispness
+  const g = c.getContext('2d');
+  g.scale(2, 2); fn(g, size);
+  return c;
+}
+function rr(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+/* golden gear — the collectible */
+const gearSpr = makeSprite(44, function (g, s) {
+  const cx = s / 2, cy = s / 2;
+  const glow = g.createRadialGradient(cx, cy, 2, cx, cy, s / 2);
+  glow.addColorStop(0, 'rgba(255,235,140,0.9)');
+  glow.addColorStop(1, 'rgba(255,235,140,0)');
+  g.fillStyle = glow; g.fillRect(0, 0, s, s);
+  g.translate(cx, cy);
+  g.fillStyle = '#FFC93C';
+  for (let i = 0; i < 8; i++) {
+    g.save(); g.rotate(i * Math.PI / 4);
+    g.fillRect(-3.2, -s * 0.36, 6.4, s * 0.14);
+    g.restore();
+  }
+  g.beginPath(); g.arc(0, 0, s * 0.26, 0, 7); g.fill();
+  g.lineWidth = 2.5; g.strokeStyle = '#fff';
+  g.beginPath(); g.arc(0, 0, s * 0.26, 0, 7); g.stroke();
+  g.fillStyle = '#E09E12';
+  g.beginPath(); g.arc(0, 0, s * 0.10, 0, 7); g.fill();
+});
+/* sleepy purple drone body (propeller drawn live) */
+const droneSpr = makeSprite(52, function (g, s) {
+  g.translate(s / 2, s / 2 + 4);
+  g.fillStyle = '#7A5CC0';
+  g.fillRect(-2.5, -s * 0.42, 5, 8);            // mast
+  const grd = g.createLinearGradient(0, -18, 0, 16);
+  grd.addColorStop(0, '#A98BE0'); grd.addColorStop(1, '#8A67CE');
+  g.fillStyle = grd;
+  g.beginPath(); g.arc(0, 0, s * 0.34, 0, 7); g.fill();
+  g.strokeStyle = '#3E2E66'; g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath(); g.arc(-7, -2, 4, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+  g.beginPath(); g.arc(7, -2, 4, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+  g.beginPath(); g.arc(0, 9, 5, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
+  g.fillStyle = 'rgba(255,120,150,0.4)';
+  g.beginPath(); g.arc(-11, 4, 3.5, 0, 7); g.fill();
+  g.beginPath(); g.arc(11, 4, 3.5, 0, 7); g.fill();
+  g.fillStyle = '#6E4FB5';
+  g.beginPath(); g.arc(-8, s * 0.30, 4, 0, 7); g.fill();
+  g.beginPath(); g.arc(8, s * 0.30, 4, 0, 7); g.fill();
+});
+/* grumpy crate */
+const crateSpr = makeSprite(48, function (g, s) {
+  const grd = g.createLinearGradient(0, 0, 0, s);
+  grd.addColorStop(0, '#A98BE0'); grd.addColorStop(1, '#8A67CE');
+  g.fillStyle = grd;
+  rr(g, 2, 2, s - 4, s - 4, 8); g.fill();
+  g.strokeStyle = '#6E4FB5'; g.lineWidth = 3;
+  rr(g, 2, 2, s - 4, s - 4, 8); g.stroke();
+  g.fillStyle = '#6E4FB5';
+  [[8, 8], [s - 8, 8], [8, s - 8], [s - 8, s - 8]].forEach(function (p) {
+    g.beginPath(); g.arc(p[0], p[1], 2.6, 0, 7); g.fill();
+  });
+  g.strokeStyle = '#3E2E66'; g.lineCap = 'round';
+  g.beginPath(); g.arc(s / 2 - 8, s / 2 - 4, 4, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+  g.beginPath(); g.arc(s / 2 + 8, s / 2 - 4, 4, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+  g.beginPath(); g.arc(s / 2, s / 2 + 12, 5, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
+});
+/* friendly blimp for the far sky */
+const blimpSpr = makeSprite(110, function (g, s) {
+  g.fillStyle = '#FF9BC0';
+  g.beginPath(); g.ellipse(s * 0.5, s * 0.4, s * 0.4, s * 0.17, 0, 0, 7); g.fill();
+  g.fillStyle = '#E86FA0';
+  g.beginPath(); g.moveTo(s * 0.12, s * 0.4);
+  g.lineTo(s * 0.02, s * 0.3); g.lineTo(s * 0.02, s * 0.5); g.closePath(); g.fill();
+  g.fillStyle = '#fff';
+  g.beginPath(); g.ellipse(s * 0.55, s * 0.4, s * 0.16, s * 0.09, 0, 0, 7); g.fill();
+  g.fillStyle = '#8FB7F2';
+  rr(g, s * 0.42, s * 0.56, s * 0.16, s * 0.10, 4); g.fill();
+});
+/* pastel skyline strips, tiled at two parallax depths */
+function makeSkyline(hMax, cols) {
+  const wTot = 1600;
+  const c = document.createElement('canvas');
+  c.width = wTot; c.height = hMax;
+  const g = c.getContext('2d');
+  let x = 0, k = 0;
+  while (x < wTot) {
+    const bw = 60 + ((k * 47) % 90);
+    const bh = hMax * (0.35 + ((k * 31) % 60) / 100);
+    const col = cols[k % cols.length];
+    g.fillStyle = col;
+    g.beginPath();
+    g.moveTo(x, hMax); g.lineTo(x, hMax - bh + 14);
+    g.arcTo(x, hMax - bh, x + 14, hMax - bh, 14);
+    g.lineTo(x + bw - 14, hMax - bh);
+    g.arcTo(x + bw, hMax - bh, x + bw, hMax - bh + 14, 14);
+    g.lineTo(x + bw, hMax); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.45)';
+    for (let wy = hMax - bh + 12; wy < hMax - 14; wy += 18)
+      for (let wx = x + 8; wx < x + bw - 12; wx += 16)
+        g.fillRect(wx, wy, 7, 9);
+    x += bw + 12 + ((k * 13) % 20);
+    k++;
+  }
+  return c;
+}
+const skyFar  = makeSkyline(200, ['#C4B5F0', '#B7A6EC', '#CDBFF4']);
+const skyNear = makeSkyline(250, ['#8FB7F2', '#7FA9EC', '#9CC1F6']);
+
+/* =====================================================================
+   SPAWNER — distance/time based obstacle & gear patterns
+   entity kinds: 'gear' {x,y}  'zap' {x,y0,y1}  'drone' {x,y0,ph}
+                 'crate' {x,n}  (n = stack height)
+   ===================================================================== */
+function rand(a, b) { return a + Math.random() * (b - a); }
+
+function gearTrail(x0, y0) {
+  const yc = Math.max(TOPPAD + 90, Math.min(groundY - 110, y0));
+  for (let i = 0; i < 8; i++)
+    ents.push({ k: 'gear', x: x0 + i * 62,
+                y: yc + Math.sin(i * 0.85) * 62, got: false });
+}
+function spawnChunk() {
+  const x0 = W + 80;
+  const hard = runT > 22;                        // window gates arrive later
+  const roll = Math.random();
+  if (!lastWasObstacle || roll < 0.30) {         // breather: gears only
+    gearTrail(x0, rand(TOPPAD + 100, groundY - 130));
+    lastWasObstacle = false;
+    return;
+  }
+  lastWasObstacle = true;
+  const pick = Math.random();
+  if (hard && pick < 0.25) {                     // zapper window + gears inside
+    const gapC = rand(TOPPAD + 150, groundY - 150);
+    ents.push({ k: 'zap', x: x0, y0: 46, y1: gapC - 105, hit: false });
+    ents.push({ k: 'zap', x: x0, y0: gapC + 105, y1: groundY - 4, hit: false });
+    for (let i = -1; i <= 1; i++)
+      ents.push({ k: 'gear', x: x0 + i * 56, y: gapC, got: false });
+  } else if (pick < 0.45) {                      // zapper hanging from the sky
+    ents.push({ k: 'zap', x: x0, y0: 46, y1: rand(groundY - 300, groundY - 210), hit: false });
+    for (let i = 0; i < 4; i++)
+      ents.push({ k: 'gear', x: x0 - 40 + i * 58, y: groundY - 90, got: false });
+  } else if (pick < 0.65) {                      // zapper rising from the belt
+    ents.push({ k: 'zap', x: x0, y0: rand(TOPPAD + 190, TOPPAD + 280), y1: groundY - 4, hit: false });
+    for (let i = 0; i < 4; i++)
+      ents.push({ k: 'gear', x: x0 - 40 + i * 58, y: TOPPAD + 110, got: false });
+  } else if (pick < 0.85) {                      // bobbing drone
+    ents.push({ k: 'drone', x: x0, y0: rand(TOPPAD + 130, groundY - 170),
+                ph: Math.random() * 6.28, hit: false });
+    gearTrail(x0 + 170, rand(TOPPAD + 110, groundY - 130));
+  } else {                                       // crate stack on the belt
+    const n = 1 + (Math.random() * 3 | 0);
+    ents.push({ k: 'crate', x: x0, n: n, hit: false });
+    for (let i = 0; i < 5; i++)                  // arc of gears over the stack
+      ents.push({ k: 'gear', x: x0 - 120 + i * 60,
+                  y: groundY - n * 46 - 100 - Math.sin(i / 4 * Math.PI) * 46, got: false });
+  }
+}
+
+/* =====================================================================
+   UPDATE
+   ===================================================================== */
+let prevMs = performance.now();
+
+function circleRect(cx, cy, r, rx0, ry0, rx1, ry1) {
+  const dx = Math.max(rx0 - cx, 0, cx - rx1);
+  const dy = Math.max(ry0 - cy, 0, cy - ry1);
+  return dx * dx + dy * dy < r * r;
+}
+function bonk(x, y) {
+  inv = 1.3; shake = 1; combo = 0;
+  sfxClank();
+  sparkle(x, y, '#c9d6e2');
+  sparkle(x, y, '#FFD84D');
+}
+
+function update(dt) {
+  uiClock += dt; runT += dt;
+  const SPEED = curSpeed();
+
+  /* flight */
+  bot.vy += (holding ? -TH : GR) * dt;
+  bot.vy = Math.max(VY_MIN, Math.min(VY_MAX, bot.vy));
+  bot.y += bot.vy * dt;
+  if (bot.y < TOPPAD + RR) { bot.y = TOPPAD + RR; bot.vy = Math.max(0, bot.vy); }
+  if (bot.y > groundY - RR) { bot.y = groundY - RR; bot.vy = Math.min(0, bot.vy); }
+  bot.tilt += ((bot.vy / 1400) - bot.tilt) * Math.min(1, dt * 10);
+  if (holding) { flame(PX - 26, bot.y + 14, stage >= 5); flame(PX - 26, bot.y + 14, stage >= 5); }
+
+  if (inv > 0) inv -= dt;
+  if (shake > 0) shake = Math.max(0, shake - dt * 2.5);
+
+  /* spawning */
+  nextSpawn -= dt;
+  if (nextSpawn <= 0) {
+    spawnChunk();
+    const base = Math.max(1.25, 1.9 - runT * 0.014);
+    nextSpawn = rand(base * 0.85, base * 1.15);
+  }
+
+  /* entities: move, collide, cull */
+  for (let i = ents.length - 1; i >= 0; i--) {
+    const e = ents[i];
+    e.x -= SPEED * dt;
+    if (e.x < -160) { ents.splice(i, 1); continue; }
+
+    if (e.k === 'gear') {
+      if (!e.got) {
+        const dx = e.x - PX, dy = e.y - bot.y;
+        if (dx * dx + dy * dy < 46 * 46) {
+          e.got = true; score++; combo++;
+          if (currentUser && score > currentUser.best) {
+            currentUser.best = score;            // best = best single run, saved live
+            saveData();
+          }
+          sfxBlip(combo - 1);
+          sparkle(e.x, e.y, '#FFC93C');
+          if (stage < UPGRADES.length && score >= UPGRADES[stage]) {
+            stage++;
+            confetti();
+            bigText(WORDS[stage - 1]);
+            sfxUpgrade();
+          }
+        }
+      }
+    } else if (inv <= 0 && !e.hit) {
+      if (e.k === 'zap') {
+        if (circleRect(PX, bot.y, RR * 0.85, e.x - 9, e.y0, e.x + 9, e.y1)) {
+          e.hit = true; bonk(PX + 10, bot.y);
+        }
+      } else if (e.k === 'drone') {
+        const dy2 = e.y0 + Math.sin(uiClock * 2.4 + e.ph) * 26;
+        const dx = e.x - PX, dy = dy2 - bot.y;
+        if (dx * dx + dy * dy < (RR * 0.85 + 18) * (RR * 0.85 + 18)) {
+          e.hit = true; bonk(e.x, dy2);
+        }
+      } else if (e.k === 'crate') {
+        const top = groundY - e.n * 46;
+        if (circleRect(PX, bot.y, RR * 0.85, e.x - 20, top + 4, e.x + 20, groundY)) {
+          e.hit = true; bonk(e.x, top);
+        }
+      }
+    }
+  }
+
+  /* particles */
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life -= dt;
+    if (p.life <= 0) { parts.splice(i, 1); continue; }
+    if (p.c === 1) {                                  // confetti
+      p.vy += 420 * dt;
+      p.x += p.vx * dt + Math.sin(p.life * 7) * 26 * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vr * dt;
+    } else {
+      p.vy += 300 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+    }
+  }
+
+  /* floaty text lifetime */
+  for (let i = texts.length - 1; i >= 0; i--)
+    if (uiClock - texts[i].t0 > 1.6) texts.splice(i, 1);
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function draw(sceneT) {
+  ctx.save();
+  if (shake > 0)
+    ctx.translate((Math.random() - 0.5) * 7 * shake, (Math.random() - 0.5) * 5 * shake);
+
+  /* sky */
+  const sky = ctx.createLinearGradient(0, 0, 0, groundY);
+  sky.addColorStop(0, '#7ee8e0');
+  sky.addColorStop(0.6, '#cfeef2');
+  sky.addColorStop(1, '#fbd3ec');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, groundY);
+
+  /* slowly turning gear-sun */
+  const sx = W * 0.8, sy = H * 0.17;
+  ctx.save();
+  ctx.translate(sx, sy); ctx.rotate(sceneT * 0.15);
+  ctx.fillStyle = 'rgba(255,214,107,0.85)';
+  for (let i = 0; i < 8; i++) {
+    ctx.save(); ctx.rotate(i * Math.PI / 4);
+    ctx.fillRect(-6, -52, 12, 20);
+    ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, 38, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fbd3ec';
+  ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.fill();
+  ctx.restore();
+
+  /* blimp drifting on its own slow clock */
+  const bspan = W + 340;
+  const bx = bspan - ((sceneT * 26) % bspan) - 170;
+  ctx.drawImage(blimpSpr, bx, H * 0.10, 110, 110 * 0.6);
+
+  /* skyline, two parallax depths */
+  const sc = sceneT * SPEEDBASE;
+  const f1 = (sc * 0.18) % 1600, f2 = (sc * 0.42) % 1600;
+  ctx.globalAlpha = 0.8;
+  ctx.drawImage(skyFar, -f1, groundY - 200);
+  ctx.drawImage(skyFar, 1600 - f1, groundY - 200);
+  ctx.globalAlpha = 1;
+  ctx.drawImage(skyNear, -f2, groundY - 250);
+  ctx.drawImage(skyNear, 1600 - f2, groundY - 250);
+
+  /* conveyor-belt ground */
+  ctx.fillStyle = '#1f7f7a';
+  ctx.fillRect(0, groundY, W, H - groundY);
+  ctx.fillStyle = '#2AA7A0';
+  ctx.fillRect(0, groundY, W, 26);
+  const chevW = 46;
+  const off = (sc * 1.0) % chevW;
+  ctx.strokeStyle = '#BFF3EF'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  for (let x = -off; x < W + chevW; x += chevW) {
+    ctx.beginPath();
+    ctx.moveTo(x, groundY + 6); ctx.lineTo(x + 12, groundY + 13); ctx.lineTo(x, groundY + 20);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(0, groundY + 26, W, 4);
+
+  /* entities */
+  for (let i = 0; i < ents.length; i++) {
+    const e = ents[i];
+    if (e.x > W + 160) continue;
+    if (e.k === 'gear') {
+      if (e.got) continue;
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      ctx.rotate(sceneT * 2 + e.x * 0.01);
+      ctx.drawImage(gearSpr, -22, -22, 44, 44);
+      ctx.restore();
+    } else if (e.k === 'zap') {
+      drawZapper(e, sceneT);
+    } else if (e.k === 'drone') {
+      const dy2 = e.y0 + Math.sin(uiClock * 2.4 + e.ph) * 26;
+      ctx.drawImage(droneSpr, e.x - 26, dy2 - 26, 52, 52);
+      ctx.save();                                // spinning propeller
+      ctx.translate(e.x, dy2 - 22);
+      ctx.scale(Math.sin(sceneT * 30 + e.ph), 1);
+      ctx.fillStyle = '#3E2E66';
+      ctx.fillRect(-16, -2.5, 32, 5);
+      ctx.restore();
+    } else if (e.k === 'crate') {
+      for (let n = 0; n < e.n; n++)
+        ctx.drawImage(crateSpr, e.x - 23, groundY - (n + 1) * 46, 46, 46);
+    }
+  }
+
+  drawRobot();
+
+  /* particles */
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    const a = Math.max(0, p.life / p.max);
+    if (p.c === 1) {
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.min(1, a * 2);
+      ctx.fillStyle = p.col;
+      ctx.fillRect(-p.w / 2, -p.w / 3, p.w, p.w * 0.66);
+      ctx.restore();
+    } else {
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.col;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * a + 1, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* floaty words */
+  for (let i = 0; i < texts.length; i++) {
+    const tx = texts[i];
+    const age = uiClock - tx.t0;
+    const s = age < 0.25 ? backOut(age / 0.25) : 1;
+    const a = age > 1.15 ? Math.max(0, 1 - (age - 1.15) / 0.45) : 1;
+    ctx.save();
+    ctx.translate(W / 2, H * 0.3);
+    ctx.scale(s, s);
+    ctx.globalAlpha = a;
+    ctx.font = '900 ' + Math.min(64, W * 0.09) + 'px -apple-system, "Segoe UI", Arial';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeText(tx.str, 0, 0);
+    ctx.fillStyle = '#FF7043';
+    ctx.fillText(tx.str, 0, 0);
+    ctx.restore();
+  }
+
+  /* HUD */
+  if (running) {
+    const hy = 16;
+    ctx.drawImage(gearSpr, 16, hy, 36, 36);
+    ctx.font = '900 30px -apple-system, "Segoe UI", Arial';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeText('' + score, 60, hy + 20);
+    ctx.fillStyle = '#3c4a7a';
+    ctx.fillText('' + score, 60, hy + 20);
+    if (currentUser) {
+      const sub = currentUser.name + ' \u2022 best ' + currentUser.best;
+      ctx.font = '800 14px -apple-system, "Segoe UI", Arial';
+      ctx.lineWidth = 4;
+      ctx.strokeText(sub, 18, hy + 46);
+      ctx.fillText(sub, 18, hy + 46);
+    }
+  }
+  ctx.restore();
+}
+
+function drawZapper(e, sceneT) {
+  const midX = e.x, h0 = e.y0, h1 = e.y1;
+  ctx.fillStyle = 'rgba(255,201,60,0.25)';
+  ctx.fillRect(midX - 13, h0, 26, h1 - h0);
+  ctx.fillStyle = '#FFC93C';
+  ctx.fillRect(midX - 7, h0, 14, h1 - h0);
+  ctx.strokeStyle = '#FFF3C4'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.beginPath();                               // wiggling electric core
+  for (let y = h0; y <= h1; y += 14)
+    ctx.lineTo(midX + Math.sin(y * 0.35 + sceneT * 22) * 4, y);
+  ctx.stroke();
+  ctx.fillStyle = '#7A5CC0';                     // emitter caps
+  rr(ctx, midX - 17, h0 - 12, 34, 16, 7); ctx.fill();
+  rr(ctx, midX - 17, h1 - 4, 34, 16, 7); ctx.fill();
+}
+
+function drawRobot() {
+  ctx.save();
+  ctx.translate(PX, bot.y);
+  ctx.rotate(bot.tilt);
+  if (inv > 0 && (Math.floor(uiClock * 14) & 1)) ctx.globalAlpha = 0.45;
+
+  /* jetpack */
+  ctx.fillStyle = '#8A9BB0';
+  rr(ctx, -34, -16, 14, 30, 6); ctx.fill();
+  ctx.fillStyle = '#5C6D80';
+  rr(ctx, -32, 12, 10, 7, 3); ctx.fill();
+
+  /* stage 2+: side boosters */
+  if (stage >= 2) {
+    ctx.fillStyle = '#5CC9C4';
+    rr(ctx, -12, 22, 11, 15, 5); ctx.fill();
+    rr(ctx, 4, 22, 11, 15, 5); ctx.fill();
+  }
+  /* stage 4+: wing fins */
+  if (stage >= 4) {
+    ctx.fillStyle = '#2AA7A0';
+    ctx.beginPath();
+    ctx.moveTo(-20, -6); ctx.lineTo(-44, 4); ctx.lineTo(-20, 10);
+    ctx.closePath(); ctx.fill();
+  }
+
+  /* body */
+  ctx.fillStyle = '#FF8A5C';
+  rr(ctx, -22, -26, 46, 50, 14); ctx.fill();
+  ctx.fillStyle = '#FFB68F';
+  rr(ctx, -22, -26, 46, 14, 14); ctx.fill();
+
+  /* face plate + eyes + smile */
+  ctx.fillStyle = '#FFF4E8';
+  rr(ctx, -14, -18, 32, 24, 9); ctx.fill();
+  ctx.fillStyle = '#2b3a5c';
+  ctx.beginPath(); ctx.arc(-3, -8, 4, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(11, -8, 4, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#2b3a5c'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(4, -2, 6, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+
+  /* little arm + feet */
+  ctx.fillStyle = '#E0673A';
+  ctx.beginPath(); ctx.arc(24, 8, 6, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-8, 28, 6, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(10, 28, 6, 0, 7); ctx.fill();
+
+  /* stage 3+: gold star badge */
+  if (stage >= 3) {
+    ctx.fillStyle = '#FFC93C';
+    ctx.save(); ctx.translate(1, 14);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r2 = (i % 2 === 0) ? 8 : 3.5;
+      const a2 = -Math.PI / 2 + i * Math.PI / 5;
+      ctx.lineTo(Math.cos(a2) * r2, Math.sin(a2) * r2);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  /* antenna; stage 1+ makes it glow */
+  ctx.strokeStyle = '#8A9BB0'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(1, -26); ctx.lineTo(1, -38); ctx.stroke();
+  ctx.fillStyle = stage >= 1 ? '#FFC93C' : '#8A9BB0';
+  ctx.beginPath(); ctx.arc(1, -41, stage >= 1 ? 6 : 4, 0, 7); ctx.fill();
+  if (stage >= 1) {
+    ctx.strokeStyle = 'rgba(255,201,60,' + (0.4 + 0.3 * Math.sin(uiClock * 6)) + ')';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(1, -41, 10, 0, 7); ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function backOut(x) { const c = 1.7; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); }
+
+/* =====================================================================
+   MAIN LOOP — idle scene behind the login, live game once started
+   ===================================================================== */
+function frame(ms) {
+  const dt = Math.min(0.033, (ms - prevMs) / 1000);
+  prevMs = ms;
+
+  if (running && !paused && actx) {
+    update(dt);
+    draw(actx.currentTime);
+  } else if (!running) {
+    bot.y = (TOPPAD + groundY) / 2 + Math.sin(ms / 900) * 16;
+    bot.vy = 0; bot.tilt = Math.sin(ms / 900 + 1) * 0.06;
+    draw(ms / 1000 * 0.35);          // slow scenic drift under the login
+  }
+  requestAnimationFrame(frame);
+}
+
+/* login title, candy-coloured bouncing letters */
+(function buildTitle() {
+  const ttl = document.getElementById('ttl');
+  const cols = ['#FF7043', '#FFB300', '#62CE7A', '#58A6FF', '#A98BE0', '#FF6FA5'];
+  const words = ['ROBOT', 'RUNNER'];
+  let k = 0;
+  for (let w = 0; w < words.length; w++) {
+    for (let i = 0; i < words[w].length; i++) {
+      const sp = document.createElement('span');
+      sp.textContent = words[w][i];
+      sp.style.color = cols[k % cols.length];
+      sp.style.animationDelay = (k * 0.07) + 's';
+      ttl.appendChild(sp);
+      k++;
+    }
+    if (w === 0) ttl.appendChild(document.createElement('br'));
+  }
+})();
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
