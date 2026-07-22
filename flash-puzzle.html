@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>15 Puzzle - Classic Sliding Tile Game</title>
+  <meta name="description" content="A modern, high-performance, single-file 15 Tile Sliding Puzzle game with multiple themes, dynamic image mode, keyboard & touch controls, Web Audio FX, and intelligent hint solver.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ==========================================================================
+       DESIGN SYSTEM & THEMES
+       ========================================================================== */
+    :root {
+      --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      /* Cyber Neon Theme (Default) */
+      --bg-gradient: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 60%, #020617 100%);
+      --panel-bg: rgba(30, 27, 75, 0.45);
+      --panel-border: rgba(139, 92, 246, 0.25);
+      --panel-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      
+      --board-bg: rgba(15, 23, 42, 0.75);
+      --board-border: rgba(139, 92, 246, 0.4);
+      --board-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 92, 246, 0.15);
+      
+      --tile-bg: linear-gradient(135deg, rgba(139, 92, 246, 0.85) 0%, rgba(99, 102, 241, 0.95) 100%);
+      --tile-border: rgba(255, 255, 255, 0.3);
+      --tile-shadow: 0 8px 20px rgba(99, 102, 241, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.4), inset 0 -3px 6px rgba(0, 0, 0, 0.4);
+      --tile-text: #ffffff;
+      --tile-text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      --tile-hover-glow: rgba(168, 85, 247, 0.6);
+
+      --accent-color: #a855f7;
+      --accent-hover: #c084fc;
+      --accent-text: #ffffff;
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      
+      --radius-board: 24px;
+      --radius-tile: 16px;
+      --radius-panel: 20px;
+    }
+
+    [data-theme="wood"] {
+      --bg-gradient: radial-gradient(circle at 50% 30%, #3e2723 0%, #1b0000 80%, #0d0000 100%);
+      --panel-bg: rgba(62, 39, 35, 0.6);
+      --panel-border: rgba(215, 163, 106, 0.3);
+      --panel-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+
+      --board-bg: #27160c;
+      --board-border: #8d5b40;
+      --board-shadow: inset 0 6px 16px rgba(0, 0, 0, 0.8), 0 10px 30px rgba(0,0,0,0.5);
+
+      --tile-bg: linear-gradient(145deg, #d7a36a 0%, #b07842 100%);
+      --tile-border: rgba(255, 235, 205, 0.4);
+      --tile-shadow: 0 6px 14px rgba(0, 0, 0, 0.5), inset 0 2px 3px rgba(255, 255, 255, 0.5), inset 0 -3px 4px rgba(0, 0, 0, 0.4);
+      --tile-text: #3e2723;
+      --tile-text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+      --tile-hover-glow: rgba(215, 163, 106, 0.6);
+
+      --accent-color: #d7a36a;
+      --accent-hover: #e5b882;
+      --accent-text: #27160c;
+
+      --text-main: #f5e6d3;
+      --text-muted: #bcaaa4;
+    }
+
+    [data-theme="sunset"] {
+      --bg-gradient: radial-gradient(circle at 50% 20%, #4c0519 0%, #1e1b4b 60%, #09090b 100%);
+      --panel-bg: rgba(76, 5, 25, 0.4);
+      --panel-border: rgba(244, 63, 94, 0.3);
+      --panel-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+
+      --board-bg: rgba(24, 24, 27, 0.85);
+      --board-border: rgba(244, 63, 94, 0.4);
+      --board-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.7);
+
+      --tile-bg: linear-gradient(135deg, #f43f5e 0%, #fb923c 100%);
+      --tile-border: rgba(255, 255, 255, 0.4);
+      --tile-shadow: 0 8px 20px rgba(244, 63, 94, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.5), inset 0 -3px 6px rgba(0, 0, 0, 0.3);
+      --tile-text: #ffffff;
+      --tile-text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      --tile-hover-glow: rgba(251, 146, 60, 0.6);
+
+      --accent-color: #fb923c;
+      --accent-hover: #fdba74;
+      --accent-text: #4c0519;
+
+      --text-main: #fff1f2;
+      --text-muted: #fda4af;
+    }
+
+    [data-theme="emerald"] {
+      --bg-gradient: radial-gradient(circle at 50% 20%, #064e3b 0%, #022c22 60%, #020617 100%);
+      --panel-bg: rgba(6, 78, 59, 0.4);
+      --panel-border: rgba(16, 185, 129, 0.3);
+      --panel-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+
+      --board-bg: rgba(2, 44, 34, 0.85);
+      --board-border: rgba(16, 185, 129, 0.4);
+      --board-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.7);
+
+      --tile-bg: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+      --tile-border: rgba(255, 255, 255, 0.35);
+      --tile-shadow: 0 8px 20px rgba(16, 185, 129, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.4), inset 0 -3px 6px rgba(0, 0, 0, 0.3);
+      --tile-text: #ffffff;
+      --tile-text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      --tile-hover-glow: rgba(56, 189, 248, 0.6);
+
+      --accent-color: #10b981;
+      --accent-hover: #34d399;
+      --accent-text: #022c22;
+
+      --text-main: #ecfdf5;
+      --text-muted: #6ee7b7;
+    }
+
+    /* ==========================================================================
+       BASE RESET & GLOBAL STYLES
+       ========================================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow-x: hidden;
+      transition: background 0.4s ease;
+    }
+
+    /* App Layout Container */
+    .app-container {
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      align-items: center;
+    }
+
+    /* Header */
+    header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .title-group h1 {
+      font-family: var(--font-heading);
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 30%, var(--accent-color) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .title-group p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .icon-btn {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .icon-btn:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-color);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), 0 0 12px var(--tile-hover-glow);
+    }
+
+    .icon-btn:active {
+      transform: translateY(0);
+    }
+
+    .icon-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    /* Stats Panel */
+    .stats-panel {
+      width: 100%;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-panel);
+      padding: 16px 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      backdrop-filter: blur(16px);
+      box-shadow: var(--panel-shadow);
+    }
+
+    .stat-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .stat-value {
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Game Board Wrapper & Canvas Grid */
+    .board-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-width: 440px;
+      background: var(--board-bg);
+      border: 2px solid var(--board-border);
+      border-radius: var(--radius-board);
+      padding: 14px;
+      box-shadow: var(--board-shadow);
+      backdrop-filter: blur(20px);
+      touch-action: none;
+    }
+
+    .board {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Tile Styling */
+    .tile {
+      position: absolute;
+      width: calc(25% - 9px);
+      height: calc(25% - 9px);
+      border-radius: var(--radius-tile);
+      background: var(--tile-bg);
+      border: 1px solid var(--tile-border);
+      box-shadow: var(--tile-shadow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-heading);
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--tile-text);
+      text-shadow: var(--tile-text-shadow);
+      cursor: pointer;
+      transition: transform 0.18s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+      will-change: transform;
+      background-size: 400% 400%;
+      overflow: hidden;
+    }
+
+    .tile:hover {
+      box-shadow: var(--tile-shadow), 0 0 15px var(--tile-hover-glow);
+    }
+
+    .tile.image-mode {
+      color: transparent;
+      text-shadow: none;
+    }
+
+    .tile.image-mode.show-numbers::after {
+      content: attr(data-number);
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #ffffff;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 2px 8px;
+      border-radius: 8px;
+      backdrop-filter: blur(4px);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+
+    .tile.hint-highlight {
+      animation: pulse-hint 1.2s infinite alternate;
+      border-color: #38bdf8;
+    }
+
+    @keyframes pulse-hint {
+      0% { box-shadow: var(--tile-shadow), 0 0 5px #38bdf8; }
+      100% { box-shadow: var(--tile-shadow), 0 0 25px #38bdf8, 0 0 35px #0284c7; }
+    }
+
+    /* Toolbar / Controls */
+    .toolbar {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    .btn {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      padding: 14px 18px;
+      border-radius: 14px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-primary {
+      background: var(--accent-color);
+      border-color: rgba(255, 255, 255, 0.3);
+      color: var(--accent-text);
+      box-shadow: 0 6px 20px rgba(168, 85, 247, 0.35);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(168, 85, 247, 0.5);
+    }
+
+    .btn:hover:not(.btn-primary) {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--accent-color);
+      transform: translateY(-2px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    /* Modal Styling */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(2, 6, 23, 0.75);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      padding: 20px;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      padding: 32px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: var(--panel-shadow);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 20px;
+      transform: scale(0.9) translateY(20px);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .modal-overlay.active .modal-card {
+      transform: scale(1) translateY(0);
+    }
+
+    .modal-title {
+      font-family: var(--font-heading);
+      font-size: 1.8rem;
+      font-weight: 800;
+    }
+
+    .modal-stats-grid {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Theme & Options Menu Dropdowns */
+    .options-row {
+      width: 100%;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .select-input {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .select-input option {
+      background: #0f172a;
+      color: #fff;
+    }
+
+    /* Confetti Canvas */
+    #confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 99;
+    }
+
+    /* File input hidden */
+    #image-upload {
+      display: none;
+    }
+
+    /* Helper guide text */
+    .guide-text {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 480px) {
+      .app-container {
+        gap: 14px;
+      }
+
+      .title-group h1 {
+        font-size: 1.6rem;
+      }
+
+      .stat-value {
+        font-size: 1.25rem;
+      }
+
+      .board-wrapper {
+        padding: 10px;
+      }
+
+      .tile {
+        width: calc(25% - 7px);
+        height: calc(25% - 7px);
+        border-radius: 12px;
+        font-size: 1.5rem;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body data-theme="cyber">
+
+  <canvas id="confetti-canvas"></canvas>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="title-group">
+        <h1>15 PUZZLE</h1>
+        <p>Classic Sliding Tile Game</p>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="sound-btn" title="Toggle Sound">
+          <svg id="sound-icon-on" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <svg id="sound-icon-off" viewBox="0 0 24 24" style="display:none;"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+        </button>
+        <button class="icon-btn" id="help-btn" title="How to Play">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Theme & Mode Selectors -->
+    <div class="options-row">
+      <select id="theme-select" class="select-input" title="Choose Theme">
+        <option value="cyber">Theme: Cyber Neon</option>
+        <option value="wood">Theme: Classic Wood</option>
+        <option value="sunset">Theme: Sunset Glow</option>
+        <option value="emerald">Theme: Emerald City</option>
+      </select>
+
+      <select id="mode-select" class="select-input" title="Choose Mode">
+        <option value="numbers">Mode: Numbers</option>
+        <option value="image-cosmic">Mode: Cosmic Pattern</option>
+        <option value="image-geometric">Mode: Geometry Pattern</option>
+        <option value="image-custom">Mode: Custom Image...</option>
+      </select>
+      <input type="file" id="image-upload" accept="image/*">
+    </div>
+
+    <!-- Stats Card -->
+    <div class="stats-panel">
+      <div class="stat-card">
+        <span class="stat-label">Moves</span>
+        <span class="stat-value" id="move-counter">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Time</span>
+        <span class="stat-value" id="timer-display">00:00</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Best</span>
+        <span class="stat-value" id="best-score">--</span>
+      </div>
+    </div>
+
+    <!-- Game Board -->
+    <div class="board-wrapper" id="board-wrapper">
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- Main Toolbar -->
+    <div class="toolbar">
+      <button class="btn btn-primary" id="shuffle-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+        New Game
+      </button>
+      <button class="btn" id="undo-btn" title="Undo Move">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+        Undo
+      </button>
+      <button class="btn" id="hint-btn" title="Get Hint">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
+        Hint
+      </button>
+    </div>
+
+    <p class="guide-text">Use Mouse / Touch to slide tiles, or Arrow Keys / WASD</p>
+  </div>
+
+  <!-- Victory Modal -->
+  <div class="modal-overlay" id="victory-modal">
+    <div class="modal-card">
+      <div style="font-size: 3.5rem;">🎉</div>
+      <h2 class="modal-title" style="color: var(--accent-color);">Puzzle Solved!</h2>
+      <p style="color: var(--text-muted);">Congratulations, you completed the 15-tile puzzle!</p>
+      
+      <div class="modal-stats-grid">
+        <div>
+          <div class="stat-label">Total Moves</div>
+          <div class="stat-value" id="final-moves">0</div>
+        </div>
+        <div>
+          <div class="stat-label">Total Time</div>
+          <div class="stat-value" id="final-time">00:00</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="modal-play-again" style="width: 100%;">Play Again</button>
+    </div>
+  </div>
+
+  <!-- How to Play Modal -->
+  <div class="modal-overlay" id="help-modal">
+    <div class="modal-card" style="text-align: left;">
+      <h2 class="modal-title" style="align-self: center;">How to Play</h2>
+      <ul style="color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; padding-left: 20px;">
+        <li>Slide tiles into the empty space to arrange them in order from 1 to 15.</li>
+        <li>Click or tap any tile adjacent to the empty slot, or click any tile in the same row/column to slide multiple tiles at once.</li>
+        <li>Use <strong>Arrow Keys</strong> or <strong>WASD</strong> on keyboard to slide tiles.</li>
+        <li>Switch between Numbers mode and Custom Image modes using the top dropdown.</li>
+        <li>Use the <strong>Hint</strong> button if you get stuck to see the next optimal step!</li>
+      </ul>
+      <button class="btn btn-primary" id="modal-help-close" style="width: 100%;">Got it!</button>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       GAME LOGIC & AUDIO ENGINE
+       ========================================================================== -->
+  <script>
+    // Audio Synthesizer (Web Audio API)
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            this.ctx = new AudioContext();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playSlide() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.08);
+
+        gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.08);
+      }
+
+      playWin() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+
+          const startTime = this.ctx.currentTime + idx * 0.12;
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.3, startTime + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.5);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(startTime);
+          osc.stop(startTime + 0.5);
+        });
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    // Game Core State
+    const GRID_SIZE = 4;
+    const TOTAL_TILES = 16;
+    let boardState = []; // Array of length 16. Stores tile numbers (0 = empty)
+    let tileElements = {}; // Map tile number -> DOM element
+    let movesCount = 0;
+    let secondsElapsed = 0;
+    let timerInterval = null;
+    let gameStarted = false;
+    let moveHistory = [];
+    let currentImageURL = null;
+    let currentMode = 'numbers';
+
+    // DOM Elements
+    const boardEl = document.getElementById('board');
+    const moveCounterEl = document.getElementById('move-counter');
+    const timerDisplayEl = document.getElementById('timer-display');
+    const bestScoreEl = document.getElementById('best-score');
+    const themeSelect = document.getElementById('theme-select');
+    const modeSelect = document.getElementById('mode-select');
+    const imageUpload = document.getElementById('image-upload');
+    const soundBtn = document.getElementById('sound-btn');
+    const soundIconOn = document.getElementById('sound-icon-on');
+    const soundIconOff = document.getElementById('sound-icon-off');
+
+    // Modals & Canvas
+    const victoryModal = document.getElementById('victory-modal');
+    const helpModal = document.getElementById('help-modal');
+    const finalMovesEl = document.getElementById('final-moves');
+    const finalTimeEl = document.getElementById('final-time');
+    const confettiCanvas = document.getElementById('confetti-canvas');
+
+    // Initialize Game Board Elements
+    function createTileDOM() {
+      boardEl.innerHTML = '';
+      tileElements = {};
+
+      for (let i = 1; i < TOTAL_TILES; i++) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.textContent = i;
+        tile.setAttribute('data-number', i);
+        tile.addEventListener('click', () => handleTileClick(i));
+        boardEl.appendChild(tile);
+        tileElements[i] = tile;
+      }
+    }
+
+    // Position recalculation & rendering
+    function updateTilePositions(animate = true) {
+      const containerWidth = boardEl.clientWidth;
+      const tileSize = (containerWidth - 9 * 3) / 4; // grid gap accounting
+
+      boardState.forEach((tileNum, index) => {
+        if (tileNum === 0) return; // empty slot
+
+        const row = Math.floor(index / GRID_SIZE);
+        const col = index % GRID_SIZE;
+        const x = col * (tileSize + 9);
+        const y = row * (tileSize + 9);
+
+        const tileEl = tileElements[tileNum];
+        if (tileEl) {
+          tileEl.style.width = `${tileSize}px`;
+          tileEl.style.height = `${tileSize}px`;
+          tileEl.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+
+          if (currentMode !== 'numbers') {
+            const origIndex = tileNum - 1;
+            const origRow = Math.floor(origIndex / GRID_SIZE);
+            const origCol = origIndex % GRID_SIZE;
+            const bgX = (origCol / (GRID_SIZE - 1)) * 100;
+            const bgY = (origRow / (GRID_SIZE - 1)) * 100;
+
+            tileEl.style.backgroundImage = `url(${currentImageURL})`;
+            tileEl.style.backgroundSize = `${containerWidth}px ${containerWidth}px`;
+            tileEl.style.backgroundPosition = `${bgX}% ${bgY}%`;
+          } else {
+            tileEl.style.backgroundImage = 'none';
+          }
+        }
+      });
+    }
+
+    // Initialize Solved Board State
+    function initBoard() {
+      boardState = Array.from({ length: TOTAL_TILES }, (_, i) => (i + 1) % TOTAL_TILES);
+      createTileDOM();
+      updateTilePositions(false);
+      resetStats();
+      loadBestScore();
+    }
+
+    // Solvability Guaranteed Shuffle (Random Walk algorithm from solved state)
+    function shuffleBoard() {
+      initBoard();
+      clearHintHighlight();
+
+      let currentEmpty = 15;
+      let lastEmpty = -1;
+      const shuffleSteps = 120; // Enough random steps for high entropy
+
+      for (let s = 0; s < shuffleSteps; s++) {
+        const neighbors = getAdjacentIndices(currentEmpty).filter(idx => idx !== lastEmpty);
+        const nextPos = neighbors[Math.floor(Math.random() * neighbors.length)];
+        
+        // Swap empty with nextPos
+        boardState[currentEmpty] = boardState[nextPos];
+        boardState[nextPos] = 0;
+        
+        lastEmpty = currentEmpty;
+        currentEmpty = nextPos;
+      }
+
+      // If naturally ended up solved, swap two tiles to unsolve
+      if (checkWin()) {
+        const tmp = boardState[0];
+        boardState[0] = boardState[1];
+        boardState[1] = tmp;
+      }
+
+      updateTilePositions(true);
+      resetStats();
+      gameStarted = true;
+      startTimer();
+      sound.playSlide();
+    }
+
+    // Adjacent index checker
+    function getAdjacentIndices(index) {
+      const row = Math.floor(index / GRID_SIZE);
+      const col = index % GRID_SIZE;
+      const neighbors = [];
+
+      if (row > 0) neighbors.push(index - GRID_SIZE); // Up
+      if (row < GRID_SIZE - 1) neighbors.push(index + GRID_SIZE); // Down
+      if (col > 0) neighbors.push(index - 1); // Left
+      if (col < GRID_SIZE - 1) neighbors.push(index + 1); // Right
+
+      return neighbors;
+    }
+
+    // Tile Click & Multi-tile Slide Logic
+    function handleTileClick(tileNum) {
+      clearHintHighlight();
+      const clickedIdx = boardState.indexOf(tileNum);
+      const emptyIdx = boardState.indexOf(0);
+
+      const clickedRow = Math.floor(clickedIdx / GRID_SIZE);
+      const clickedCol = clickedIdx % GRID_SIZE;
+      const emptyRow = Math.floor(emptyIdx / GRID_SIZE);
+      const emptyCol = emptyIdx % GRID_SIZE;
+
+      // Check if tile is in same row or column as empty space
+      if (clickedRow !== emptyRow && clickedCol !== emptyCol) return;
+
+      // Save state for Undo
+      moveHistory.push([...boardState]);
+
+      // Multi-tile slide path
+      const moveIndices = [];
+      if (clickedRow === emptyRow) {
+        const step = clickedCol < emptyCol ? 1 : -1;
+        for (let c = emptyCol - step; c !== clickedCol - step; c -= step) {
+          moveIndices.push(clickedRow * GRID_SIZE + c);
+        }
+      } else {
+        const step = clickedRow < emptyRow ? 1 : -1;
+        for (let r = emptyRow - step; r !== clickedRow - step; r -= step) {
+          moveIndices.push(r * GRID_SIZE + emptyCol);
+        }
+      }
+
+      // Execute shift along the line towards empty space
+      let currEmpty = emptyIdx;
+      for (const idx of moveIndices) {
+        boardState[currEmpty] = boardState[idx];
+        boardState[idx] = 0;
+        currEmpty = idx;
+      }
+
+      movesCount++;
+      moveCounterEl.textContent = movesCount;
+      if (!gameStarted) {
+        gameStarted = true;
+        startTimer();
+      }
+
+      sound.playSlide();
+      updateTilePositions(true);
+
+      if (checkWin()) {
+        onGameWin();
+      }
+    }
+
+    // Keyboard Navigation
+    document.addEventListener('keydown', (e) => {
+      if (victoryModal.classList.contains('active') || helpModal.classList.contains('active')) return;
+
+      const emptyIdx = boardState.indexOf(0);
+      const emptyRow = Math.floor(emptyIdx / GRID_SIZE);
+      const emptyCol = emptyIdx % GRID_SIZE;
+      let targetIdx = -1;
+
+      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') {
+        if (emptyRow < GRID_SIZE - 1) targetIdx = emptyIdx + GRID_SIZE; // Tile below moves up
+      } else if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') {
+        if (emptyRow > 0) targetIdx = emptyIdx - GRID_SIZE; // Tile above moves down
+      } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
+        if (emptyCol < GRID_SIZE - 1) targetIdx = emptyIdx + 1; // Tile right moves left
+      } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
+        if (emptyCol > 0) targetIdx = emptyIdx - 1; // Tile left moves right
+      }
+
+      if (targetIdx !== -1 && boardState[targetIdx] !== 0) {
+        handleTileClick(boardState[targetIdx]);
+      }
+    });
+
+    // Undo feature
+    document.getElementById('undo-btn').addEventListener('click', () => {
+      if (moveHistory.length === 0) return;
+      boardState = moveHistory.pop();
+      movesCount++;
+      moveCounterEl.textContent = movesCount;
+      updateTilePositions(true);
+      sound.playSlide();
+    });
+
+    // Check Win Condition
+    function checkWin() {
+      for (let i = 0; i < TOTAL_TILES - 1; i++) {
+        if (boardState[i] !== i + 1) return false;
+      }
+      return boardState[TOTAL_TILES - 1] === 0;
+    }
+
+    function onGameWin() {
+      stopTimer();
+      sound.playWin();
+      saveBestScore();
+      
+      finalMovesEl.textContent = movesCount;
+      finalTimeEl.textContent = formatTime(secondsElapsed);
+      
+      triggerConfetti();
+      setTimeout(() => {
+        victoryModal.classList.add('active');
+      }, 300);
+    }
+
+    // Timer Logic
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        timerDisplayEl.textContent = formatTime(secondsElapsed);
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+    }
+
+    function resetStats() {
+      stopTimer();
+      secondsElapsed = 0;
+      movesCount = 0;
+      moveHistory = [];
+      gameStarted = false;
+      moveCounterEl.textContent = '0';
+      timerDisplayEl.textContent = '00:00';
+    }
+
+    function formatTime(totalSecs) {
+      const mins = Math.floor(totalSecs / 60).toString().padStart(2, '0');
+      const secs = (totalSecs % 60).toString().padStart(2, '0');
+      return `${mins}:${secs}`;
+    }
+
+    // Persistent Best Score
+    function saveBestScore() {
+      const key = `15puzzle_best_${currentMode}`;
+      const savedBest = localStorage.getItem(key);
+      if (!savedBest || movesCount < parseInt(savedBest, 10)) {
+        localStorage.setItem(key, movesCount);
+        loadBestScore();
+      }
+    }
+
+    function loadBestScore() {
+      const key = `15puzzle_best_${currentMode}`;
+      const savedBest = localStorage.getItem(key);
+      bestScoreEl.textContent = savedBest ? savedBest : '--';
+    }
+
+    // Intelligent Hint System (Manhattan Distance A* Next Step)
+    document.getElementById('hint-btn').addEventListener('click', () => {
+      clearHintHighlight();
+      const emptyIdx = boardState.indexOf(0);
+      const neighbors = getAdjacentIndices(emptyIdx);
+
+      let bestNeighborTile = null;
+      let minScore = Infinity;
+
+      // Find neighbor move that minimizes overall Manhattan Distance
+      for (const nIdx of neighbors) {
+        const tileNum = boardState[nIdx];
+        const tempBoard = [...boardState];
+        tempBoard[emptyIdx] = tileNum;
+        tempBoard[nIdx] = 0;
+
+        const score = calculateManhattanDistance(tempBoard);
+        if (score < minScore) {
+          minScore = score;
+          bestNeighborTile = tileNum;
+        }
+      }
+
+      if (bestNeighborTile && tileElements[bestNeighborTile]) {
+        tileElements[bestNeighborTile].classList.add('hint-highlight');
+      }
+    });
+
+    function clearHintHighlight() {
+      Object.values(tileElements).forEach(el => el.classList.remove('hint-highlight'));
+    }
+
+    function calculateManhattanDistance(state) {
+      let dist = 0;
+      for (let i = 0; i < TOTAL_TILES; i++) {
+        const val = state[i];
+        if (val === 0) continue;
+        const targetIdx = val - 1;
+        const currRow = Math.floor(i / GRID_SIZE);
+        const currCol = i % GRID_SIZE;
+        const targetRow = Math.floor(targetIdx / GRID_SIZE);
+        const targetCol = targetIdx % GRID_SIZE;
+        dist += Math.abs(currRow - targetRow) + Math.abs(currCol - targetCol);
+      }
+      return dist;
+    }
+
+    // Pattern Generators for Dynamic Image Modes
+    function generatePatternImage(type) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 600;
+      canvas.height = 600;
+      const ctx = canvas.getContext('2d');
+
+      if (type === 'cosmic') {
+        const grad = ctx.createRadialGradient(300, 300, 50, 300, 300, 400);
+        grad.addColorStop(0, '#ec4899');
+        grad.addColorStop(0.5, '#8b5cf6');
+        grad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 600, 600);
+
+        // Nebula stars & geometry
+        for (let i = 0; i < 80; i++) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.8})`;
+          ctx.beginPath();
+          ctx.arc(Math.random() * 600, Math.random() * 600, Math.random() * 3 + 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (type === 'geometric') {
+        const grad = ctx.createLinearGradient(0, 0, 600, 600);
+        grad.addColorStop(0, '#06b6d4');
+        grad.addColorStop(0.5, '#3b82f6');
+        grad.addColorStop(1, '#1e1b4b');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 600, 600);
+
+        // Abstract overlapping polygons
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        for (let i = 0; i < 6; i++) {
+          ctx.beginPath();
+          ctx.moveTo(100 * i, 0);
+          ctx.lineTo(600, 100 * i);
+          ctx.lineTo(600 - 80 * i, 600);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      return canvas.toDataURL();
+    }
+
+    // Theme & Mode Controls
+    themeSelect.addEventListener('change', (e) => {
+      document.body.setAttribute('data-theme', e.target.value);
+    });
+
+    modeSelect.addEventListener('change', (e) => {
+      const mode = e.target.value;
+      currentMode = mode;
+
+      if (mode === 'numbers') {
+        Object.values(tileElements).forEach(el => {
+          el.classList.remove('image-mode', 'show-numbers');
+        });
+        updateTilePositions(false);
+      } else if (mode === 'image-custom') {
+        imageUpload.click();
+      } else {
+        const patternType = mode.replace('image-', '');
+        currentImageURL = generatePatternImage(patternType);
+        Object.values(tileElements).forEach(el => {
+          el.classList.add('image-mode', 'show-numbers');
+        });
+        updateTilePositions(false);
+      }
+      loadBestScore();
+    });
+
+    imageUpload.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          currentImageURL = event.target.result;
+          Object.values(tileElements).forEach(el => {
+            el.classList.add('image-mode', 'show-numbers');
+          });
+          updateTilePositions(false);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Sound Toggle
+    soundBtn.addEventListener('click', () => {
+      sound.enabled = !sound.enabled;
+      soundIconOn.style.display = sound.enabled ? 'block' : 'none';
+      soundIconOff.style.display = sound.enabled ? 'none' : 'block';
+    });
+
+    // Modals Action Handlers
+    document.getElementById('help-btn').addEventListener('click', () => helpModal.classList.add('active'));
+    document.getElementById('modal-help-close').addEventListener('click', () => helpModal.classList.remove('active'));
+    document.getElementById('modal-play-again').addEventListener('click', () => {
+      victoryModal.classList.remove('active');
+      shuffleBoard();
+    });
+    document.getElementById('shuffle-btn').addEventListener('click', shuffleBoard);
+
+    // Confetti Animation Effect
+    function triggerConfetti() {
+      const ctx = confettiCanvas.getContext('2d');
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+
+      const particles = Array.from({ length: 100 }, () => ({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        vx: (Math.random() - 0.5) * 16,
+        vy: (Math.random() - 0.7) * 16,
+        color: ['#a855f7', '#ec4899', '#3b82f6', '#10b981', '#fb923c'][Math.floor(Math.random() * 5)],
+        size: Math.random() * 8 + 4,
+        rotation: Math.random() * 360,
+        rSpeed: (Math.random() - 0.5) * 10
+      }));
+
+      let frame = 0;
+      function animate() {
+        ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.3; // Gravity
+          p.rotation += p.rSpeed;
+
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.rotation * Math.PI) / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+          ctx.restore();
+        });
+
+        frame++;
+        if (frame < 180) {
+          requestAnimationFrame(animate);
+        } else {
+          ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        }
+      }
+      animate();
+    }
+
+    // Responsive Resizing
+    window.addEventListener('resize', () => updateTilePositions(false));
+
+    // Initialize Game on Load
+    initBoard();
+    shuffleBoard();
+  </script>
+</body>
+</html>
