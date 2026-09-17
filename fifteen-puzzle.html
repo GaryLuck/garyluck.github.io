@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fifteen Puzzle</title>
+<style>
+  :root {
+    --bg: #1e2a32;
+    --panel: #f4f1e8;
+    --ink: #22303a;
+    --accent: #0e7c6b;
+    --accent-dark: #0a5f52;
+    --tile: #ffffff;
+    --gap: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Georgia, "Times New Roman", serif;
+    padding: 24px;
+  }
+  main {
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 24px;
+    width: min(440px, 100%);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 28px;
+    letter-spacing: 0.5px;
+  }
+  p.sub { margin: 0 0 16px; font-size: 14px; }
+  .stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    font-family: Verdana, Geneva, sans-serif;
+    font-size: 14px;
+  }
+  .stats div {
+    flex: 1;
+    background: #e4ddc9;
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  .stats strong { display: block; font-size: 20px; }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--gap);
+    background: #22303a;
+    padding: var(--gap);
+    border-radius: 10px;
+    touch-action: manipulation;
+  }
+  .tile {
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: 6px;
+    background: var(--tile);
+    color: var(--ink);
+    font-family: Verdana, Geneva, sans-serif;
+    font-size: clamp(20px, 6vw, 28px);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .tile:not(.empty):hover { outline: 3px solid var(--accent); }
+  .tile:focus-visible { outline: 3px solid #b3541e; }
+  .tile.empty {
+    background: transparent;
+    cursor: default;
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  button.action {
+    flex: 1;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: Verdana, Geneva, sans-serif;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button.action:hover { background: var(--accent-dark); }
+  #message {
+    min-height: 1.5em;
+    margin: 12px 0 0;
+    font-weight: bold;
+    text-align: center;
+  }
+  details { margin-top: 10px; font-size: 13px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .tile:not(.empty) { transition: transform 80ms ease-out; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fifteen Puzzle</h1>
+  <p class="sub">Slide tiles into the empty square to order 1&ndash;15. Click a tile or use arrow keys.</p>
+  <div class="stats">
+    <div>Moves<strong id="moves">0</strong></div>
+    <div>Time<strong id="time">0:00</strong></div>
+  </div>
+  <div id="board" role="grid" aria-label="Fifteen puzzle board"></div>
+  <div class="controls">
+    <button class="action" id="shuffleBtn" type="button">Shuffle</button>
+    <button class="action" id="resetBtn" type="button">Reset</button>
+  </div>
+  <p id="message" role="status" aria-live="polite"></p>
+  <details>
+    <summary>How to play</summary>
+    Click any tile next to the empty square to slide it. Arrow keys slide a tile
+    into the empty square. Shuffle deals a solvable puzzle. Timer starts on your
+    first move.
+  </details>
+</main>
+<script>
+(function () {
+  "use strict";
+  var SIZE = 4;
+  var SOLVED = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
+  var state = SOLVED.slice();
+  var moves = 0;
+  var seconds = 0;
+  var timerId = null;
+  var won = false;
+
+  var board = document.getElementById("board");
+  var movesEl = document.getElementById("moves");
+  var timeEl = document.getElementById("time");
+  var messageEl = document.getElementById("message");
+
+  function emptyIndex() { return state.indexOf(0); }
+
+  function adjacent(a, b) {
+    var ar = Math.floor(a / SIZE), ac = a % SIZE;
+    var br = Math.floor(b / SIZE), bc = b % SIZE;
+    return Math.abs(ar - br) + Math.abs(ac - bc) === 1;
+  }
+
+  function formatTime(s) {
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return m + ":" + (r < 10 ? "0" + r : r);
+  }
+
+  function stopTimer() {
+    if (timerId !== null) { clearInterval(timerId); timerId = null; }
+  }
+
+  function startTimer() {
+    if (timerId !== null || won) return;
+    timerId = setInterval(function () {
+      seconds += 1;
+      timeEl.textContent = formatTime(seconds);
+    }, 1000);
+  }
+
+  function isSolved() {
+    for (var i = 0; i < 16; i++) {
+      if (state[i] !== SOLVED[i]) return false;
+    }
+    return true;
+  }
+
+  function render() {
+    board.textContent = "";
+    for (var i = 0; i < 16; i++) {
+      (function (idx) {
+        var v = state[idx];
+        var btn = document.createElement("button");
+        btn.type = "button";
+        if (v === 0) {
+          btn.className = "tile empty";
+          btn.setAttribute("aria-label", "Empty square");
+          btn.disabled = true;
+          btn.textContent = "";
+        } else {
+          btn.className = "tile";
+          btn.textContent = String(v);
+          btn.setAttribute("aria-label", "Tile " + v);
+          if (adjacent(idx, emptyIndex())) {
+            btn.addEventListener("click", function () { tryMove(idx); });
+          } else {
+            btn.disabled = true;
+          }
+        }
+        btn.setAttribute("role", "gridcell");
+        board.appendChild(btn);
+      })(i);
+    }
+    movesEl.textContent = String(moves);
+    timeEl.textContent = formatTime(seconds);
+  }
+
+  function tryMove(idx) {
+    if (won) return false;
+    var e = emptyIndex();
+    if (!adjacent(idx, e)) return false;
+    if (moves === 0 && seconds === 0) startTimer();
+    state[e] = state[idx];
+    state[idx] = 0;
+    moves += 1;
+    if (isSolved()) {
+      won = true;
+      stopTimer();
+      messageEl.textContent = "Solved in " + moves + " moves, " + formatTime(seconds) + "!";
+    } else {
+      messageEl.textContent = "";
+    }
+    render();
+    return true;
+  }
+
+  // Move the empty square: dx/dy applied to the empty cell; the
+  // neighboring tile slides into it (standard arrow-key feel).
+  function moveEmpty(dr, dc) {
+    var e = emptyIndex();
+    var r = Math.floor(e / SIZE) + dr;
+    var c = (e % SIZE) + dc;
+    if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return false;
+    return tryMove(r * SIZE + c);
+  }
+
+  function shuffledByRandomWalk(steps) {
+    var deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (var i = 0; i < steps; i++) {
+      var e = emptyIndex();
+      var r = Math.floor(e / SIZE), c = e % SIZE;
+      var options = [];
+      for (var k = 0; k < deltas.length; k++) {
+        var nr = r + deltas[k][0], nc = c + deltas[k][1];
+        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) options.push(nr * SIZE + nc);
+      }
+      var pick = options[Math.floor(Math.random() * options.length)];
+      state[e] = state[pick];
+      state[pick] = 0;
+    }
+    // Avoid dealing an already-solved board.
+    if (isSolved()) shuffledByRandomWalk(1);
+  }
+
+  function newGame() {
+    state = SOLVED.slice();
+    shuffledByRandomWalk(200);
+    moves = 0;
+    seconds = 0;
+    won = false;
+    stopTimer();
+    messageEl.textContent = "";
+    render();
+  }
+
+  function reset() {
+    state = SOLVED.slice();
+    moves = 0;
+    seconds = 0;
+    won = false;
+    stopTimer();
+    messageEl.textContent = "";
+    render();
+  }
+
+  document.getElementById("shuffleBtn").addEventListener("click", newGame);
+  document.getElementById("resetBtn").addEventListener("click", reset);
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "ArrowUp") { moveEmpty(1, 0); ev.preventDefault(); }
+    else if (ev.key === "ArrowDown") { moveEmpty(-1, 0); ev.preventDefault(); }
+    else if (ev.key === "ArrowLeft") { moveEmpty(0, 1); ev.preventDefault(); }
+    else if (ev.key === "ArrowRight") { moveEmpty(0, -1); ev.preventDefault(); }
+  });
+
+  // Expose a tiny API for testing without polluting global scope otherwise.
+  window.__fifteen = {
+    get state() { return state.slice(); },
+    get moves() { return moves; },
+    tryMove: tryMove,
+    newGame: newGame,
+    reset: reset,
+    isSolved: isSolved
+  };
+
+  reset();
+})();
+</script>
+</body>
+</html>
